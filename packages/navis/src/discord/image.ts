@@ -67,7 +67,7 @@ export async function collectImages(message: Message): Promise<InputImage[]> {
       continue;
     }
     try {
-      const res = await fetch(att.url);
+      const res = await fetch(att.url, { signal: AbortSignal.timeout(15_000) });
       if (!res.ok) continue;
       const buf = Buffer.from(await res.arrayBuffer());
       const result = await downscale(buf, ct);
