@@ -90,6 +90,9 @@ async function runUpcomingCheck(): Promise<void> {
     }
   } catch (err) {
     console.error("[calendar] upcoming 실패:", err);
+    if (config.navisChannelId) {
+      await sendToChannel(discord, config.navisChannelId, `[calendar] upcoming 확인 실패: ${err instanceof Error ? err.message : String(err)}`, "calendar").catch(() => {});
+    }
   }
 }
 
@@ -211,6 +214,9 @@ async function runDailyFollowup(): Promise<void> {
     }
   } catch (err) {
     console.error("[calendar] follow-up 실패:", err);
+    if (config.navisChannelId) {
+      await sendToChannel(discord, config.navisChannelId, `[calendar] follow-up 실패: ${err instanceof Error ? err.message : String(err)}`, "calendar").catch(() => {});
+    }
   }
 }
 
