@@ -59,11 +59,13 @@ interface CurateInput {
 }
 
 // 한 턴을 큐레이팅한다. 실패는 삼킴 — 사용자 흐름을 막지 않는 게 최우선.
-export async function curateTurn(input: CurateInput): Promise<void> {
+// 반환값은 큐레이터가 namory.save 를 한 번이라도 호출했는지 여부 — 호출 측이
+// 디스코드 💡 리액션을 뒤늦게라도 붙일 수 있게 한다.
+export async function curateTurn(input: CurateInput): Promise<boolean> {
   // 팔로업 응답이면 pre-filter 우회 — "응 맛있었어요" 같은 짧은 답도 결과 정보로
   // 의미가 있어 저장 후보가 된다.
   if (!input.followupAnswerContext && !worthCurating(input.userText, input.assistantText)) {
-    return;
+    return false;
   }
 
   // 큐레이터에 넣을 턴 본문. 사용자/어시스턴트 구분을 명시해 인용·혼동 방지.
@@ -86,6 +88,7 @@ export async function curateTurn(input: CurateInput): Promise<void> {
     .filter(Boolean)
     .join("\n");
 
+  let saved = false;
   try {
     for await (const _msg of query({
       prompt: turn,
@@ -108,10 +111,20 @@ export async function curateTurn(input: CurateInput): Promise<void> {
         maxTurns: 6,
       },
     })) {
-      // 메시지 스트림은 소비만 — 큐레이터는 사용자에게 텍스트를 보내지 않는다.
-      void _msg;
+      // namory.save 호출 감지 — 호출 측이 💡 리액션을 붙일지 결정하는 신호.
+      if (_msg.type === "assistant") {
+        const content = _msg.message.content;
+        if (Array.isArray(content)) {
+          for (const block of content) {
+            if (block.type === "tool_use" && block.name === "mcp__namory__save") {
+              saved = true;
+            }
+          }
+        }
+      }
     }
   } catch (err) {
     console.error("[curator] 실패(무시):", err);
   }
+  return saved;
 }

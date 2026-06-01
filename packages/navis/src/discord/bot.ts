@@ -146,11 +146,23 @@ async function handleMessage(message: Message): Promise<void> {
     // 사후 큐레이터(A) — 답변을 보낸 뒤 백그라운드로 한 번 더 평가해 저장 누락을 메운다.
     // fire-and-forget: 사용자 UX는 끝났고 큐레이터 실패는 무시(자체 try/catch).
     // 이번 메시지가 navis 의 자발적 팔로업 질문에 대한 응답이면 그 맥락을 함께 넘긴다.
-    void curateTurn({
+    // 메인 턴에서 이미 saved=true 라 💡 가 붙어 있어도, Discord 가 같은 이모지 중복을
+    // 무시하므로 이중 리액션 위험은 없다.
+    curateTurn({
       userText: prompt,
       assistantText: text,
       followupAnswerContext: followupAnswer?.question,
-    });
+    })
+      .then((curatorSaved) => {
+        if (curatorSaved) {
+          message.react("💡").catch((err) => {
+            console.error("[discord] 큐레이터 리액션 실패:", err);
+          });
+        }
+      })
+      .catch(() => {
+        // fire-and-forget 유지 — 큐레이터 실패는 무시.
+      });
 
     // 자발적 팔로업 스케줄링(C) — 이 턴의 결과를 나중에 다시 물어볼 가치가 있는지
     // Haiku 가 판단해 예약. 기존 채널 예약/대기는 내부에서 cancel 되므로 항상 안전.
