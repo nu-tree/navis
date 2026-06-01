@@ -65,6 +65,7 @@ const MAX_DIFF_CHARS = 60_000; // sonnet 컨텍스트 안에서 안전한 크기
 async function fetchPrDiff(prNumber: number): Promise<string> {
   const url = `https://api.github.com/repos/${config.githubRepo}/pulls/${prNumber}`;
   const res = await fetch(url, {
+    signal: AbortSignal.timeout(15_000),
     headers: {
       accept: "application/vnd.github.v3.diff",
       "x-github-api-version": "2022-11-28",
