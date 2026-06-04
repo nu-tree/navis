@@ -1,6 +1,8 @@
 import { Pressable, View } from 'react-native';
 import { cn } from '../../lib/cn';
 import { Text } from '../ui/text';
+import { Avatar } from '../ui/avatar';
+import { NAVIS_LOGO } from '../../lib/assets';
 
 export type ChatHeaderProps = {
   title: string;
@@ -21,6 +23,8 @@ export function ChatHeader({ title, subtitle, onMenu, onNewChat, className }: Ch
       <Pressable hitSlop={8} onPress={onMenu} className="h-9 w-9 items-center justify-center rounded-lg active:bg-secondary">
         <Text className="text-xl text-foreground">☰</Text>
       </Pressable>
+
+      <Avatar source={NAVIS_LOGO} size={30} className="rounded-lg bg-transparent" />
 
       <View className="flex-1">
         <Text variant="subtitle" numberOfLines={1}>

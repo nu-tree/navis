@@ -35,6 +35,7 @@ async function createWindow() {
     minWidth: 360,
     minHeight: 560,
     title: '나비스',
+    icon: path.join(__dirname, '../app/assets/navis-logo.png'),
     backgroundColor: '#0b0b0f',
     autoHideMenuBar: true,
     webPreferences: {

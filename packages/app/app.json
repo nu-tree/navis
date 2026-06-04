@@ -5,7 +5,7 @@
     "scheme": "navis",
     "version": "0.1.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/navis-logo.png",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
@@ -22,7 +22,7 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/navis-logo.png"
     }
   }
 }
