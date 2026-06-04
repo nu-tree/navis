@@ -8,8 +8,8 @@ const workspaceRoot = path.resolve(projectRoot, '../..');
 
 const config = getDefaultConfig(projectRoot);
 
-// 1. 모노레포 전체를 watch (워크스페이스 내부 패키지 변경 감지)
-config.watchFolders = [workspaceRoot];
+// 1. Expo 기본 watchFolders 에 워크스페이스 루트를 추가 (기본값 보존)
+config.watchFolders = [...(config.watchFolders ?? []), workspaceRoot];
 
 // 2. 프로젝트 → 워크스페이스 루트 순으로 node_modules 해석
 config.resolver.nodeModulesPaths = [
