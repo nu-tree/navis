@@ -9,7 +9,8 @@
     "dev": "pnpm --filter namory-mcp dev",
     "dev:navis": "pnpm --filter navis dev",
     "namory": "pnpm --filter namory-mcp",
-    "navis": "pnpm --filter navis"
+    "navis": "pnpm --filter navis",
+    "release:desktop": "node scripts/release-desktop.mjs"
   },
   "engines": {
     "node": ">=22"
