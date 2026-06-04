@@ -3,6 +3,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import type { Client } from "discord.js";
 import { config } from "./config.js";
 import { askClaude } from "./claude/ask.js";
+import { getReports } from "./reports/store.js";
 import { startDiscord } from "./discord/bot.js";
 import { startCronScheduler } from "./cron/scheduler.js";
 import { startDigestScheduler } from "./digest.js";
@@ -49,11 +50,44 @@ createServer((req, res) => {
       return;
     }
   }
+  if (req.url?.startsWith("/api/reports")) {
+    if (req.method === "OPTIONS") {
+      res.writeHead(204, CORS_HEADERS);
+      res.end();
+      return;
+    }
+    if (req.method === "GET") {
+      handleReports(req, res);
+      return;
+    }
+  }
   res.writeHead(404);
   res.end();
 }).listen(config.port, "0.0.0.0", () => {
-  console.log(`[agent] http on :${config.port} (/health, /webhook/github, /api/chat)`);
+  console.log(
+    `[agent] http on :${config.port} (/health, /webhook/github, /api/chat, /api/reports)`,
+  );
 });
+
+// 앱이 선제 보고를 폴링하는 엔드포인트. ?since=<ISO> 로 증분 조회.
+function handleReports(req: IncomingMessage, res: ServerResponse): void {
+  const token = config.appApiToken;
+  if (!token) {
+    res.writeHead(503, JSON_HEADERS);
+    res.end(JSON.stringify({ error: "app api not configured" }));
+    return;
+  }
+  const auth = req.headers["authorization"];
+  if (typeof auth !== "string" || !verifyBearer(token, auth)) {
+    res.writeHead(401, JSON_HEADERS);
+    res.end(JSON.stringify({ error: "unauthorized" }));
+    return;
+  }
+  const url = new URL(req.url ?? "/api/reports", "http://localhost");
+  const since = url.searchParams.get("since") ?? undefined;
+  res.writeHead(200, JSON_HEADERS);
+  res.end(JSON.stringify({ reports: getReports(since) }));
+}
 
 // navis-app(모바일/데스크톱) 채팅 엔드포인트. 디스코드와 같은 두뇌(askClaude)를 쓰되
 // 인증은 APP_API_TOKEN Bearer 토큰으로 한다. 멀티턴은 클라가 보관한 sessionId 로 이어가고,

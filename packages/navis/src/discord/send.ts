@@ -1,4 +1,5 @@
 import type { Client } from "discord.js";
+import { recordReport } from "../reports/store.js";
 
 const DISCORD_MAX = 2000;
 
@@ -25,6 +26,9 @@ export async function sendToChannel(
   text: string,
   logTag = "discord",
 ): Promise<void> {
+  // 선제 보고를 앱(/api/reports)용으로도 기록 — 디스코드 전송 성패와 무관하게.
+  recordReport(logTag, text);
+
   const ch = await client.channels.fetch(channelId).catch(() => null);
   if (!ch || !ch.isSendable()) {
     console.error(`[${logTag}] 채널 전송 불가: ${channelId}`);

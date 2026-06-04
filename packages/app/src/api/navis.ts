@@ -1,5 +1,6 @@
 import { makeId } from '../lib/id';
 import { NAVIS_URL, NAVIS_TOKEN, IS_BACKEND_CONFIGURED } from '../lib/config';
+import type { Report } from '../store/chat-store';
 import type { ChatMessage } from '../types';
 
 export type SendResult = {
@@ -54,6 +55,19 @@ export async function sendMessage(text: string, sessionId?: string): Promise<Sen
     contextFull: data.contextFull,
     saved: data.saved,
   };
+}
+
+// navis 선제 보고 폴링. 백엔드 미설정이면 빈 배열.
+export async function fetchReports(): Promise<Report[]> {
+  if (!IS_BACKEND_CONFIGURED) return [];
+  const res = await fetch(`${NAVIS_URL}/api/reports`, {
+    headers: { authorization: `Bearer ${NAVIS_TOKEN}` },
+  });
+  if (!res.ok) {
+    throw new Error(`navis 보고 조회 오류: ${res.status}`);
+  }
+  const data = (await res.json()) as { reports: Report[] };
+  return data.reports;
 }
 
 async function mockReply(text: string): Promise<SendResult> {

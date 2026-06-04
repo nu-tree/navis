@@ -30,7 +30,9 @@ export function MessageList() {
       onContentSizeChange={scrollToEnd}
       ListEmptyComponent={
         <View className="flex-1 items-center justify-center">
-          <Text variant="muted">새 대화를 시작해봐</Text>
+          <Text variant="muted">
+            {conversation?.kind === 'report' ? '아직 받은 보고가 없어' : '새 대화를 시작해봐'}
+          </Text>
         </View>
       }
       ListFooterComponent={
