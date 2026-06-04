@@ -109,7 +109,9 @@ async function handleMessage(message: Message): Promise<void> {
     if (overLimit) {
       const k = Math.round(prev.contextTokens / 1000);
       const limitK = Math.round(config.contextTokenLimit / 1000);
-      console.log(`[discord] 컨텍스트 한도 초과(${prev.contextTokens}) → 새 세션`);
+      console.log(
+        `[discord] 컨텍스트 한도 초과(${prev.contextTokens}) → 새 세션`,
+      );
       await message.reply(
         `[알림] 대화가 한도(${limitK}k)에 도달해 맥락을 새로 시작합니다(이전 ~${k}k 토큰). 중요한 내용은 namory에 저장돼 있어요.`,
       );
@@ -185,7 +187,9 @@ export function startDiscord(): Client {
   // 실제 봇을 띄우는 진입점인 여기서 누락 시 종료한다.
   const token = config.discordToken;
   if (!token) {
-    console.error("[discord] DISCORD_TOKEN 누락 — 디스코드 봇 모드는 토큰 필수.");
+    console.error(
+      "[discord] DISCORD_TOKEN 누락 — 디스코드 봇 모드는 토큰 필수.",
+    );
     process.exit(1);
   }
   if (config.allowedUserIds.length === 0) {
