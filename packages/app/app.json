@@ -13,11 +13,12 @@
     "updates": {
       "enabled": true,
       "checkAutomatically": "ON_LOAD",
-      "fallbackToCacheTimeout": 0
+      "fallbackToCacheTimeout": 0,
+      "url": "https://u.expo.dev/e6b968a5-0016-4cce-b55a-babc17f9b2fd"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.navis.app"
+      "bundleIdentifier": "com.knu9910.navis"
     },
     "android": {
       "package": "com.navis.app",
@@ -31,6 +32,11 @@
     },
     "web": {
       "favicon": "./assets/navis-logo.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "e6b968a5-0016-4cce-b55a-babc17f9b2fd"
+      }
     }
   }
 }
