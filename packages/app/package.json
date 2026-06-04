@@ -1,0 +1,31 @@
+{
+  "name": "navis-app",
+  "version": "0.1.0",
+  "description": "navis 전용 모바일 앱 (React Native + Expo)",
+  "main": "index.ts",
+  "private": true,
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "typecheck": "tsc --noEmit",
+    "doctor": "expo-doctor"
+  },
+  "dependencies": {
+    "expo": "~56.0.8",
+    "expo-status-bar": "~56.0.4",
+    "nativewind": "^4.2.4",
+    "react": "19.2.3",
+    "react-native": "0.85.3",
+    "react-native-reanimated": "4.3.1",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-worklets": "0.8.3"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2",
+    "prettier-plugin-tailwindcss": "^0.8.0",
+    "tailwindcss": "^3.4.19",
+    "typescript": "~6.0.3"
+  }
+}
