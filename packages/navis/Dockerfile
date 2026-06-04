@@ -41,18 +41,24 @@ ENV PORT=3000
 # Claude Agent SDK가 내부 CLI 서브프로세스를 띄우며 HOME에 세션 파일을 쓴다.
 ENV HOME=/home/app
 
-RUN addgroup -S app && adduser -S app -G app \
+# su-exec: 시작 시 root 로 볼륨 권한 보정 후 app 으로 강등하기 위해 필요.
+RUN apk add --no-cache su-exec \
+    && addgroup -S app && adduser -S app -G app \
     && mkdir -p /home/app && chown -R app:app /home/app
 
 COPY --from=build --chown=app:app /app/node_modules ./node_modules
 COPY --from=build --chown=app:app /app/dist ./dist
 COPY --from=build --chown=app:app /app/package.json ./package.json
+COPY packages/navis/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
-USER app
+# USER app 을 두지 않는다 — entrypoint 가 root 로 볼륨 소유권을 보정한 뒤
+# su-exec 로 app 권한으로 떨어뜨려 node 를 실행한다(런타임은 여전히 비-root).
 
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD wget -qO- http://127.0.0.1:${PORT}/health || exit 1
 
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["node", "dist/index.js"]
