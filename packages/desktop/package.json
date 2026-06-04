@@ -11,7 +11,8 @@
     "dev": "cross-env ELECTRON_DEV=1 electron .",
     "dist": "pnpm web:build && electron-builder",
     "dist:mac": "pnpm web:build && electron-builder --mac",
-    "dist:win": "pnpm web:build && electron-builder --win"
+    "dist:win": "pnpm web:build && electron-builder --win",
+    "release": "pnpm web:build && electron-builder --publish always"
   },
   "build": {
     "appId": "com.navis.app",
@@ -24,6 +25,13 @@
       "electron-main.cjs",
       "preload.cjs",
       "web-build/**/*"
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "nu-tree",
+        "repo": "navis"
+      }
     ],
     "mac": {
       "target": "dmg",
@@ -40,6 +48,7 @@
     }
   },
   "dependencies": {
+    "electron-updater": "^6.3.9",
     "serve-handler": "^6.1.6"
   },
   "devDependencies": {

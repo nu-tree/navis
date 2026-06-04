@@ -5,6 +5,7 @@ const { app, BrowserWindow, shell } = require('electron');
 const path = require('node:path');
 const http = require('node:http');
 const handler = require('serve-handler');
+const { autoUpdater } = require('electron-updater');
 
 const isDev = process.env.ELECTRON_DEV === '1';
 const WEB_DIR = path.join(__dirname, 'web-build');
@@ -60,7 +61,11 @@ async function createWindow() {
   }
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  void createWindow();
+  // 패키징된 빌드에서만 GitHub Releases 확인 → 새 버전 자동 다운로드/설치 알림
+  if (!isDev) autoUpdater.checkForUpdatesAndNotify();
+});
 
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) void createWindow();

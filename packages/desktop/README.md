@@ -24,7 +24,21 @@ pnpm --filter navis-desktop dist:win
 ```
 결과물은 `packages/desktop/release/` 에 생성된다.
 
+## 자동 업데이트 (electron-updater)
+새 버전을 GitHub Releases 에 올리면 설치된 앱이 실행 시 자동으로 확인/다운로드한다.
+
+```bash
+cd packages/desktop
+# package.json 의 version 을 올린 뒤:
+export GH_TOKEN=<Releases 게시 권한 토큰>
+pnpm release          # 빌드 + GitHub Releases(nu-tree/navis) 게시
+```
+- `build.publish` 가 github(nu-tree/navis)로 설정돼 있음.
+- 설치된 앱: 실행 시 `autoUpdater.checkForUpdatesAndNotify()` → 새 버전 자동 적용.
+- 즉 데스크톱도 **매번 수동 재설치 불필요** — release 한 번이면 사용자 앱이 알아서 갱신.
+
 ## 구조
-- `electron-main.cjs` — web-build 를 로컬 HTTP 서버로 서빙 후 BrowserWindow 로드
+- `electron-main.cjs` — web-build 를 로컬 HTTP 서버로 서빙 후 BrowserWindow 로드,
+  프로덕션에서 electron-updater 로 자동 업데이트 확인
 - `preload.cjs` — 렌더러 ↔ 메인 브리지 자리 (향후 네이티브 알림/딥링크)
 - `web:build` 스크립트 — `expo export -p web` 결과를 `web-build/` 로 출력
