@@ -219,7 +219,7 @@ function safeParse(raw: string): { text?: string; sessionId?: string } | undefin
 async function handleGithubWebhook(
   req: IncomingMessage,
   res: ServerResponse,
-  client: Client,
+  client: Client | undefined,
 ): Promise<void> {
   try {
     const secret = config.githubWebhookSecret;
@@ -270,6 +270,9 @@ async function handleGithubWebhook(
     const instruction =
       body.match(/##\s*작업 지시\s*\n```\n([\s\S]*?)\n```/)?.[1]?.trim() ??
       "(지시 파싱 실패)";
+
+    // 디스코드 비활성이면 PR 검토 보고 경로(채널)가 없으므로 스킵.
+    if (!client) return;
 
     // fire-and-forget — 디스코드 메인 흐름과 독립
     void reviewPullRequest({

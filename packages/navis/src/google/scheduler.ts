@@ -42,18 +42,15 @@ function markNotified(id: string): void {
   }
 }
 
-let discord: Client;
+let discord: Client | undefined;
 
-export function startCalendarScheduler(client: Client): void {
+export function startCalendarScheduler(client: Client | undefined): void {
   discord = client;
   if (!isCalendarEnabled()) {
     console.log("[calendar] 비활성 (GOOGLE_* env 미설정) — 스케줄러 미시작");
     return;
   }
-  if (!config.navisChannelId) {
-    console.log("[calendar] NAVIS_CHANNEL_ID 미설정 — 자동 알림 미시작 (도구는 동작)");
-    return;
-  }
+  // navisChannelId 가 없어도 동작 — 알림은 앱(/api/reports)으로 간다. 디스코드는 옵션.
   cron.schedule(UPCOMING_CHECK_CRON, () => void runUpcomingCheck(), { timezone: TIMEZONE });
   cron.schedule(FOLLOWUP_CRON, () => void runDailyFollowup(), { timezone: TIMEZONE });
   console.log(
@@ -63,7 +60,6 @@ export function startCalendarScheduler(client: Client): void {
 
 // ── 잡 1: 다가오는 일정 알림 ─────────────────────────────────
 async function runUpcomingCheck(): Promise<void> {
-  if (!config.navisChannelId) return;
   try {
     const { cal } = getCalendar();
     const now = new Date();
@@ -90,9 +86,7 @@ async function runUpcomingCheck(): Promise<void> {
     }
   } catch (err) {
     console.error("[calendar] upcoming 실패:", err);
-    if (config.navisChannelId) {
-      await sendToChannel(discord, config.navisChannelId, `[calendar] upcoming 확인 실패: ${err instanceof Error ? err.message : String(err)}`, "calendar").catch(() => {});
-    }
+    await sendToChannel(discord, config.navisChannelId, `[calendar] upcoming 확인 실패: ${err instanceof Error ? err.message : String(err)}`, "calendar").catch(() => {});
   }
 }
 
@@ -105,7 +99,6 @@ async function notifyUpcoming(e: {
   end?: { dateTime?: string | null } | null;
   htmlLink?: string | null;
 }): Promise<void> {
-  if (!config.navisChannelId) return;
   const verdict = await evaluateUpcoming(e);
   const start = e.start?.dateTime
     ? new Date(e.start.dateTime).toLocaleString("ko-KR", { timeZone: TIMEZONE })
@@ -181,7 +174,6 @@ async function evaluateUpcoming(e: {
 
 // ── 잡 2: 매일 follow-up ────────────────────────────────────
 async function runDailyFollowup(): Promise<void> {
-  if (!config.navisChannelId) return;
   try {
     const { cal } = getCalendar();
     const now = new Date();
@@ -204,7 +196,7 @@ async function runDailyFollowup(): Promise<void> {
       return;
     }
     const summary = await runFollowupAgent(events);
-    if (summary && config.navisChannelId) {
+    if (summary) {
       await sendToChannel(
         discord,
         config.navisChannelId,
@@ -214,9 +206,7 @@ async function runDailyFollowup(): Promise<void> {
     }
   } catch (err) {
     console.error("[calendar] follow-up 실패:", err);
-    if (config.navisChannelId) {
-      await sendToChannel(discord, config.navisChannelId, `[calendar] follow-up 실패: ${err instanceof Error ? err.message : String(err)}`, "calendar").catch(() => {});
-    }
+    await sendToChannel(discord, config.navisChannelId, `[calendar] follow-up 실패: ${err instanceof Error ? err.message : String(err)}`, "calendar").catch(() => {});
   }
 }
 

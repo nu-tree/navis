@@ -9,7 +9,7 @@ import { fetchCrons, patchCronRemote, type CronRow } from "./api.js";
 
 // id → {task, sig}. sig는 schedule|timezone|enabled 로, 바뀐 잡만 다시 건다.
 const jobs = new Map<string, { task: ScheduledTask; sig: string }>();
-let discord: Client;
+let discord: Client | undefined;
 
 const sigOf = (c: CronRow) => `${c.schedule}|${c.timezone}|${c.enabled}`;
 
@@ -73,7 +73,7 @@ export async function reconcile(): Promise<void> {
 }
 
 // 부팅 시 호출. 초기 로드 + 1분마다 동기화(직접 DB 변경/다중 인스턴스 대비).
-export async function startCronScheduler(client: Client): Promise<void> {
+export async function startCronScheduler(client: Client | undefined): Promise<void> {
   discord = client;
   await reconcile().catch((err) => console.error("[cron] 초기 로드 실패:", err));
   cron.schedule("* * * * *", () => void reconcile().catch(() => {}));

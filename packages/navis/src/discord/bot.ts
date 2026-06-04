@@ -182,15 +182,13 @@ async function handleMessage(message: Message): Promise<void> {
   }
 }
 
-export function startDiscord(): Client {
-  // 디스코드 모드 전용 env 검증. config.ts 는 이 둘을 optional 로 두고(CLI 가 영향 안 받게),
-  // 실제 봇을 띄우는 진입점인 여기서 누락 시 종료한다.
+export function startDiscord(): Client | undefined {
+  // 디스코드는 이제 선택. 토큰이 없으면 봇을 띄우지 않고 undefined 를 돌려준다
+  // (앱 /api/chat + 선제 보고만으로 동작). 토큰이 있을 때만 허용 유저를 강제한다.
   const token = config.discordToken;
   if (!token) {
-    console.error(
-      "[discord] DISCORD_TOKEN 누락 — 디스코드 봇 모드는 토큰 필수.",
-    );
-    process.exit(1);
+    console.log("[discord] DISCORD_TOKEN 미설정 — 디스코드 봇 비활성 (앱 모드로 동작)");
+    return undefined;
   }
   if (config.allowedUserIds.length === 0) {
     console.error(

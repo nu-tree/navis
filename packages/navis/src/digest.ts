@@ -28,7 +28,7 @@ function buildDigestPrompt(days: number): string {
   ].join("\n");
 }
 
-let discord: Client;
+let discord: Client | undefined;
 
 // 다이제스트 1회 실행: navis가 요약→프로필 갱신을 수행하고, 채널이 설정돼 있으면
 // 요약을 보고한다. 수동 트리거(테스트)에도 재사용할 수 있게 분리.
@@ -42,35 +42,30 @@ export async function runDigest(): Promise<void> {
       undefined, // 크론 도구 불필요
       true, // profile_update 허용 (신뢰된 자동화 경로)
     );
-    if (config.navisChannelId) {
+    // 항상 보고로 기록(앱이 받음) + 디스코드 채널 있으면 추가 전송.
+    await sendToChannel(
+      discord,
+      config.navisChannelId,
+      `**주간 기억 다이제스트**\n\n${text}`,
+      "digest",
+    );
+  } catch (err) {
+    console.error("[digest] 실행 실패:", err);
+    try {
       await sendToChannel(
         discord,
         config.navisChannelId,
-        `**주간 기억 다이제스트**\n\n${text}`,
+        `[다이제스트] 실행 실패: ${err instanceof Error ? err.message : String(err)}`,
         "digest",
       );
-    } else {
-      console.log("[digest] DIGEST_CHANNEL_ID 미설정 — 프로필만 갱신, 포스팅 생략");
-    }
-  } catch (err) {
-    console.error("[digest] 실행 실패:", err);
-    if (config.navisChannelId && discord) {
-      try {
-        await sendToChannel(
-          discord,
-          config.navisChannelId,
-          `[다이제스트] 실행 실패: ${err instanceof Error ? err.message : String(err)}`,
-          "digest",
-        );
-      } catch {
-        // Discord 알림 실패는 무시 (이미 console.error로 기록됨)
-      }
+    } catch {
+      // 전송 실패는 무시 (이미 console.error로 기록됨)
     }
   }
 }
 
 // 부팅 시 호출. digestSchedule(cron 식)에 맞춰 주기 실행을 등록한다.
-export function startDigestScheduler(client: Client): void {
+export function startDigestScheduler(client: Client | undefined): void {
   discord = client;
   if (!cron.validate(config.digestSchedule)) {
     console.error(`[digest] 잘못된 cron 식, 스케줄러 미시작: ${config.digestSchedule}`);

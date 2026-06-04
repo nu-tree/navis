@@ -32,15 +32,18 @@ function defaultMeta(logTag: string): ReportMeta {
 // 채널을 못 찾거나 보낼 수 없으면 로그만 남기고 조용히 실패(스케줄러 흐름을 막지 않음).
 // meta 를 주면 그 출처(방)로 보고를 기록한다. 없으면 logTag 기본 출처.
 export async function sendToChannel(
-  client: Client,
-  channelId: string,
+  client: Client | undefined,
+  channelId: string | undefined,
   text: string,
   logTag = "discord",
   meta?: ReportMeta,
 ): Promise<void> {
-  // 선제 보고를 앱(/api/reports)용으로도 기록 — 디스코드 전송 성패와 무관하게.
+  // 선제 보고를 앱(/api/reports)용으로 항상 기록 — 디스코드 유무·전송 성패와 무관하게.
   const source = meta ?? defaultMeta(logTag);
   recordReport({ type: logTag, text, sourceId: source.sourceId, sourceTitle: source.sourceTitle });
+
+  // 디스코드 미사용(클라/채널 없음)이면 기록만 하고 종료 — 앱이 /api/reports 로 받는다.
+  if (!client || !channelId) return;
 
   const ch = await client.channels.fetch(channelId).catch(() => null);
   if (!ch || !ch.isSendable()) {
