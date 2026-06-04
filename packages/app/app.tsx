@@ -4,14 +4,21 @@ import { StatusBar } from 'expo-status-bar';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ChatScreen } from './src/screens/chat-screen';
+import { MemoriesScreen } from './src/screens/memories-screen';
+import { useUiStore } from './src/store/ui-store';
 
 const queryClient = new QueryClient();
+
+function Root() {
+  const screen = useUiStore((s) => s.screen);
+  return screen === 'memories' ? <MemoriesScreen /> : <ChatScreen />;
+}
 
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <SafeAreaProvider>
-        <ChatScreen />
+        <Root />
         <StatusBar style="light" />
       </SafeAreaProvider>
     </QueryClientProvider>

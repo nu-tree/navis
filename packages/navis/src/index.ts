@@ -5,6 +5,7 @@ import { config } from "./config.js";
 import { askClaude } from "./claude/ask.js";
 import { getReports } from "./reports/store.js";
 import { fetchCrons } from "./cron/api.js";
+import { fetchMemories, patchMemory, deleteMemory } from "./memories/api.js";
 import { startDiscord } from "./discord/bot.js";
 import { startCronScheduler } from "./cron/scheduler.js";
 import { startDigestScheduler } from "./digest.js";
@@ -73,6 +74,15 @@ createServer((req, res) => {
       return;
     }
   }
+  if (req.url?.startsWith("/api/memories")) {
+    if (req.method === "OPTIONS") {
+      res.writeHead(204, CORS_HEADERS);
+      res.end();
+      return;
+    }
+    void handleMemories(req, res);
+    return;
+  }
   res.writeHead(404);
   res.end();
 }).listen(config.port, "0.0.0.0", () => {
@@ -110,6 +120,56 @@ async function handleCrons(req: IncomingMessage, res: ServerResponse): Promise<v
     res.end(JSON.stringify({ crons: safe }));
   } catch (err) {
     console.error("[crons] 조회 실패:", err);
+    res.writeHead(502, JSON_HEADERS);
+    res.end(JSON.stringify({ error: "upstream error" }));
+  }
+}
+
+// 앱 기억 페이지 — namory 기억 REST 프록시. GET 목록 / PATCH 수정 / DELETE 삭제.
+async function handleMemories(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const token = config.appApiToken;
+  if (!token) {
+    res.writeHead(503, JSON_HEADERS);
+    res.end(JSON.stringify({ error: "app api not configured" }));
+    return;
+  }
+  const auth = req.headers["authorization"];
+  if (typeof auth !== "string" || !verifyBearer(token, auth)) {
+    res.writeHead(401, JSON_HEADERS);
+    res.end(JSON.stringify({ error: "unauthorized" }));
+    return;
+  }
+
+  const url = new URL(req.url ?? "/api/memories", "http://localhost");
+  const idMatch = url.pathname.match(/^\/api\/memories\/([^/]+)$/);
+
+  try {
+    if (req.method === "GET" && url.pathname === "/api/memories") {
+      const limit = Number(url.searchParams.get("limit")) || undefined;
+      const project = url.searchParams.get("project") ?? undefined;
+      const memories = await fetchMemories(limit, project);
+      res.writeHead(200, JSON_HEADERS);
+      res.end(JSON.stringify({ memories }));
+      return;
+    }
+    if (req.method === "PATCH" && idMatch) {
+      const raw = await readBody(req);
+      const body = (safeParse(raw) ?? {}) as Record<string, unknown>;
+      const result = await patchMemory(idMatch[1], body);
+      res.writeHead(result.ok ? 200 : result.status, JSON_HEADERS);
+      res.end(JSON.stringify({ ok: result.ok }));
+      return;
+    }
+    if (req.method === "DELETE" && idMatch) {
+      const result = await deleteMemory(idMatch[1]);
+      res.writeHead(result.ok ? 200 : result.status, JSON_HEADERS);
+      res.end(JSON.stringify({ ok: result.ok }));
+      return;
+    }
+    res.writeHead(404, JSON_HEADERS);
+    res.end(JSON.stringify({ error: "not found" }));
+  } catch (err) {
+    console.error("[memories] proxy 실패:", err);
     res.writeHead(502, JSON_HEADERS);
     res.end(JSON.stringify({ error: "upstream error" }));
   }
@@ -204,9 +264,9 @@ function verifyBearer(token: string, header: string): boolean {
   return timingSafeEqual(a, b);
 }
 
-function safeParse(raw: string): { text?: string; sessionId?: string } | undefined {
+function safeParse(raw: string): Record<string, unknown> | undefined {
   try {
-    return JSON.parse(raw) as { text?: string; sessionId?: string };
+    return JSON.parse(raw) as Record<string, unknown>;
   } catch {
     return undefined;
   }

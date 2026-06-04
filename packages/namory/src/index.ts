@@ -2,6 +2,10 @@ import Fastify from "fastify";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { buildMcpServer } from "./mcp.js";
 import { listCrons, createCron, deleteCron, updateCron } from "./tools/cron.js";
+import { listMemories } from "./tools/recent.js";
+import { update } from "./tools/update.js";
+import { remove } from "./tools/remove.js";
+import { CATEGORIES, type Category } from "./db/schema.js";
 
 const app = Fastify({
   logger: {
@@ -29,8 +33,13 @@ app.get("/health", async () => ({ ok: true }));
 //  2) ?token=<토큰> 쿼리 파라미터    — Claude 커스텀 커넥터 UI엔 헤더/토큰 입력란이
 //     없어 URL에 실어야 함. 토큰은 위 로거에서 마스킹됨.
 app.addHook("onRequest", async (req, reply) => {
-  // /mcp(도구)와 /crons(스케줄 CRUD) 둘 다 토큰으로 보호. 그 외(/health)는 공개.
-  if (!req.url.startsWith("/mcp") && !req.url.startsWith("/crons")) return;
+  // /mcp(도구)·/crons(스케줄)·/memories(기억 CRUD) 토큰 보호. 그 외(/health)는 공개.
+  if (
+    !req.url.startsWith("/mcp") &&
+    !req.url.startsWith("/crons") &&
+    !req.url.startsWith("/memories")
+  )
+    return;
   const headerToken = req.headers.authorization?.replace(/^Bearer\s+/i, "");
   const queryToken =
     new URL(req.url, "http://localhost").searchParams.get("token") ?? undefined;
@@ -121,6 +130,58 @@ app.patch<{ Params: { id: string } }>("/crons/:id", async (req, reply) => {
       return reply.code(404).send({ error: "해당 id의 크론이 없습니다" });
     }
     console.error("[crons] unexpected error:", err);
+    return reply.code(500).send({ error: "서버 오류" });
+  }
+});
+
+// 기억 CRUD (앱 기억 페이지가 navis 프록시를 통해 사용). 조회/수정/삭제.
+// 수정 시 update() 가 content 변경을 감지해 임베딩을 재계산한다.
+app.get("/memories", async (req) => {
+  const q = new URL(req.url, "http://localhost").searchParams;
+  const limit = Number(q.get("limit")) || undefined;
+  const project = q.get("project") ?? undefined;
+  return { memories: await listMemories({ limit, project }) };
+});
+
+app.patch<{ Params: { id: string } }>("/memories/:id", async (req, reply) => {
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  const patch: {
+    id: string;
+    content?: string;
+    category?: Category;
+    project?: string;
+    tags?: string[];
+    done?: boolean;
+  } = { id: req.params.id };
+  if (typeof b.content === "string") patch.content = b.content;
+  if (typeof b.category === "string" && CATEGORIES.includes(b.category as Category)) {
+    patch.category = b.category as Category;
+  }
+  if (typeof b.project === "string") patch.project = b.project;
+  if (Array.isArray(b.tags)) patch.tags = b.tags.filter((t): t is string => typeof t === "string");
+  if (typeof b.done === "boolean") patch.done = b.done;
+  try {
+    return await update(patch);
+  } catch (err) {
+    if (err instanceof Error && err.message.startsWith("해당 id의 기억이 없습니다")) {
+      return reply.code(404).send({ error: "해당 id의 기억이 없습니다" });
+    }
+    if (err instanceof Error && err.message.startsWith("수정할 필드가 없습니다")) {
+      return reply.code(400).send({ error: err.message });
+    }
+    console.error("[memories] update 오류:", err);
+    return reply.code(500).send({ error: "서버 오류" });
+  }
+});
+
+app.delete<{ Params: { id: string } }>("/memories/:id", async (req, reply) => {
+  try {
+    return await remove({ id: req.params.id });
+  } catch (err) {
+    if (err instanceof Error && err.message.startsWith("해당 id의 기억이 없습니다")) {
+      return reply.code(404).send({ error: "해당 id의 기억이 없습니다" });
+    }
+    console.error("[memories] delete 오류:", err);
     return reply.code(500).send({ error: "서버 오류" });
   }
 });

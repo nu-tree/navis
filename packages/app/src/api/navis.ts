@@ -79,6 +79,49 @@ export type Cron = {
   lastRunAt: string | null;
 };
 
+export type Memory = {
+  id: string;
+  content: string;
+  category: string | null;
+  project: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+};
+
+export type MemoryPatch = {
+  content?: string;
+  category?: string;
+  project?: string;
+};
+
+// 내 기억 전체 조회 (navis → namory 프록시)
+export async function fetchMemories(): Promise<Memory[]> {
+  if (!IS_BACKEND_CONFIGURED) return [];
+  const res = await fetch(`${NAVIS_URL}/api/memories`, {
+    headers: { authorization: `Bearer ${NAVIS_TOKEN}` },
+  });
+  if (!res.ok) throw new Error(`기억 조회 오류: ${res.status}`);
+  const data = (await res.json()) as { memories: Memory[] };
+  return data.memories;
+}
+
+export async function patchMemory(id: string, patch: MemoryPatch): Promise<void> {
+  const res = await fetch(`${NAVIS_URL}/api/memories/${id}`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${NAVIS_TOKEN}` },
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) throw new Error(`기억 수정 오류: ${res.status}`);
+}
+
+export async function deleteMemory(id: string): Promise<void> {
+  const res = await fetch(`${NAVIS_URL}/api/memories/${id}`, {
+    method: 'DELETE',
+    headers: { authorization: `Bearer ${NAVIS_TOKEN}` },
+  });
+  if (!res.ok) throw new Error(`기억 삭제 오류: ${res.status}`);
+}
+
 // 크론 목록 — 크론마다 보고방을 미리 만들기 위해.
 export async function fetchCrons(): Promise<Cron[]> {
   if (!IS_BACKEND_CONFIGURED) return [];
