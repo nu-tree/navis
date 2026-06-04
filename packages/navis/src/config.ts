@@ -160,6 +160,10 @@ export const config = {
   // (레포 공개 대비 — 프롬프트는 .env / Railway 변수에만 존재). 없으면 즉시 종료.
   systemPrompt: required("SYSTEM_PROMPT"),
 
+  // 모바일/데스크톱 앱(navis-app)이 /api/chat 을 호출할 때 쓰는 인증 토큰.
+  // 미설정이면 /api/chat 라우트가 비활성(503). 앱의 EXPO_PUBLIC_NAVIS_TOKEN 과 동일 값.
+  appApiToken: optional("APP_API_TOKEN"),
+
   // Railway 헬스체크용 포트. 디스코드 봇은 인바운드 HTTP가 필요 없지만
   // 호스팅 uptime 체크를 위해 /health 만 연다.
   port: Number(process.env.PORT) || 3000,

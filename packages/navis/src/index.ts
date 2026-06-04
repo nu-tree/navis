@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { Client } from "discord.js";
 import { config } from "./config.js";
+import { askClaude } from "./claude/ask.js";
 import { startDiscord } from "./discord/bot.js";
 import { startCronScheduler } from "./cron/scheduler.js";
 import { startDigestScheduler } from "./digest.js";
@@ -36,11 +37,98 @@ createServer((req, res) => {
     void handleGithubWebhook(req, res, client);
     return;
   }
+  if (req.url === "/api/chat") {
+    // 네이티브 앱은 CORS 무관하지만, 추후 데스크톱(Electron/웹뷰) 대비 preflight 허용.
+    if (req.method === "OPTIONS") {
+      res.writeHead(204, CORS_HEADERS);
+      res.end();
+      return;
+    }
+    if (req.method === "POST") {
+      void handleChat(req, res);
+      return;
+    }
+  }
   res.writeHead(404);
   res.end();
 }).listen(config.port, "0.0.0.0", () => {
-  console.log(`[agent] http on :${config.port} (/health, /webhook/github)`);
+  console.log(`[agent] http on :${config.port} (/health, /webhook/github, /api/chat)`);
 });
+
+// navis-app(모바일/데스크톱) 채팅 엔드포인트. 디스코드와 같은 두뇌(askClaude)를 쓰되
+// 인증은 APP_API_TOKEN Bearer 토큰으로 한다. 멀티턴은 클라가 보관한 sessionId 로 이어가고,
+// 컨텍스트가 한도를 넘으면 contextFull:true 를 돌려 클라가 다음 턴부터 세션을 리셋한다.
+const CORS_HEADERS = {
+  "access-control-allow-origin": "*",
+  "access-control-allow-methods": "POST, OPTIONS",
+  "access-control-allow-headers": "authorization, content-type",
+} as const;
+const JSON_HEADERS = { ...CORS_HEADERS, "content-type": "application/json" } as const;
+
+async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  try {
+    const token = config.appApiToken;
+    if (!token) {
+      res.writeHead(503, JSON_HEADERS);
+      res.end(JSON.stringify({ error: "app api not configured" }));
+      return;
+    }
+
+    const auth = req.headers["authorization"];
+    if (typeof auth !== "string" || !verifyBearer(token, auth)) {
+      res.writeHead(401, JSON_HEADERS);
+      res.end(JSON.stringify({ error: "unauthorized" }));
+      return;
+    }
+
+    const raw = await readBody(req);
+    const body = safeParse(raw);
+    const text = typeof body?.text === "string" ? body.text.trim() : "";
+    if (!text) {
+      res.writeHead(400, JSON_HEADERS);
+      res.end(JSON.stringify({ error: "text required" }));
+      return;
+    }
+    const resume =
+      typeof body?.sessionId === "string" && body.sessionId ? body.sessionId : undefined;
+
+    const result = await askClaude(text, resume);
+    const contextFull = result.contextTokens >= config.contextTokenLimit;
+
+    res.writeHead(200, JSON_HEADERS);
+    res.end(
+      JSON.stringify({
+        text: result.text,
+        sessionId: result.sessionId,
+        contextFull,
+      }),
+    );
+  } catch (err) {
+    console.error("[chat] 처리 실패:", err);
+    if (!res.headersSent) {
+      res.writeHead(500, JSON_HEADERS);
+      res.end(JSON.stringify({ error: "internal error" }));
+    }
+  }
+}
+
+// "Bearer <token>" 헤더를 상수시간 비교로 검증.
+function verifyBearer(token: string, header: string): boolean {
+  const match = header.match(/^Bearer\s+(.+)$/i);
+  if (!match) return false;
+  const a = Buffer.from(match[1]);
+  const b = Buffer.from(token);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
+
+function safeParse(raw: string): { text?: string; sessionId?: string } | undefined {
+  try {
+    return JSON.parse(raw) as { text?: string; sessionId?: string };
+  } catch {
+    return undefined;
+  }
+}
 
 // GitHub repo Settings → Webhooks 에서 /webhook/github 으로 등록. content type:
 // application/json, secret 은 GITHUB_WEBHOOK_SECRET 과 동일 값, 이벤트는 Pull requests 만.
