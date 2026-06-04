@@ -3,13 +3,14 @@ import { config } from "../config.js";
 import { buildCronTools, CRON_TOOL_NAMES } from "../cron/mcp.js";
 import { buildRepoTools, REPO_TOOL_NAMES } from "../repo/mcp.js";
 import { buildSelfModifyTools, SELF_MODIFY_TOOL_NAMES } from "../self-modify/mcp.js";
+import { buildGoogleTools, GOOGLE_TOOL_NAMES } from "../google/mcp.js";
+import { isCalendarEnabled } from "../google/auth.js";
 import {
   BUILTIN_TOOLS,
   NAMORY_PROFILE_UPDATE_TOOL,
   NAMORY_TOOLS,
 } from "./allowed-tools.js";
 import {
-  httpMcp,
   notionStdio,
   type McpHttpServer,
   type McpStdioServer,
@@ -35,6 +36,10 @@ export async function askClaude(
   // CLI에서 감지된 프로젝트명(있으면). 시스템 프롬프트에 부속문을 붙여
   // 이 대화에서 발생하는 save 호출이 자동으로 project 태그를 부착하게 한다.
   projectContext?: string,
+  // 새 세션 시작 시 채널 직전 메시지들을 텍스트로 묶어 넘기는 맥락 보강.
+  // 크론/자율 루틴이 보낸 보고 메시지가 sessionId 매핑 밖이라 그 직후 사용자
+  // 질문이 "맥락 없음" 으로 보이던 버그를 메운다. 이미 진행 중 세션은 빈 값.
+  historyContext?: string,
 ): Promise<AskResult> {
   let text = "";
   let sessionId = "";
@@ -57,10 +62,18 @@ export async function askClaude(
   // 메인 턴에서 잡으면 응답 흐름 안에서 자연스럽게 저장돼 UX가 매끄럽다.
   const nudgedPrompt = applySaveNudge(prompt);
 
+  // historyContext 는 사용자가 아닌 채널 로그라 nudge 키워드 매칭 대상이 아니다.
+  // 그래서 nudge 적용 후에 합친다.
+  const promptWithHistory = historyContext
+    ? `[참고: 이 채널의 최근 메시지 — 'navis' 는 너 자신의 직전 발화/자동 보고. 새 세션이라 맥락 보강용으로 붙여둠. 사용자의 이번 질문은 아래 "[현재 메시지]" 블록.]\n${historyContext}\n\n[현재 메시지]\n${nudgedPrompt}`
+    : nudgedPrompt;
+
   // 이미지가 있으면 content block 배열로 구성해 user 메시지 하나를 yield 한다.
   // 없으면 기존처럼 문자열 prompt 그대로(가장 단순한 경로).
   const promptInput =
-    images.length > 0 ? buildImageMessage(nudgedPrompt, images) : nudgedPrompt;
+    images.length > 0
+      ? buildImageMessage(promptWithHistory, images)
+      : promptWithHistory;
 
   // 채널 id가 있으면(=실제 대화) 그 채널에 묶인 in-process 크론 도구를 붙인다.
   // 크론 발동 결과는 이 채널로 가도록 channelId를 클로저로 주입한다.
@@ -75,7 +88,11 @@ export async function askClaude(
   // GitHub PR 로만 결과 확인 가능. webhook 매핑용 channelId 는 있을 때만 클로저로 묶인다.
   const selfModifyServer = buildSelfModifyTools(channelId);
 
-  // 선택 외부 연동(노션/구글). env에 토큰이 있을 때만 설정이 채워진다.
+  // 구글 캘린더 in-process MCP. env 셋(client/secret/refresh) 다 채워졌을 때만 활성.
+  // CLI/디스코드 모드 모두 노출 — 일정 조회·생성은 어느 채널이든 동일하게 의미 있음.
+  const googleServer = isCalendarEnabled() ? buildGoogleTools() : undefined;
+
+  // 선택 외부 연동(노션). env에 토큰이 있을 때만 설정이 채워진다.
   // 서버 단위로 allowedTools에 `mcp__<name>` 을 넣어 그 서버의 모든 도구를 자동 승인.
   const extraServers: Record<string, McpHttpServer | McpStdioServer> = {};
   const extraToolNames: string[] = [];
@@ -83,10 +100,6 @@ export async function askClaude(
     // 노션은 OAuth 회피용 self-host stdio (내부 통합 토큰만 주입).
     extraServers.notion = notionStdio(config.notionToken);
     extraToolNames.push("mcp__notion");
-  }
-  if (config.google) {
-    extraServers.google = httpMcp(config.google);
-    extraToolNames.push("mcp__google");
   }
 
   // 프로젝트 컨텍스트가 있으면 시스템 프롬프트에 부속문을 합성. 코드로 강제 인젝션
@@ -124,6 +137,7 @@ export async function askClaude(
         ...(cronServer ? { cron: cronServer } : {}),
         repo: repoServer,
         self_modify: selfModifyServer,
+        ...(googleServer ? { google: googleServer } : {}),
         ...extraServers,
       },
       // 자동 승인 도구: namory + 내장(파일/셸/웹/탐색) + repo 조회 + (대화 중이면) 크론·자기개선 + 부가 연동.
@@ -135,6 +149,7 @@ export async function askClaude(
         ...(cronServer ? CRON_TOOL_NAMES : []),
         ...REPO_TOOL_NAMES,
         ...SELF_MODIFY_TOOL_NAMES,
+        ...(googleServer ? GOOGLE_TOOL_NAMES : []),
         ...BUILTIN_TOOLS,
         ...extraToolNames,
       ],

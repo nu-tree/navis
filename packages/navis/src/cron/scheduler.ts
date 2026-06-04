@@ -2,7 +2,7 @@ import cron, { type ScheduledTask } from "node-cron";
 import type { Client } from "discord.js";
 import { askClaude } from "../claude/ask.js";
 import { sendToChannel } from "../discord/send.js";
-import { fetchCrons, type CronRow } from "./api.js";
+import { fetchCrons, patchCronRemote, type CronRow } from "./api.js";
 
 // 선제적 알림 스케줄러. 영속화는 namory(REST /crons)가, 스케줄링/전송은 여기서.
 // 부팅 시 namory에서 잡을 읽어 등록하고, 발동하면 askClaude로 실행해 채널로 보낸다.
@@ -45,10 +45,19 @@ export function unscheduleCron(id: string): void {
 async function runCron(c: CronRow): Promise<void> {
   console.log(`[cron] 발동: '${c.title}'`);
   try {
-    const { text } = await askClaude(c.prompt);
+    const { text } = await askClaude(c.prompt, undefined, [], c.channelId);
     await sendToChannel(discord, c.channelId, text, "cron");
+    // 성공한 실행 시각을 기록 (lastRunAt 업데이트). 실패해도 흐름은 유지.
+    void patchCronRemote(c.id, { lastRunAt: new Date().toISOString() });
   } catch (err) {
     console.error(`[cron] '${c.title}' 실행 실패:`, err);
+    // 사용자가 실패를 인지할 수 있도록 Discord 채널에도 알림.
+    sendToChannel(
+      discord,
+      c.channelId,
+      `⚠️ 크론 '${c.title}' 실행에 실패했어요. Railway 로그를 확인해주세요.`,
+      "cron",
+    ).catch(() => {}); // 알림 실패는 무시(무한 루프 방지)
   }
 }
 

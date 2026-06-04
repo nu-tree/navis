@@ -65,6 +65,7 @@ const MAX_DIFF_CHARS = 60_000; // sonnet 컨텍스트 안에서 안전한 크기
 async function fetchPrDiff(prNumber: number): Promise<string> {
   const url = `https://api.github.com/repos/${config.githubRepo}/pulls/${prNumber}`;
   const res = await fetch(url, {
+    signal: AbortSignal.timeout(15_000),
     headers: {
       accept: "application/vnd.github.v3.diff",
       "x-github-api-version": "2022-11-28",
@@ -100,7 +101,7 @@ async function runReview(
     prompt,
     options: {
       // 코드 리뷰는 정확도 중요. sonnet 충분 (opus 까진 과함).
-      model: "claude-sonnet-4-6",
+      model: config.reviewModel,
       systemPrompt: REVIEW_SYSTEM_PROMPT,
       // 도구 호출 불필요 — diff 는 프롬프트에 다 박아둠.
       allowedTools: [],

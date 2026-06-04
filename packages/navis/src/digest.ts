@@ -42,10 +42,10 @@ export async function runDigest(): Promise<void> {
       undefined, // 크론 도구 불필요
       true, // profile_update 허용 (신뢰된 자동화 경로)
     );
-    if (config.digestChannelId) {
+    if (config.navisChannelId) {
       await sendToChannel(
         discord,
-        config.digestChannelId,
+        config.navisChannelId,
         `**주간 기억 다이제스트**\n\n${text}`,
         "digest",
       );
@@ -54,6 +54,18 @@ export async function runDigest(): Promise<void> {
     }
   } catch (err) {
     console.error("[digest] 실행 실패:", err);
+    if (config.navisChannelId && discord) {
+      try {
+        await sendToChannel(
+          discord,
+          config.navisChannelId,
+          `[다이제스트] 실행 실패: ${err instanceof Error ? err.message : String(err)}`,
+          "digest",
+        );
+      } catch {
+        // Discord 알림 실패는 무시 (이미 console.error로 기록됨)
+      }
+    }
   }
 }
 

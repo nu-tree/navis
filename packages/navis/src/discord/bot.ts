@@ -8,12 +8,59 @@ import {
 import { config } from "../config.js";
 import { askClaude } from "../claude/ask.js";
 import { curateTurn } from "../claude/curator.js";
+import {
+  consumeAwaitingAnswer,
+  scheduleFollowupIfWarranted,
+} from "../followup/scheduler.js";
 import { collectImages } from "./image.js";
 import { chunk } from "./send.js";
+import {
+  getChannelSession,
+  setChannelSession,
+  clearChannelSession,
+} from "./sessions.js";
 
-// 채널(DM 포함)별 진행 중인 대화 세션. in-memory라 재시작하면 사라진다(의도된 것 —
-// 영속 맥락은 namory가 담당). contextTokens가 한도를 넘으면 다음 메시지에서 새 세션.
-const sessions = new Map<string, { sessionId: string; contextTokens: number }>();
+// 채널 세션 맵은 ./sessions.ts 로 추출. followup/scheduler 도 같은 맵을 건드려야 해서
+// (질문 발송 후 세션 리셋) 순환 import 를 피하려고 별도 모듈로 뺐다.
+
+// 새 세션을 시작할 때 채널 최근 메시지 중 끌어올 개수. 크론 보고처럼 봇 메시지가
+// 끼어 사용자 다음 질문이 "맥락 없음" 으로 보이던 케이스를 메우는 용도 — 너무 크면
+// 첫 프롬프트가 부풀고, 너무 작으면 보고 메시지를 놓친다. 10이 균형.
+const HISTORY_LIMIT = 10;
+
+// 현재 처리 중인 메시지 직전의 채널 메시지들을 텍스트로 묶어 반환.
+// 봇(navis) 자신의 메시지도 포함해 크론/자율 보고가 맥락에 잡히도록 한다.
+// fetch 실패(권한 부족, partial DM 등)는 빈 문자열로 폴백.
+async function fetchRecentHistory(
+  message: Message,
+  limit: number,
+): Promise<string> {
+  const channel = message.channel;
+  // 일부 partial 채널 객체는 messages 매니저가 없을 수 있음.
+  if (!("messages" in channel) || !channel.messages?.fetch) return "";
+  try {
+    const fetched = await channel.messages.fetch({
+      limit,
+      before: message.id,
+    });
+    // fetched 는 newest-first Collection. 시간순(오래된 → 최신)으로 재정렬.
+    const sorted = Array.from(fetched.values()).sort(
+      (a, b) => a.createdTimestamp - b.createdTimestamp,
+    );
+    const lines: string[] = [];
+    for (const m of sorted) {
+      const content = m.content?.trim();
+      // 본문 없는 첨부-only/시스템 메시지는 텍스트 맥락에 의미 없으니 스킵.
+      if (!content) continue;
+      const who = m.author.bot ? "navis" : m.author.username;
+      lines.push(`[${who}]: ${content}`);
+    }
+    return lines.join("\n");
+  } catch (err) {
+    console.error("[discord] 채널 히스토리 조회 실패:", err);
+    return "";
+  }
+}
 
 async function handleMessage(message: Message): Promise<void> {
   // 봇 자신·다른 봇 무시.
@@ -30,17 +77,30 @@ async function handleMessage(message: Message): Promise<void> {
 
   // 수동 초기화: 진행 중 대화를 끊고 다음 메시지부터 새 세션.
   if (prompt === "/reset") {
-    sessions.delete(channelId);
+    clearChannelSession(channelId);
     await message.reply("대화 맥락을 초기화했어요. 새로 시작합니다.");
     return;
   }
 
+  // 자발적 팔로업: 이 채널로 navis 가 먼저 물어본 질문이 있고 사용자가 답하러
+  // 돌아왔으면 그 질문을 가져와 사후 큐레이터에 넘긴다(저장 가능성↑).
+  const followupAnswer = consumeAwaitingAnswer(channelId);
+
+  let typingInterval: ReturnType<typeof setInterval> | null = null;
   try {
     // 처리 중 타이핑 표시 (Claude 응답까지 몇 초 걸림).
-    if (message.channel.isSendable()) await message.channel.sendTyping();
+    // Discord typing indicator는 10초 후 자동 소멸하므로 8초마다 갱신.
+    if (message.channel.isSendable()) {
+      await message.channel.sendTyping();
+      typingInterval = setInterval(() => {
+        if (message.channel.isSendable()) {
+          message.channel.sendTyping().catch(() => {});
+        }
+      }, 8_000);
+    }
 
     // 직전 세션이 한도 미만이면 이어받고, 넘었으면(또는 없으면) 새 세션.
-    const prev = sessions.get(channelId);
+    const prev = getChannelSession(channelId);
     const overLimit =
       prev !== undefined && prev.contextTokens >= config.contextTokenLimit;
     const resumeId = prev && !overLimit ? prev.sessionId : undefined;
@@ -55,13 +115,22 @@ async function handleMessage(message: Message): Promise<void> {
       );
     }
 
+    // 새 세션 시작(=resumeId 없음)일 때만 채널 직전 메시지를 맥락 보강용으로 끌어옴.
+    // 진행 중 세션은 이미 히스토리를 갖고 있어서 중복 주입은 토큰 낭비.
+    const historyContext = resumeId
+      ? undefined
+      : await fetchRecentHistory(message, HISTORY_LIMIT);
+
     const { text, sessionId, contextTokens, saved } = await askClaude(
       prompt,
       resumeId,
       images,
       channelId,
+      false,
+      undefined,
+      historyContext || undefined,
     );
-    sessions.set(channelId, { sessionId, contextTokens });
+    setChannelSession(channelId, { sessionId, contextTokens });
 
     // 무언가 저장했으면 사용자 메시지에 💡 리액션으로 표시(본문엔 알림 텍스트 없음).
     if (saved) {
@@ -76,10 +145,38 @@ async function handleMessage(message: Message): Promise<void> {
 
     // 사후 큐레이터(A) — 답변을 보낸 뒤 백그라운드로 한 번 더 평가해 저장 누락을 메운다.
     // fire-and-forget: 사용자 UX는 끝났고 큐레이터 실패는 무시(자체 try/catch).
-    void curateTurn({ userText: prompt, assistantText: text });
+    // 이번 메시지가 navis 의 자발적 팔로업 질문에 대한 응답이면 그 맥락을 함께 넘긴다.
+    // 메인 턴에서 이미 saved=true 라 💡 가 붙어 있어도, Discord 가 같은 이모지 중복을
+    // 무시하므로 이중 리액션 위험은 없다.
+    curateTurn({
+      userText: prompt,
+      assistantText: text,
+      followupAnswerContext: followupAnswer?.question,
+    })
+      .then((curatorSaved) => {
+        if (curatorSaved) {
+          message.react("💡").catch((err) => {
+            console.error("[discord] 큐레이터 리액션 실패:", err);
+          });
+        }
+      })
+      .catch(() => {
+        // fire-and-forget 유지 — 큐레이터 실패는 무시.
+      });
+
+    // 자발적 팔로업 스케줄링(C) — 이 턴의 결과를 나중에 다시 물어볼 가치가 있는지
+    // Haiku 가 판단해 예약. 기존 채널 예약/대기는 내부에서 cancel 되므로 항상 안전.
+    void scheduleFollowupIfWarranted({
+      client: message.client,
+      channelId,
+      userText: prompt,
+      assistantText: text,
+    });
   } catch (err) {
     console.error("[discord] 처리 실패:", err);
     await message.reply("⚠️ 처리 중 오류가 났어요. 로그를 확인해주세요.");
+  } finally {
+    if (typingInterval) clearInterval(typingInterval);
   }
 }
 

@@ -82,7 +82,7 @@ export function buildRepoTools(): McpSdkServerConfigWithInstance {
           if ("error" in r) return err(r.error);
           const refParam = args.ref ? `?ref=${encodeURIComponent(args.ref)}` : "";
           const url = `https://api.github.com/repos/${r.repo}/contents/${encodeURI(args.path)}${refParam}`;
-          const res = await fetch(url, { headers: buildHeaders() });
+          const res = await fetch(url, { headers: buildHeaders(), signal: AbortSignal.timeout(10_000) });
           if (res.status === 404) {
             return err(`파일을 찾을 수 없습니다: ${args.path} (ref=${args.ref ?? "main"})`);
           }
@@ -121,7 +121,7 @@ export function buildRepoTools(): McpSdkServerConfigWithInstance {
           const dir = args.dir ?? "";
           const refParam = args.ref ? `?ref=${encodeURIComponent(args.ref)}` : "";
           const url = `https://api.github.com/repos/${r.repo}/contents/${encodeURI(dir)}${refParam}`;
-          const res = await fetch(url, { headers: buildHeaders() });
+          const res = await fetch(url, { headers: buildHeaders(), signal: AbortSignal.timeout(10_000) });
           if (res.status === 404) {
             return err(`디렉터리를 찾을 수 없습니다: ${dir || "(루트)"} (ref=${args.ref ?? "main"})`);
           }

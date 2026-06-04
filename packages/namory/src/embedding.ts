@@ -12,6 +12,7 @@ export async function embed(
 
   const res = await fetch(ENDPOINT, {
     method: "POST",
+    signal: AbortSignal.timeout(10_000),
     headers: {
       "content-type": "application/json",
       authorization: `Bearer ${key}`,
