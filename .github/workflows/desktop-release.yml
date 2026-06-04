@@ -1,20 +1,18 @@
-# navis 데스크톱 릴리스 — 맥/윈도우 설치파일을 GitHub Releases 에 자동 게시.
+# navis 데스크톱 릴리스 — 맥/윈도우 설치파일을 navis(Railway)로 게시.
 #
 # 동작:
 #   - `desktop-v*` 태그를 push 하거나 수동 실행(workflow_dispatch)하면
-#   - macOS / Windows 러너에서 각각 .dmg / .exe 를 빌드하고
-#   - electron-builder --publish always 로 GitHub Releases 에 업로드.
+#   - macOS / Windows 러너에서 각각 .dmg / .exe 를 빌드하고(electron-builder --publish never)
+#   - 빌드 산출물(.dmg/.exe + latest*.yml + blockmap)을 navis 의
+#     PUT /api/desktop/upload 로 업로드한다.
 #
 # 결과:
-#   - 다운로드 페이지: https://github.com/nu-tree/navis/releases/latest
-#     (아무 컴퓨터 브라우저에서 Download 클릭 → 설치)
-#   - 설치된 앱은 electron-updater 로 이 Releases 를 보고 자동 업데이트.
+#   - 다운로드 페이지: https://<navis-url>/download  (토큰 로그인 후 설치파일 받기)
+#   - 설치된 앱은 electron-updater(generic provider)로 navis 를 보고 자동 업데이트.
 #
-# 인증: 소스(nu-tree/navis)는 private 이고 설치파일은 public 레포
-# (nu-tree/navis-desktop)에 게시한다. 다른 레포에 쓰려면 cross-repo 권한이 필요해
-# 기본 GITHUB_TOKEN 으로는 안 되고, fine-grained PAT 를 secret RELEASES_TOKEN 으로 둔다
-# (navis-desktop 레포에 Contents: write).
-# 백엔드 주소를 굽고 싶으면 repo secret EXPO_PUBLIC_NAVIS_URL / _TOKEN 설정(선택).
+# 인증: GitHub PAT/공개 레포 불필요. navis 토큰(EXPO_PUBLIC_NAVIS_TOKEN == navis 의
+# APP_API_TOKEN)으로 업로드·다운로드·자동업데이트를 모두 처리한다.
+# 필요한 repo secret: EXPO_PUBLIC_NAVIS_URL, EXPO_PUBLIC_NAVIS_TOKEN.
 
 name: desktop release
 
@@ -23,9 +21,6 @@ on:
     tags:
       - "desktop-v*"
   workflow_dispatch:
-
-permissions:
-  contents: write
 
 jobs:
   build:
@@ -48,14 +43,27 @@ jobs:
       - name: Install deps
         run: pnpm install --frozen-lockfile
 
-      - name: Build & publish desktop
+      # 설치된 앱이 navis 를 보도록 자동업데이트 설정을 구워 넣는다(url + token).
+      - name: Write updater config
         working-directory: packages/desktop
         env:
-          # public 릴리스 레포(navis-desktop)에 게시할 PAT
-          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+          NAVIS_URL: ${{ secrets.EXPO_PUBLIC_NAVIS_URL }}
+          NAVIS_TOKEN: ${{ secrets.EXPO_PUBLIC_NAVIS_TOKEN }}
+        run: node -e "require('fs').writeFileSync('updater-config.json', JSON.stringify({url:(process.env.NAVIS_URL||'').replace(/\/+$/,'')+'/api/desktop/file', token:process.env.NAVIS_TOKEN||''}))"
+
+      - name: Build desktop (no publish)
+        working-directory: packages/desktop
+        env:
           # mac 코드서명 건너뜀(개인 배포 — 미서명 dmg)
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
-          # 선택: 백엔드 주소를 빌드에 인라인 (미설정이면 앱이 목업 폴백)
+          # 백엔드 주소를 웹 빌드에 인라인 (미설정이면 앱이 목업 폴백)
           EXPO_PUBLIC_NAVIS_URL: ${{ secrets.EXPO_PUBLIC_NAVIS_URL }}
           EXPO_PUBLIC_NAVIS_TOKEN: ${{ secrets.EXPO_PUBLIC_NAVIS_TOKEN }}
-        run: pnpm release
+        run: pnpm web:build && npx electron-builder --publish never
+
+      - name: Upload to navis
+        working-directory: packages/desktop
+        env:
+          NAVIS_URL: ${{ secrets.EXPO_PUBLIC_NAVIS_URL }}
+          NAVIS_TOKEN: ${{ secrets.EXPO_PUBLIC_NAVIS_TOKEN }}
+        run: node scripts/upload.mjs

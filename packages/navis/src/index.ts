@@ -15,6 +15,12 @@ import {
 } from "./self-modify/mcp.js";
 import { reviewPullRequest } from "./self-modify/review.js";
 import { startCalendarScheduler } from "./google/scheduler.js";
+import {
+  handleDesktopUpload,
+  handleDesktopList,
+  handleDesktopFile,
+  handleDownloadPage,
+} from "./desktop/serve.js";
 
 // 디스코드 게이트웨이 봇 시작 (always-on 워커).
 const client = startDiscord();
@@ -82,6 +88,26 @@ createServer((req, res) => {
     }
     void handleMemories(req, res);
     return;
+  }
+  // 데스크톱 설치파일 배포(다운로드 페이지 + 업로드 + 자동업데이트 피드).
+  if (req.url === "/download") {
+    handleDownloadPage(res);
+    return;
+  }
+  if (req.url?.startsWith("/api/desktop/")) {
+    const durl = new URL(req.url, "http://localhost");
+    if (durl.pathname === "/api/desktop/upload" && (req.method === "PUT" || req.method === "POST")) {
+      void handleDesktopUpload(req, res, durl);
+      return;
+    }
+    if (durl.pathname === "/api/desktop/list" && req.method === "GET") {
+      void handleDesktopList(req, res, durl);
+      return;
+    }
+    if (durl.pathname.startsWith("/api/desktop/file/") && req.method === "GET") {
+      void handleDesktopFile(req, res, durl);
+      return;
+    }
   }
   res.writeHead(404);
   res.end();

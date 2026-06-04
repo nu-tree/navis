@@ -4,6 +4,7 @@
 const { app, BrowserWindow, shell } = require('electron');
 const path = require('node:path');
 const http = require('node:http');
+const fs = require('node:fs');
 const handler = require('serve-handler');
 const { autoUpdater } = require('electron-updater');
 
@@ -61,10 +62,27 @@ async function createWindow() {
   }
 }
 
+// 자동 업데이트: GitHub Releases 대신 navis(Railway)를 generic provider 로 본다.
+// 빌드 시 워크플로가 updater-config.json({url, token})을 구워 넣으면, 그 URL 의
+// latest*.yml 을 토큰 헤더로 폴링해 새 버전을 받아 설치한다. 파일이 없으면 조용히 비활성.
+function configureUpdater() {
+  try {
+    const cfgPath = path.join(__dirname, 'updater-config.json');
+    if (!fs.existsSync(cfgPath)) return;
+    const { url, token } = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+    if (!url) return;
+    autoUpdater.setFeedURL({ provider: 'generic', url });
+    if (token) autoUpdater.requestHeaders = { Authorization: `Bearer ${token}` };
+    autoUpdater.checkForUpdatesAndNotify();
+  } catch (err) {
+    console.error('[updater] 설정 실패:', err);
+  }
+}
+
 app.whenReady().then(() => {
   void createWindow();
-  // 패키징된 빌드에서만 GitHub Releases 확인 → 새 버전 자동 다운로드/설치 알림
-  if (!isDev) autoUpdater.checkForUpdatesAndNotify();
+  // 패키징된 빌드에서만 자동 업데이트 확인.
+  if (!isDev) configureUpdater();
 });
 
 app.on('activate', () => {

@@ -24,39 +24,54 @@ pnpm --filter navis-desktop dist:win
 ```
 결과물은 `packages/desktop/release/` 에 생성된다.
 
-## 다운로드 페이지 + 자동 업데이트 (public 릴리스 레포)
+## 다운로드 페이지 + 자동 업데이트 (navis/Railway 호스팅)
 
-소스 레포(`nu-tree/navis`)는 private 이라 설치파일을 **public 릴리스 전용 레포
-`nu-tree/navis-desktop`** 에 게시한다. 이러면 누구나 로그인 없이 다운로드 가능하고
-앱 자동 업데이트도 토큰 없이 동작한다.
+GitHub Releases/PAT 를 쓰지 않는다. 설치파일은 **이미 떠 있는 navis(Railway)**
+가 직접 호스팅하고, **토큰 로그인** 뒤에서 받는다. 빌드만 GitHub Actions(맥/윈도우
+러너)가 하고 — Railway 는 리눅스라 .dmg/.exe 를 빌드할 수 없음 — 산출물을 navis 로
+업로드한다.
 
 ```
-nu-tree/navis (private 소스) ──CI 빌드──▶ nu-tree/navis-desktop (public 릴리스)
+GitHub Actions(맥/윈도우 빌드) ──업로드──▶ navis (Railway, 볼륨 보관)
                                               ↓
-              다운로드: github.com/nu-tree/navis-desktop/releases/latest
-              자동 업데이트: 설치 앱이 같은 곳을 확인
+              다운로드: https://<navis-url>/download  (토큰 로그인)
+              자동 업데이트: 설치 앱이 generic provider 로 같은 navis 를 확인
 ```
+
+새 엔드포인트(navis):
+- `GET  /download` — 토큰 로그인 후 설치파일 다운로드 페이지
+- `PUT  /api/desktop/upload?name=<파일>` — Actions 가 산출물 업로드(Bearer 토큰)
+- `GET  /api/desktop/file/<파일>` — 설치파일/`latest*.yml` 서빙(사람=`?token=`, 업데이터=Bearer)
+
+인증은 전부 navis 의 `APP_API_TOKEN`(= 앱의 `EXPO_PUBLIC_NAVIS_TOKEN`) 하나로 통일.
 
 ### 한 번만 셋업
-1. GitHub 에 **public 레포 `navis-desktop`** 생성(비어 있어도 됨)
-2. fine-grained PAT 발급 — `navis-desktop` 레포에 **Contents: write**
-3. 소스 레포(navis) Settings → Secrets → Actions 에 `RELEASES_TOKEN` 으로 추가
+1. **Railway 볼륨**: navis 서비스에 볼륨을 붙이고 마운트 경로를 정한 뒤,
+   변수 `DESKTOP_DIR` 에 그 경로(예: `/data/desktop`)를 넣는다. (볼륨이 아니면
+   재배포 때 설치파일이 사라짐.)
+2. **소스 레포(navis) Secrets → Actions** 에 다음 둘이 있어야 한다(이미 있으면 끝):
+   - `EXPO_PUBLIC_NAVIS_URL`   — navis 베이스 URL (예: `https://navis.up.railway.app`)
+   - `EXPO_PUBLIC_NAVIS_TOKEN` — navis `APP_API_TOKEN` 과 같은 값
+   → fine-grained PAT / public 레포는 **더 이상 필요 없음**(`RELEASES_TOKEN` 삭제 가능).
 
 ### 릴리스 (이후 매번)
 ```bash
 # packages/desktop/package.json 의 version 올린 뒤
-git tag desktop-v0.2.0 && git push --tags     # → Actions 가 맥/윈도우 빌드+게시
+git tag desktop-v0.2.0 && git push --tags     # → Actions 빌드 후 navis 로 업로드
 ```
 또는 GitHub Actions 탭에서 **desktop release → Run workflow** 수동 실행.
 
-- 설치된 앱: 실행 시 `autoUpdater.checkForUpdatesAndNotify()` → 새 버전 자동 적용.
-- 즉 데스크톱은 **매번 수동 재설치 불필요** — 태그 한 번이면 사용자 앱이 알아서 갱신.
+- 설치된 앱: 실행 시 navis 의 `latest*.yml` 확인 → 새 버전 자동 다운로드/적용.
+- 단, 자동 업데이트가 켜지려면 **현재 깔린 버전이 이미 navis 를 보도록 빌드돼 있어야**
+  한다(updater-config.json 이 구워진 빌드). 기존 GitHub Releases 버전이 깔려 있다면
+  **한 번만 새 빌드를 수동 설치**하고, 이후부터 자동.
 
-### 로컬에서 직접 게시(선택)
+### 로컬에서 직접 빌드+업로드(선택)
 ```bash
 cd packages/desktop
-export GH_TOKEN=<navis-desktop Contents:write PAT>
-pnpm release
+node -e "require('fs').writeFileSync('updater-config.json',JSON.stringify({url:process.env.EXPO_PUBLIC_NAVIS_URL+'/api/desktop/file',token:process.env.EXPO_PUBLIC_NAVIS_TOKEN}))"
+pnpm web:build && npx electron-builder --mac --publish never   # 맥은 .dmg 만
+NAVIS_URL=$EXPO_PUBLIC_NAVIS_URL NAVIS_TOKEN=$EXPO_PUBLIC_NAVIS_TOKEN node scripts/upload.mjs
 ```
 
 ## 구조

@@ -12,7 +12,7 @@
     "dist": "pnpm web:build && electron-builder",
     "dist:mac": "pnpm web:build && electron-builder --mac",
     "dist:win": "pnpm web:build && electron-builder --win",
-    "release": "pnpm web:build && electron-builder --publish always"
+    "release": "pnpm web:build && electron-builder --publish never && node scripts/upload.mjs"
   },
   "build": {
     "appId": "com.navis.app",
@@ -24,13 +24,13 @@
     "files": [
       "electron-main.cjs",
       "preload.cjs",
+      "updater-config.json",
       "web-build/**/*"
     ],
     "publish": [
       {
-        "provider": "github",
-        "owner": "nu-tree",
-        "repo": "navis-desktop"
+        "provider": "generic",
+        "url": "${env.EXPO_PUBLIC_NAVIS_URL}/api/desktop/file"
       }
     ],
     "mac": {

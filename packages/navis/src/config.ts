@@ -164,6 +164,11 @@ export const config = {
   // 미설정이면 /api/chat 라우트가 비활성(503). 앱의 EXPO_PUBLIC_NAVIS_TOKEN 과 동일 값.
   appApiToken: optional("APP_API_TOKEN"),
 
+  // 데스크톱 설치파일(.dmg/.exe + latest*.yml)을 보관/서빙할 디렉터리.
+  // Railway 볼륨을 마운트한 경로를 넣는다(예: /data/desktop). 재배포에도 유지되려면
+  // 반드시 볼륨이어야 한다. 미설정이면 인스턴스 임시 디스크(.desktop-dist) — 재배포 시 사라짐.
+  desktopDir: optional("DESKTOP_DIR") ?? ".desktop-dist",
+
   // Railway 헬스체크용 포트. 디스코드 봇은 인바운드 HTTP가 필요 없지만
   // 호스팅 uptime 체크를 위해 /health 만 연다.
   port: Number(process.env.PORT) || 3000,
