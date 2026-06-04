@@ -44,9 +44,11 @@ export function unscheduleCron(id: string): void {
 // 발동 시: 프롬프트를 새 세션으로 실행하고 결과를 등록 채널로 보낸다.
 async function runCron(c: CronRow): Promise<void> {
   console.log(`[cron] 발동: '${c.title}'`);
+  // 크론마다 자기 보고방 — sourceId=크론 id, 제목=크론 DB 제목.
+  const meta = { sourceId: c.id, sourceTitle: `⏰ ${c.title}` };
   try {
     const { text } = await askClaude(c.prompt, undefined, [], c.channelId);
-    await sendToChannel(discord, c.channelId, text, "cron");
+    await sendToChannel(discord, c.channelId, text, "cron", meta);
     // 성공한 실행 시각을 기록 (lastRunAt 업데이트). 실패해도 흐름은 유지.
     void patchCronRemote(c.id, { lastRunAt: new Date().toISOString() });
   } catch (err) {
@@ -57,6 +59,7 @@ async function runCron(c: CronRow): Promise<void> {
       c.channelId,
       `⚠️ 크론 '${c.title}' 실행에 실패했어요. Railway 로그를 확인해주세요.`,
       "cron",
+      meta,
     ).catch(() => {}); // 알림 실패는 무시(무한 루프 방지)
   }
 }

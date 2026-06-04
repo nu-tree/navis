@@ -18,16 +18,29 @@ export function chunk(text: string): string[] {
   return parts;
 }
 
+// 선제 보고의 출처(앱에서 방 라우팅에 사용). 크론은 크론마다 다르므로 호출부에서 넘긴다.
+export type ReportMeta = { sourceId: string; sourceTitle: string };
+
+// logTag 기본 출처 — 다이제스트/캘린더는 고정 방, 그 외는 logTag 기반.
+function defaultMeta(logTag: string): ReportMeta {
+  if (logTag === "digest") return { sourceId: "digest", sourceTitle: "📋 주간 다이제스트" };
+  if (logTag === "calendar") return { sourceId: "calendar", sourceTitle: "📅 캘린더" };
+  return { sourceId: logTag, sourceTitle: `🔔 ${logTag}` };
+}
+
 // 채널 id로 메시지를 전송. 길이 초과 시 chunk로 나눠 순차 전송.
 // 채널을 못 찾거나 보낼 수 없으면 로그만 남기고 조용히 실패(스케줄러 흐름을 막지 않음).
+// meta 를 주면 그 출처(방)로 보고를 기록한다. 없으면 logTag 기본 출처.
 export async function sendToChannel(
   client: Client,
   channelId: string,
   text: string,
   logTag = "discord",
+  meta?: ReportMeta,
 ): Promise<void> {
   // 선제 보고를 앱(/api/reports)용으로도 기록 — 디스코드 전송 성패와 무관하게.
-  recordReport(logTag, text);
+  const source = meta ?? defaultMeta(logTag);
+  recordReport({ type: logTag, text, sourceId: source.sourceId, sourceTitle: source.sourceTitle });
 
   const ch = await client.channels.fetch(channelId).catch(() => null);
   if (!ch || !ch.isSendable()) {

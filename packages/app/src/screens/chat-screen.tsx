@@ -5,6 +5,7 @@ import { ChatDrawer, ChatHeader, ChatInput, MessageList } from '../components/ch
 import { Text } from '../components/ui/text';
 import { useActiveConversation, useChatStore } from '../store/chat-store';
 import { useReports } from '../hooks/use-reports';
+import { useCrons } from '../hooks/use-crons';
 
 // 상태는 Zustand 스토어 / TanStack Query 훅에서 → 화면은 레이아웃 + 드로어 토글만
 export function ChatScreen() {
@@ -13,8 +14,9 @@ export function ChatScreen() {
   const active = useActiveConversation();
   const newConversation = useChatStore((s) => s.newConversation);
 
-  // navis 선제 보고 폴링 → 보고방에 머지
+  // navis 선제 보고 폴링 → 보고방에 머지 + 크론 목록으로 보고방 미리 생성
   useReports();
+  useCrons();
 
   const isReport = active?.kind === 'report';
 

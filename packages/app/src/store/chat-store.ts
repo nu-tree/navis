@@ -12,8 +12,6 @@ export type Conversation = {
   messages: ChatMessage[];
   // 대화방마다 독립된 navis 세션 — 컨텍스트가 방끼리 섞이지 않는다.
   sessionId?: string;
-  // 보고방 전용: 이 방으로 라우팅할 navis 보고 type 목록. undefined = catch-all.
-  reportTypes?: string[];
   createdAt: string;
   updatedAt: string;
 };
@@ -22,6 +20,9 @@ export type Conversation = {
 export type Report = {
   id: string;
   type: string;
+  // 방 라우팅 키 (크론 id / "digest" / "calendar") + 방 제목(DB 기반)
+  sourceId: string;
+  sourceTitle: string;
   text: string;
   createdAt: string;
 };
@@ -38,7 +39,9 @@ type ChatStore = {
   setTyping: (conversationId: string, typing: boolean) => void;
   // 메시지 이모지 리액션 토글 (있으면 제거, 없으면 추가)
   toggleReaction: (conversationId: string, messageId: string, emoji: string) => void;
-  // navis 선제 보고를 type 에 맞는 보고방에 추가(중복 id 무시)
+  // 보고방을 보장(없으면 생성, 있으면 제목 갱신) — 크론 목록으로 미리 만들 때
+  ensureReportRoom: (sourceId: string, title: string) => void;
+  // navis 선제 보고를 출처(sourceId) 방에 추가(없으면 방 생성, 중복 id 무시)
   appendReport: (report: Report) => void;
 };
 
@@ -73,29 +76,22 @@ const SEED_CHAT: Conversation = {
   updatedAt: '2026-06-04T09:01:03.000Z',
 };
 
-// 보고방(읽기 전용). 주간 다이제스트는 전용 방, 그 외 선제 보고는 알림 방(catch-all).
+// 보고방 id 규칙 — 출처(sourceId)별 방. 크론마다 방 1개(sourceId=크론 id).
+const reportRoomId = (sourceId: string) => `report:${sourceId}`;
+
+// 주간 다이제스트는 주기가 길어 비어 있어도 보이게 미리 시드. 크론·캘린더 방은
+// 크론 목록(/api/crons)·첫 보고 도착 시 동적으로 생성된다.
 const REPORT_DIGEST: Conversation = {
-  id: 'report-digest',
+  id: reportRoomId('digest'),
   title: '📋 주간 다이제스트',
   kind: 'report',
-  reportTypes: ['digest'],
-  messages: [],
-  createdAt: '2026-06-04T00:00:00.000Z',
-  updatedAt: '2026-06-04T00:00:00.000Z',
-};
-
-const REPORT_ALERTS: Conversation = {
-  id: 'report-alerts',
-  title: '🔔 알림 보고',
-  kind: 'report',
-  reportTypes: undefined, // catch-all (cron/calendar/기타)
   messages: [],
   createdAt: '2026-06-04T00:00:00.000Z',
   updatedAt: '2026-06-04T00:00:00.000Z',
 };
 
 export const useChatStore = create<ChatStore>((set) => ({
-  conversations: [SEED_CHAT, REPORT_DIGEST, REPORT_ALERTS],
+  conversations: [SEED_CHAT, REPORT_DIGEST],
   activeId: SEED_CHAT.id,
   typingIds: [],
 
@@ -164,31 +160,59 @@ export const useChatStore = create<ChatStore>((set) => ({
       }),
     })),
 
+  ensureReportRoom: (sourceId, title) =>
+    set((s) => {
+      const id = reportRoomId(sourceId);
+      const existing = s.conversations.find((c) => c.id === id);
+      if (existing) {
+        // 제목이 DB 에서 바뀌었으면 갱신
+        if (existing.title === title) return s;
+        return {
+          conversations: s.conversations.map((c) => (c.id === id ? { ...c, title } : c)),
+        };
+      }
+      const ts = now();
+      const room: Conversation = {
+        id,
+        title,
+        kind: 'report',
+        messages: [],
+        createdAt: ts,
+        updatedAt: ts,
+      };
+      return { conversations: [...s.conversations, room] };
+    }),
+
   appendReport: (report) =>
     set((s) => {
-      // type 매칭 보고방 → 없으면 catch-all 보고방
-      const target =
-        s.conversations.find(
-          (c) => c.kind === 'report' && c.reportTypes?.includes(report.type),
-        ) ?? s.conversations.find((c) => c.kind === 'report' && !c.reportTypes);
-      if (!target || target.messages.some((m) => m.id === report.id)) return s;
+      const id = reportRoomId(report.sourceId);
+      const existing = s.conversations.find((c) => c.id === id);
+      if (existing?.messages.some((m) => m.id === report.id)) return s; // 중복
+
+      const message: ChatMessage = {
+        id: report.id,
+        role: 'assistant',
+        text: report.text,
+        createdAt: report.createdAt,
+      };
+
+      // 방이 없으면 보고와 함께 생성
+      if (!existing) {
+        const room: Conversation = {
+          id,
+          title: report.sourceTitle,
+          kind: 'report',
+          messages: [message],
+          createdAt: report.createdAt,
+          updatedAt: report.createdAt,
+        };
+        return { conversations: [...s.conversations, room] };
+      }
 
       return {
         conversations: s.conversations.map((c) =>
-          c.id === target.id
-            ? {
-                ...c,
-                messages: [
-                  ...c.messages,
-                  {
-                    id: report.id,
-                    role: 'assistant',
-                    text: report.text,
-                    createdAt: report.createdAt,
-                  },
-                ],
-                updatedAt: report.createdAt,
-              }
+          c.id === id
+            ? { ...c, messages: [...c.messages, message], updatedAt: report.createdAt }
             : c,
         ),
       };

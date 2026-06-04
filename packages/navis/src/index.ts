@@ -4,6 +4,7 @@ import type { Client } from "discord.js";
 import { config } from "./config.js";
 import { askClaude } from "./claude/ask.js";
 import { getReports } from "./reports/store.js";
+import { fetchCrons } from "./cron/api.js";
 import { startDiscord } from "./discord/bot.js";
 import { startCronScheduler } from "./cron/scheduler.js";
 import { startDigestScheduler } from "./digest.js";
@@ -61,13 +62,58 @@ createServer((req, res) => {
       return;
     }
   }
+  if (req.url?.startsWith("/api/crons")) {
+    if (req.method === "OPTIONS") {
+      res.writeHead(204, CORS_HEADERS);
+      res.end();
+      return;
+    }
+    if (req.method === "GET") {
+      void handleCrons(req, res);
+      return;
+    }
+  }
   res.writeHead(404);
   res.end();
 }).listen(config.port, "0.0.0.0", () => {
   console.log(
-    `[agent] http on :${config.port} (/health, /webhook/github, /api/chat, /api/reports)`,
+    `[agent] http on :${config.port} (/health, /webhook/github, /api/chat, /api/reports, /api/crons)`,
   );
 });
+
+// 앱이 크론 목록을 받아 크론마다 보고방을 미리 만든다(한눈에 보기). 프롬프트 등 민감
+// 정보는 제외하고 표시용 필드만 노출.
+async function handleCrons(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const token = config.appApiToken;
+  if (!token) {
+    res.writeHead(503, JSON_HEADERS);
+    res.end(JSON.stringify({ error: "app api not configured" }));
+    return;
+  }
+  const auth = req.headers["authorization"];
+  if (typeof auth !== "string" || !verifyBearer(token, auth)) {
+    res.writeHead(401, JSON_HEADERS);
+    res.end(JSON.stringify({ error: "unauthorized" }));
+    return;
+  }
+  try {
+    const crons = await fetchCrons();
+    const safe = crons.map((c) => ({
+      id: c.id,
+      title: c.title,
+      schedule: c.schedule,
+      timezone: c.timezone,
+      enabled: c.enabled,
+      lastRunAt: c.lastRunAt,
+    }));
+    res.writeHead(200, JSON_HEADERS);
+    res.end(JSON.stringify({ crons: safe }));
+  } catch (err) {
+    console.error("[crons] 조회 실패:", err);
+    res.writeHead(502, JSON_HEADERS);
+    res.end(JSON.stringify({ error: "upstream error" }));
+  }
+}
 
 // 앱이 선제 보고를 폴링하는 엔드포인트. ?since=<ISO> 로 증분 조회.
 function handleReports(req: IncomingMessage, res: ServerResponse): void {

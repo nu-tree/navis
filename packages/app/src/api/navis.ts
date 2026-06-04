@@ -70,6 +70,28 @@ export async function fetchReports(): Promise<Report[]> {
   return data.reports;
 }
 
+export type Cron = {
+  id: string;
+  title: string;
+  schedule: string;
+  timezone: string;
+  enabled: boolean;
+  lastRunAt: string | null;
+};
+
+// 크론 목록 — 크론마다 보고방을 미리 만들기 위해.
+export async function fetchCrons(): Promise<Cron[]> {
+  if (!IS_BACKEND_CONFIGURED) return [];
+  const res = await fetch(`${NAVIS_URL}/api/crons`, {
+    headers: { authorization: `Bearer ${NAVIS_TOKEN}` },
+  });
+  if (!res.ok) {
+    throw new Error(`navis 크론 조회 오류: ${res.status}`);
+  }
+  const data = (await res.json()) as { crons: Cron[] };
+  return data.crons;
+}
+
 async function mockReply(text: string): Promise<SendResult> {
   await new Promise((resolve) => setTimeout(resolve, 600));
   return {
