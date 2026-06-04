@@ -10,7 +10,10 @@
 #     (아무 컴퓨터 브라우저에서 Download 클릭 → 설치)
 #   - 설치된 앱은 electron-updater 로 이 Releases 를 보고 자동 업데이트.
 #
-# 인증: GITHUB_TOKEN(자동 제공) 으로 Releases 게시. 별도 secret 불필요.
+# 인증: 소스(nu-tree/navis)는 private 이고 설치파일은 public 레포
+# (nu-tree/navis-desktop)에 게시한다. 다른 레포에 쓰려면 cross-repo 권한이 필요해
+# 기본 GITHUB_TOKEN 으로는 안 되고, fine-grained PAT 를 secret RELEASES_TOKEN 으로 둔다
+# (navis-desktop 레포에 Contents: write).
 # 백엔드 주소를 굽고 싶으면 repo secret EXPO_PUBLIC_NAVIS_URL / _TOKEN 설정(선택).
 
 name: desktop release
@@ -48,7 +51,8 @@ jobs:
       - name: Build & publish desktop
         working-directory: packages/desktop
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # public 릴리스 레포(navis-desktop)에 게시할 PAT
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
           # mac 코드서명 건너뜀(개인 배포 — 미서명 dmg)
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
           # 선택: 백엔드 주소를 빌드에 인라인 (미설정이면 앱이 목업 폴백)

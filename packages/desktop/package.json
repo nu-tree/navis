@@ -30,7 +30,7 @@
       {
         "provider": "github",
         "owner": "nu-tree",
-        "repo": "navis"
+        "repo": "navis-desktop"
       }
     ],
     "mac": {

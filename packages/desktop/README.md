@@ -24,18 +24,40 @@ pnpm --filter navis-desktop dist:win
 ```
 결과물은 `packages/desktop/release/` 에 생성된다.
 
-## 자동 업데이트 (electron-updater)
-새 버전을 GitHub Releases 에 올리면 설치된 앱이 실행 시 자동으로 확인/다운로드한다.
+## 다운로드 페이지 + 자동 업데이트 (public 릴리스 레포)
 
+소스 레포(`nu-tree/navis`)는 private 이라 설치파일을 **public 릴리스 전용 레포
+`nu-tree/navis-desktop`** 에 게시한다. 이러면 누구나 로그인 없이 다운로드 가능하고
+앱 자동 업데이트도 토큰 없이 동작한다.
+
+```
+nu-tree/navis (private 소스) ──CI 빌드──▶ nu-tree/navis-desktop (public 릴리스)
+                                              ↓
+              다운로드: github.com/nu-tree/navis-desktop/releases/latest
+              자동 업데이트: 설치 앱이 같은 곳을 확인
+```
+
+### 한 번만 셋업
+1. GitHub 에 **public 레포 `navis-desktop`** 생성(비어 있어도 됨)
+2. fine-grained PAT 발급 — `navis-desktop` 레포에 **Contents: write**
+3. 소스 레포(navis) Settings → Secrets → Actions 에 `RELEASES_TOKEN` 으로 추가
+
+### 릴리스 (이후 매번)
+```bash
+# packages/desktop/package.json 의 version 올린 뒤
+git tag desktop-v0.2.0 && git push --tags     # → Actions 가 맥/윈도우 빌드+게시
+```
+또는 GitHub Actions 탭에서 **desktop release → Run workflow** 수동 실행.
+
+- 설치된 앱: 실행 시 `autoUpdater.checkForUpdatesAndNotify()` → 새 버전 자동 적용.
+- 즉 데스크톱은 **매번 수동 재설치 불필요** — 태그 한 번이면 사용자 앱이 알아서 갱신.
+
+### 로컬에서 직접 게시(선택)
 ```bash
 cd packages/desktop
-# package.json 의 version 을 올린 뒤:
-export GH_TOKEN=<Releases 게시 권한 토큰>
-pnpm release          # 빌드 + GitHub Releases(nu-tree/navis) 게시
+export GH_TOKEN=<navis-desktop Contents:write PAT>
+pnpm release
 ```
-- `build.publish` 가 github(nu-tree/navis)로 설정돼 있음.
-- 설치된 앱: 실행 시 `autoUpdater.checkForUpdatesAndNotify()` → 새 버전 자동 적용.
-- 즉 데스크톱도 **매번 수동 재설치 불필요** — release 한 번이면 사용자 앱이 알아서 갱신.
 
 ## 구조
 - `electron-main.cjs` — web-build 를 로컬 HTTP 서버로 서빙 후 BrowserWindow 로드,
