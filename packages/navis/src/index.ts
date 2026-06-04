@@ -101,6 +101,8 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
         text: result.text,
         sessionId: result.sessionId,
         contextFull,
+        // 이 턴에 namory 에 기억을 저장했는지 → 앱이 💡 리액션 표시(디스코드와 동일)
+        saved: result.saved,
       }),
     );
   } catch (err) {

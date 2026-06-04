@@ -7,12 +7,15 @@ export type SendResult = {
   sessionId: string;
   // navis 컨텍스트가 한도를 넘음 → 다음 턴부터 세션 리셋 신호
   contextFull: boolean;
+  // 이 턴에 namory 에 기억을 저장했는지 → 💡 리액션 표시
+  saved: boolean;
 };
 
 type ChatResponse = {
   text: string;
   sessionId: string;
   contextFull: boolean;
+  saved: boolean;
 };
 
 function assistantMessage(text: string): ChatMessage {
@@ -49,6 +52,7 @@ export async function sendMessage(text: string, sessionId?: string): Promise<Sen
     reply: assistantMessage(data.text),
     sessionId: data.sessionId,
     contextFull: data.contextFull,
+    saved: data.saved,
   };
 }
 
@@ -60,5 +64,6 @@ async function mockReply(text: string): Promise<SendResult> {
     ),
     sessionId: '',
     contextFull: false,
+    saved: false,
   };
 }

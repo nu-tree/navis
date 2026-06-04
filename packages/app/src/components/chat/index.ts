@@ -5,3 +5,5 @@ export { TypingIndicator, type TypingIndicatorProps } from './typing-indicator';
 export { MessageList } from './message-list';
 export { ConversationList, type ConversationListProps } from './conversation-list';
 export { ChatDrawer, type ChatDrawerProps } from './chat-drawer';
+export { ReactionPicker, type ReactionPickerProps } from './reaction-picker';
+export { MessageReactions, type MessageReactionsProps } from './message-reactions';

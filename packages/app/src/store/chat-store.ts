@@ -23,6 +23,8 @@ type ChatStore = {
   addMessage: (conversationId: string, message: ChatMessage) => void;
   setSessionId: (conversationId: string, sessionId?: string) => void;
   setTyping: (conversationId: string, typing: boolean) => void;
+  // 메시지 이모지 리액션 토글 (있으면 제거, 없으면 추가)
+  toggleReaction: (conversationId: string, messageId: string, emoji: string) => void;
 };
 
 function now(): string {
@@ -98,6 +100,24 @@ export const useChatStore = create<ChatStore>((set) => ({
       typingIds: typing
         ? Array.from(new Set([...s.typingIds, conversationId]))
         : s.typingIds.filter((x) => x !== conversationId),
+    })),
+
+  toggleReaction: (conversationId, messageId, emoji) =>
+    set((s) => ({
+      conversations: s.conversations.map((c) => {
+        if (c.id !== conversationId) return c;
+        return {
+          ...c,
+          messages: c.messages.map((m) => {
+            if (m.id !== messageId) return m;
+            const current = m.reactions ?? [];
+            const reactions = current.includes(emoji)
+              ? current.filter((e) => e !== emoji)
+              : [...current, emoji];
+            return { ...m, reactions };
+          }),
+        };
+      }),
     })),
 }));
 

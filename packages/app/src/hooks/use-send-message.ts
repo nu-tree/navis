@@ -15,18 +15,25 @@ export function useSendMessage() {
     },
     onMutate: ({ text, conversationId }) => {
       const { addMessage, setTyping } = useChatStore.getState();
+      const userMessageId = makeId('u');
       addMessage(conversationId, {
-        id: makeId('u'),
+        id: userMessageId,
         role: 'user',
         text,
         createdAt: new Date().toISOString(),
       });
       setTyping(conversationId, true);
+      // onSuccess 에서 💡 부착에 쓸 유저 메시지 id 를 context 로 넘김
+      return { userMessageId };
     },
-    onSuccess: ({ reply, sessionId, contextFull }, { conversationId }) => {
-      const { addMessage, setSessionId } = useChatStore.getState();
+    onSuccess: ({ reply, sessionId, contextFull, saved }, { conversationId }, context) => {
+      const { addMessage, setSessionId, toggleReaction } = useChatStore.getState();
       addMessage(conversationId, reply);
       setSessionId(conversationId, sessionId && !contextFull ? sessionId : undefined);
+      // 저장됐으면 유저 메시지에 💡 (디스코드와 동일)
+      if (saved && context?.userMessageId) {
+        toggleReaction(conversationId, context.userMessageId, '💡');
+      }
     },
     onError: (_err, { conversationId }) => {
       useChatStore.getState().addMessage(conversationId, {
