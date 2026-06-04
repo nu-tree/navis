@@ -81,6 +81,22 @@ export async function handleDesktopUpload(
   }
   try {
     await mkdir(DIR, { recursive: true });
+  } catch (err) {
+    const e = err as NodeJS.ErrnoException;
+    console.error(`[desktop] 디렉터리 생성 실패 DIR=${DIR}:`, e);
+    res.writeHead(500, { "content-type": "application/json" });
+    res.end(
+      JSON.stringify({
+        error: "mkdir failed",
+        dir: DIR,
+        code: e.code,
+        message: e.message,
+        hint: "DESKTOP_DIR 가 쓰기 가능한 경로인지 확인. Railway면 그 경로에 볼륨이 마운트돼 있어야 함.",
+      }),
+    );
+    return;
+  }
+  try {
     await new Promise<void>((ok, fail) => {
       const out = createWriteStream(dest);
       req.pipe(out);
@@ -91,9 +107,10 @@ export async function handleDesktopUpload(
     res.writeHead(200, { "content-type": "application/json" });
     res.end(JSON.stringify({ ok: true, name: basename(dest) }));
   } catch (err) {
-    console.error("[desktop] 업로드 실패:", err);
+    const e = err as NodeJS.ErrnoException;
+    console.error(`[desktop] 쓰기 실패 dest=${dest}:`, e);
     res.writeHead(500, { "content-type": "application/json" });
-    res.end(JSON.stringify({ error: "write failed" }));
+    res.end(JSON.stringify({ error: "write failed", dest, code: e.code, message: e.message }));
   }
 }
 
