@@ -1,0 +1,57 @@
+# navis 데스크톱 릴리스 — 맥/윈도우 설치파일을 GitHub Releases 에 자동 게시.
+#
+# 동작:
+#   - `desktop-v*` 태그를 push 하거나 수동 실행(workflow_dispatch)하면
+#   - macOS / Windows 러너에서 각각 .dmg / .exe 를 빌드하고
+#   - electron-builder --publish always 로 GitHub Releases 에 업로드.
+#
+# 결과:
+#   - 다운로드 페이지: https://github.com/nu-tree/navis/releases/latest
+#     (아무 컴퓨터 브라우저에서 Download 클릭 → 설치)
+#   - 설치된 앱은 electron-updater 로 이 Releases 를 보고 자동 업데이트.
+#
+# 인증: GITHUB_TOKEN(자동 제공) 으로 Releases 게시. 별도 secret 불필요.
+# 백엔드 주소를 굽고 싶으면 repo secret EXPO_PUBLIC_NAVIS_URL / _TOKEN 설정(선택).
+
+name: desktop release
+
+on:
+  push:
+    tags:
+      - "desktop-v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.0.8
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Build & publish desktop
+        working-directory: packages/desktop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # mac 코드서명 건너뜀(개인 배포 — 미서명 dmg)
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          # 선택: 백엔드 주소를 빌드에 인라인 (미설정이면 앱이 목업 폴백)
+          EXPO_PUBLIC_NAVIS_URL: ${{ secrets.EXPO_PUBLIC_NAVIS_URL }}
+          EXPO_PUBLIC_NAVIS_TOKEN: ${{ secrets.EXPO_PUBLIC_NAVIS_TOKEN }}
+        run: pnpm release
