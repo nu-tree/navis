@@ -4,30 +4,25 @@ import { cn } from '../../lib/cn';
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
 import { Text } from '../ui/text';
+import { useSendMessage } from '../../hooks/use-send-message';
 
 export type ChatInputProps = {
-  onSend: (text: string) => void;
-  disabled?: boolean;
   placeholder?: string;
   className?: string;
 };
 
-export function ChatInput({
-  onSend,
-  disabled,
-  placeholder = '메시지 입력…',
-  className,
-}: ChatInputProps) {
+export function ChatInput({ placeholder = '메시지 입력…', className }: ChatInputProps) {
   const [text, setText] = useState('');
+  const { send, isPending } = useSendMessage();
+
+  const canSend = text.trim().length > 0 && !isPending;
 
   const submit = () => {
     const trimmed = text.trim();
     if (!trimmed) return;
-    onSend(trimmed);
+    send(trimmed);
     setText('');
   };
-
-  const canSend = text.trim().length > 0 && !disabled;
 
   return (
     <View
