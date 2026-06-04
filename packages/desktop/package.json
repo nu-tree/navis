@@ -1,0 +1,47 @@
+{
+  "name": "navis-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "navis 데스크톱 앱 (Electron — macOS/Windows)",
+  "author": "nu-tree",
+  "main": "electron-main.cjs",
+  "scripts": {
+    "web:build": "cd ../app && npx expo export -p web --output-dir ../desktop/web-build",
+    "start": "electron .",
+    "dev": "cross-env ELECTRON_DEV=1 electron .",
+    "dist": "pnpm web:build && electron-builder",
+    "dist:mac": "pnpm web:build && electron-builder --mac",
+    "dist:win": "pnpm web:build && electron-builder --win"
+  },
+  "build": {
+    "appId": "com.navis.app",
+    "productName": "Navis",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "electron-main.cjs",
+      "preload.cjs",
+      "web-build/**/*"
+    ],
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.productivity"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  },
+  "dependencies": {
+    "serve-handler": "^6.1.6"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "electron": "33.4.11",
+    "electron-builder": "^25.1.8"
+  }
+}
