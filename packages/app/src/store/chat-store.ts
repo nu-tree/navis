@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { MOCK_MESSAGES } from '../data/mock-messages';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { makeId } from '../lib/id';
 import type { ChatMessage } from '../types';
 
@@ -66,14 +67,14 @@ function emptyConversation(): Conversation {
   };
 }
 
-// 시드: 첫 대화방에 목업 인사 — 백엔드 연결돼도 첫 진입 화면이 비지 않게.
+// 시드: 첫 실행 시 보여줄 빈 대화방(저장된 대화가 있으면 persist 가 덮어쓴다).
 const SEED_CHAT: Conversation = {
   id: 'c0',
   title: '나비스와의 대화',
   kind: 'chat',
-  messages: MOCK_MESSAGES,
+  messages: [],
   createdAt: '2026-06-04T09:00:00.000Z',
-  updatedAt: '2026-06-04T09:01:03.000Z',
+  updatedAt: '2026-06-04T09:00:00.000Z',
 };
 
 // 보고방 id 규칙 — 출처(sourceId)별 방. 크론마다 방 1개(sourceId=크론 id).
@@ -90,7 +91,9 @@ const REPORT_DIGEST: Conversation = {
   updatedAt: '2026-06-04T00:00:00.000Z',
 };
 
-export const useChatStore = create<ChatStore>((set) => ({
+export const useChatStore = create<ChatStore>()(
+  persist(
+    (set) => ({
   conversations: [SEED_CHAT, REPORT_DIGEST],
   activeId: SEED_CHAT.id,
   typingIds: [],
@@ -217,7 +220,15 @@ export const useChatStore = create<ChatStore>((set) => ({
         ),
       };
     }),
-}));
+    }),
+    {
+      name: 'navis-chat',
+      storage: createJSONStorage(() => AsyncStorage),
+      // 응답 생성 중 표시(typingIds)는 휘발성이라 저장하지 않는다.
+      partialize: (s) => ({ conversations: s.conversations, activeId: s.activeId }),
+    },
+  ),
+);
 
 // 파생 셀렉터 — 컴포넌트는 이걸로 활성 대화방만 구독
 export const useActiveConversation = (): Conversation | undefined =>
