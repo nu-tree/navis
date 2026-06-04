@@ -5,6 +5,7 @@ import { Input } from '../ui/input';
 import { Button } from '../ui/button';
 import { Text } from '../ui/text';
 import { useSendMessage } from '../../hooks/use-send-message';
+import { useIsActiveTyping } from '../../store/chat-store';
 
 export type ChatInputProps = {
   placeholder?: string;
@@ -13,9 +14,10 @@ export type ChatInputProps = {
 
 export function ChatInput({ placeholder = '메시지 입력…', className }: ChatInputProps) {
   const [text, setText] = useState('');
-  const { send, isPending } = useSendMessage();
+  const { send } = useSendMessage();
+  const typing = useIsActiveTyping();
 
-  const canSend = text.trim().length > 0 && !isPending;
+  const canSend = text.trim().length > 0 && !typing;
 
   const submit = () => {
     const trimmed = text.trim();

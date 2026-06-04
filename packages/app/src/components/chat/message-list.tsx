@@ -2,13 +2,15 @@ import { useRef } from 'react';
 import { FlatList, View } from 'react-native';
 import { ChatBubble } from './chat-bubble';
 import { TypingIndicator } from './typing-indicator';
-import { useChatStore } from '../../store/chat-store';
+import { Text } from '../ui/text';
+import { useActiveConversation, useIsActiveTyping } from '../../store/chat-store';
 import type { ChatMessage } from '../../types';
 
-// 채팅 스토어를 직접 구독 (props 없음)
+// 활성 대화방의 메시지를 직접 구독 (props 없음)
 export function MessageList() {
-  const messages = useChatStore((s) => s.messages);
-  const typing = useChatStore((s) => s.typing);
+  const conversation = useActiveConversation();
+  const typing = useIsActiveTyping();
+  const messages = conversation?.messages ?? [];
   const ref = useRef<FlatList<ChatMessage>>(null);
 
   const scrollToEnd = () => ref.current?.scrollToEnd({ animated: true });
@@ -19,9 +21,18 @@ export function MessageList() {
       data={messages}
       keyExtractor={(m) => m.id}
       renderItem={({ item }) => <ChatBubble message={item} />}
-      contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 16 }}
+      contentContainerStyle={{
+        paddingHorizontal: 12,
+        paddingVertical: 16,
+        flexGrow: 1,
+      }}
       showsVerticalScrollIndicator={false}
       onContentSizeChange={scrollToEnd}
+      ListEmptyComponent={
+        <View className="flex-1 items-center justify-center">
+          <Text variant="muted">새 대화를 시작해봐</Text>
+        </View>
+      }
       ListFooterComponent={
         typing ? (
           <View className="px-1">

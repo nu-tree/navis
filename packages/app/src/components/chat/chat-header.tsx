@@ -1,31 +1,41 @@
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { cn } from '../../lib/cn';
-import { Avatar } from '../ui/avatar';
 import { Text } from '../ui/text';
 
 export type ChatHeaderProps = {
   title: string;
   subtitle?: string;
+  onMenu: () => void;
+  onNewChat: () => void;
   className?: string;
 };
 
-export function ChatHeader({ title, subtitle, className }: ChatHeaderProps) {
+export function ChatHeader({ title, subtitle, onMenu, onNewChat, className }: ChatHeaderProps) {
   return (
     <View
       className={cn(
-        'flex-row items-center gap-3 border-b border-border bg-background px-4 py-3',
+        'flex-row items-center gap-2 border-b border-border bg-background px-2 py-2.5',
         className,
       )}
     >
-      <Avatar fallback="나" size={38} className="bg-primary" />
-      <View>
-        <Text variant="subtitle">{title}</Text>
+      <Pressable hitSlop={8} onPress={onMenu} className="h-9 w-9 items-center justify-center rounded-lg active:bg-secondary">
+        <Text className="text-xl text-foreground">☰</Text>
+      </Pressable>
+
+      <View className="flex-1">
+        <Text variant="subtitle" numberOfLines={1}>
+          {title}
+        </Text>
         {subtitle ? (
           <Text variant="caption" className="text-muted-foreground">
             {subtitle}
           </Text>
         ) : null}
       </View>
+
+      <Pressable hitSlop={8} onPress={onNewChat} className="h-9 w-9 items-center justify-center rounded-lg active:bg-secondary">
+        <Text className="text-2xl text-foreground">＋</Text>
+      </Pressable>
     </View>
   );
 }
