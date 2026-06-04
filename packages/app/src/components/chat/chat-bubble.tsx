@@ -1,7 +1,7 @@
 import { View } from 'react-native';
 import { cn } from '../../lib/cn';
 import { formatTime } from '../../lib/format';
-import { Text } from '../ui/Text';
+import { Text } from '../ui/text';
 import type { ChatMessage } from '../../types';
 
 export type ChatBubbleProps = {

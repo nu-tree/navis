@@ -1,5 +1,5 @@
-export { ChatBubble, type ChatBubbleProps } from './ChatBubble';
-export { ChatInput, type ChatInputProps } from './ChatInput';
-export { ChatHeader, type ChatHeaderProps } from './ChatHeader';
-export { TypingIndicator, type TypingIndicatorProps } from './TypingIndicator';
-export { MessageList, type MessageListProps } from './MessageList';
+export { ChatBubble, type ChatBubbleProps } from './chat-bubble';
+export { ChatInput, type ChatInputProps } from './chat-input';
+export { ChatHeader, type ChatHeaderProps } from './chat-header';
+export { TypingIndicator, type TypingIndicatorProps } from './typing-indicator';
+export { MessageList, type MessageListProps } from './message-list';

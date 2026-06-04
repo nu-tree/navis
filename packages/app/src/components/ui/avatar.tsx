@@ -1,6 +1,6 @@
 import { Image, View } from 'react-native';
 import { cn } from '../../lib/cn';
-import { Text } from './Text';
+import { Text } from './text';
 
 export type AvatarProps = {
   uri?: string;

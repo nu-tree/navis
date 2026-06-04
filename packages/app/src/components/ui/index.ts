@@ -1,6 +1,6 @@
-export { Text, type TextProps } from './Text';
-export { Button, type ButtonProps } from './Button';
-export { Input, type InputProps } from './Input';
+export { Text, type TextProps } from './text';
+export { Button, type ButtonProps } from './button';
+export { Input, type InputProps } from './input';
 export {
   Card,
   CardHeader,
@@ -9,8 +9,8 @@ export {
   CardContent,
   CardFooter,
   type CardProps,
-} from './Card';
-export { Avatar, type AvatarProps } from './Avatar';
-export { Badge, type BadgeProps } from './Badge';
-export { Separator, type SeparatorProps } from './Separator';
-export { Select, type SelectOption, type SelectProps } from './Select';
+} from './card';
+export { Avatar, type AvatarProps } from './avatar';
+export { Badge, type BadgeProps } from './badge';
+export { Separator, type SeparatorProps } from './separator';
+export { Select, type SelectOption, type SelectProps } from './select';

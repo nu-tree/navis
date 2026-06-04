@@ -1,20 +1,20 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChatHeader, ChatInput, MessageList } from '../components/chat';
-import { MOCK_MESSAGES } from '../data/mockMessages';
+import { MOCK_MESSAGES } from '../data/mock-messages';
 import type { ChatMessage } from '../types';
-
-let nextId = 1000;
 
 export function ChatScreen() {
   const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState<ChatMessage[]>(MOCK_MESSAGES);
   const [typing, setTyping] = useState(false);
+  const idRef = useRef(1000);
+  const nextId = () => String(idRef.current++);
 
   const handleSend = (text: string) => {
     const userMsg: ChatMessage = {
-      id: `u${nextId++}`,
+      id: `u${nextId()}`,
       role: 'user',
       text,
       createdAt: new Date().toISOString(),
@@ -25,9 +25,9 @@ export function ChatScreen() {
     setTyping(true);
     setTimeout(() => {
       const reply: ChatMessage = {
-        id: `a${nextId++}`,
+        id: `a${nextId()}`,
         role: 'assistant',
-        text: '(목업) 아직 백엔드 연결 전이라 임시 응답이야. 곧 진짜 navis가 답할게.',
+        text: '(목업) 아직 백엔드 연결 전이라 임시 응답이야. 곧 진짜 나비스가 답할게.',
         createdAt: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, reply]);
@@ -37,7 +37,7 @@ export function ChatScreen() {
 
   return (
     <View className="flex-1 bg-background" style={{ paddingTop: insets.top }}>
-      <ChatHeader title="navis" subtitle="제2의 뇌 · 온라인" />
+      <ChatHeader title="나비스" subtitle="남운님의 개인 비서 · 온라인" />
       <KeyboardAvoidingView
         className="flex-1"
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}

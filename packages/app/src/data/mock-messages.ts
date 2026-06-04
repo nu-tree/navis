@@ -5,7 +5,7 @@ export const MOCK_MESSAGES: ChatMessage[] = [
   {
     id: 'm1',
     role: 'assistant',
-    text: '안녕, navis야. 오늘 뭐 도와줄까?',
+    text: '안녕, 나비스야. 오늘 뭐 도와줄까?',
     createdAt: '2026-06-04T09:00:00.000Z',
   },
   {

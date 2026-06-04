@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { View } from 'react-native';
 import { cn } from '../../lib/cn';
-import { Input } from '../ui/Input';
-import { Button } from '../ui/Button';
-import { Text } from '../ui/Text';
+import { Input } from '../ui/input';
+import { Button } from '../ui/button';
+import { Text } from '../ui/text';
 
 export type ChatInputProps = {
   onSend: (text: string) => void;

@@ -1,7 +1,7 @@
 import { View } from 'react-native';
 import { cn } from '../../lib/cn';
-import { Avatar } from '../ui/Avatar';
-import { Text } from '../ui/Text';
+import { Avatar } from '../ui/avatar';
+import { Text } from '../ui/text';
 
 export type ChatHeaderProps = {
   title: string;
@@ -17,7 +17,7 @@ export function ChatHeader({ title, subtitle, className }: ChatHeaderProps) {
         className,
       )}
     >
-      <Avatar fallback="n" size={38} className="bg-primary" />
+      <Avatar fallback="나" size={38} className="bg-primary" />
       <View>
         <Text variant="subtitle">{title}</Text>
         {subtitle ? (

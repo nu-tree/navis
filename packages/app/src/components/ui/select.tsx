@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Modal, Pressable, View } from 'react-native';
 import { cn } from '../../lib/cn';
-import { Text } from './Text';
-import { Separator } from './Separator';
+import { Text } from './text';
+import { Separator } from './separator';
 
 export type SelectOption = {
   label: string;

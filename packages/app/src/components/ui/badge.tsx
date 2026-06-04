@@ -1,7 +1,7 @@
 import { View, type ViewProps } from 'react-native';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '../../lib/cn';
-import { Text } from './Text';
+import { Text } from './text';
 
 const badgeVariants = cva('self-start rounded-full px-2.5 py-0.5', {
   variants: {

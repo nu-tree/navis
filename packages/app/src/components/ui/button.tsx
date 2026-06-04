@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { ActivityIndicator, Pressable, type PressableProps } from 'react-native';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '../../lib/cn';
-import { Text } from './Text';
+import { Text } from './text';
 
 const buttonVariants = cva(
   'flex-row items-center justify-center gap-2 rounded-xl active:opacity-80',

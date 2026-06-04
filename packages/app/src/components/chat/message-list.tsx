@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { FlatList, View } from 'react-native';
-import { ChatBubble } from './ChatBubble';
-import { TypingIndicator } from './TypingIndicator';
+import { ChatBubble } from './chat-bubble';
+import { TypingIndicator } from './typing-indicator';
 import type { ChatMessage } from '../../types';
 
 export type MessageListProps = {
