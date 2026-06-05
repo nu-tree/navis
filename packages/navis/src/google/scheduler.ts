@@ -81,8 +81,9 @@ async function runUpcomingCheck(): Promise<void> {
       markNotified(e.id); // 성공/실패 모두 mark — 실패해도 다음 cron에서 중복 알림 방지
     }
   } catch (err) {
+    // 폴링 실패(예: invalid_grant=토큰 만료)는 30분마다 반복되므로 보고로 띄우지 않고
+    // 로그만 남긴다 — 보고방 스팸 방지. 토큰을 고치면 정상 알림이 다시 뜬다.
     console.error("[calendar] upcoming 실패:", err);
-    emitReport(`[calendar] upcoming 확인 실패: ${err instanceof Error ? err.message : String(err)}`, "calendar");
   }
 }
 
@@ -196,8 +197,8 @@ async function runDailyFollowup(): Promise<void> {
       emitReport(`**오늘 일정 follow-up**\n\n${summary}`, "calendar");
     }
   } catch (err) {
+    // 실패는 로그만(보고방 스팸 방지).
     console.error("[calendar] follow-up 실패:", err);
-    emitReport(`[calendar] follow-up 실패: ${err instanceof Error ? err.message : String(err)}`, "calendar");
   }
 }
 
