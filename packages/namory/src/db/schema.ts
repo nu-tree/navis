@@ -6,6 +6,7 @@ import {
   timestamp,
   vector,
   boolean,
+  integer,
   index,
 } from "drizzle-orm/pg-core";
 
@@ -75,4 +76,19 @@ export const profile = pgTable("profile", {
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
+});
+
+// 대화방 동기화 — 앱/데스크톱이 기기 간 채팅을 맞추기 위한 서버 사본.
+// id 는 클라이언트가 만든 방 id(uuid 아님)라 text PK. messages 는 통째 jsonb.
+// 머지는 방 단위 Last-Write-Wins(updatedAt), 삭제는 deletedAt 툼스톤으로 전파.
+export const conversations = pgTable("conversations", {
+  id: text("id").primaryKey(),
+  title: text("title").notNull(),
+  kind: text("kind").notNull(), // 'chat' | 'report'
+  messages: jsonb("messages").notNull(),
+  sessionId: text("session_id"),
+  unread: integer("unread").notNull().default(0),
+  hidden: boolean("hidden").notNull().default(false),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });

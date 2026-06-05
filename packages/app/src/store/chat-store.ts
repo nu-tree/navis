@@ -21,6 +21,19 @@ export type Conversation = {
   hidden?: boolean;
 };
 
+// 서버 동기화로 내려오는 대화방 행(머지 입력). deletedAt 있으면 삭제 전파.
+export type ConversationSyncRow = {
+  id: string;
+  title: string;
+  kind: ConversationKind;
+  messages: ChatMessage[];
+  sessionId: string | null;
+  unread: number;
+  hidden: boolean;
+  updatedAt: string;
+  deletedAt: string | null;
+};
+
 // navis /api/reports 응답 항목
 export type Report = {
   id: string;
@@ -57,6 +70,8 @@ type ChatStore = {
   unhideConversation: (id: string) => void;
   // 같은 kind 안에서 보이는 방들의 새 순서(id 배열)로 재정렬 — 드래그앤드롭용
   reorderConversations: (kind: ConversationKind, orderedVisibleIds: string[]) => void;
+  // 서버에서 받은 대화 스냅샷을 병합 — 방 단위 Last-Write-Wins(updatedAt) + 삭제 전파.
+  mergeServerConversations: (rows: ConversationSyncRow[]) => void;
 };
 
 function now(): string {
@@ -261,6 +276,42 @@ export const useChatStore = create<ChatStore>()(
           c.kind === kind && !c.hidden ? next[i++] ?? c : c,
         ),
       };
+    }),
+
+  mergeServerConversations: (rows) =>
+    set((s) => {
+      let convs = [...s.conversations];
+      for (const r of rows) {
+        const idx = convs.findIndex((c) => c.id === r.id);
+        if (r.deletedAt) {
+          // 서버에서 삭제됨 → 로컬에서도 제거(전파)
+          if (idx !== -1) convs.splice(idx, 1);
+          continue;
+        }
+        const incoming: Conversation = {
+          id: r.id,
+          title: r.title,
+          kind: r.kind,
+          messages: r.messages ?? [],
+          sessionId: r.sessionId ?? undefined,
+          unread: r.unread,
+          hidden: r.hidden,
+          createdAt: idx !== -1 ? convs[idx].createdAt : r.updatedAt,
+          updatedAt: r.updatedAt,
+        };
+        if (idx === -1) {
+          // 로컬에 없던 방 → 추가(최신이 앞)
+          convs.unshift(incoming);
+        } else if (new Date(r.updatedAt) > new Date(convs[idx].updatedAt)) {
+          // 서버가 더 최신 → 교체(LWW). 로컬이 더 최신이면 유지(다음 push 에서 올라감).
+          convs[idx] = incoming;
+        }
+      }
+      // 활성 방이 사라졌으면 첫 방으로
+      const activeId = convs.some((c) => c.id === s.activeId)
+        ? s.activeId
+        : convs[0]?.id ?? s.activeId;
+      return { conversations: convs, activeId };
     }),
 
   appendReport: (report) =>

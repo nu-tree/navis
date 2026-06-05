@@ -11,6 +11,11 @@ import { handleChat, handleChatStream } from "./chat.js";
 import { handleReports, handlePostReport } from "./reports.js";
 import { handleCrons, handleDeleteCron } from "./crons.js";
 import { handleMemories } from "./memories.js";
+import {
+  handleGetConversations,
+  handlePutConversation,
+  handleDeleteConversation,
+} from "./conversations.js";
 import { handleGithubWebhook } from "./webhook.js";
 
 // HTTP 요청 1건을 적절한 핸들러로 라우팅한다. createServer 콜백에서 호출.
@@ -60,6 +65,20 @@ export function route(req: IncomingMessage, res: ServerResponse): void {
   if (req.url?.startsWith("/api/memories")) {
     if (req.method === "OPTIONS") return handlePreflight(res);
     return void handleMemories(req, res);
+  }
+
+  // 대화 동기화 — GET(pull 전체) / PUT(방 upsert) / DELETE(툼스톤)
+  if (req.url?.startsWith("/api/conversations")) {
+    if (req.method === "OPTIONS") return handlePreflight(res);
+    const curl = new URL(req.url, "http://localhost");
+    if (req.method === "GET" && curl.pathname === "/api/conversations") {
+      return void handleGetConversations(req, res);
+    }
+    if (curl.pathname.startsWith("/api/conversations/")) {
+      const id = decodeURIComponent(curl.pathname.slice("/api/conversations/".length));
+      if (req.method === "PUT") return void handlePutConversation(req, res, id);
+      if (req.method === "DELETE") return void handleDeleteConversation(req, res, id);
+    }
   }
 
   // 데스크톱 설치파일 배포(다운로드 페이지 + 업로드 + 자동업데이트 피드).

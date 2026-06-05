@@ -4,6 +4,11 @@ import { buildMcpServer } from "./mcp.js";
 import { listCrons, createCron, deleteCron, updateCron } from "./tools/cron.js";
 import { listMemories } from "./tools/recent.js";
 import { listProjects } from "./tools/projects.js";
+import {
+  listConversations,
+  upsertConversation,
+  softDeleteConversation,
+} from "./tools/conversations.js";
 import { update } from "./tools/update.js";
 import { remove } from "./tools/remove.js";
 import { CATEGORIES, type Category } from "./db/schema.js";
@@ -39,7 +44,8 @@ app.addHook("onRequest", async (req, reply) => {
     !req.url.startsWith("/mcp") &&
     !req.url.startsWith("/crons") &&
     !req.url.startsWith("/memories") &&
-    !req.url.startsWith("/projects")
+    !req.url.startsWith("/projects") &&
+    !req.url.startsWith("/conversations")
   )
     return;
   const headerToken = req.headers.authorization?.replace(/^Bearer\s+/i, "");
@@ -87,6 +93,30 @@ app.all("/mcp", async (req, reply) => {
 
 // 사용 중인 프로젝트 목록 — navis가 저장 시 모델에 주입해 표기 통일에 쓴다.
 app.get("/projects", async () => ({ projects: await listProjects() }));
+
+// 대화방 동기화 — 앱이 기기 간 채팅을 맞춘다. GET(전체 pull)·PUT(방 upsert)·DELETE(툼스톤).
+app.get("/conversations", async () => ({ conversations: await listConversations() }));
+
+app.put<{ Params: { id: string } }>("/conversations/:id", async (req, reply) => {
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  const title = typeof b.title === "string" ? b.title : "";
+  if (!title) return reply.code(400).send({ error: "title 필요" });
+  const row = await upsertConversation({
+    id: req.params.id,
+    title,
+    kind: b.kind === "report" ? "report" : "chat",
+    messages: Array.isArray(b.messages) ? b.messages : [],
+    sessionId: typeof b.sessionId === "string" ? b.sessionId : null,
+    unread: typeof b.unread === "number" ? b.unread : 0,
+    hidden: typeof b.hidden === "boolean" ? b.hidden : false,
+    updatedAt: typeof b.updatedAt === "string" ? new Date(b.updatedAt) : new Date(),
+  });
+  return row;
+});
+
+app.delete<{ Params: { id: string } }>("/conversations/:id", async (req) => {
+  return await softDeleteConversation(req.params.id);
+});
 
 // 크론 CRUD (navis 스케줄러/대화 도구가 사용). MCP가 아닌 단순 REST —
 // navis가 에이전트 턴 밖(부팅·reconcile)에서도 조회해야 해서 일반 HTTP로 노출.

@@ -8,6 +8,7 @@ import { useActiveConversation, useChatStore, useTotalUnread } from '../store/ch
 import { useUiStore } from '../store/ui-store';
 import { useReports } from '../hooks/use-reports';
 import { useCrons } from '../hooks/use-crons';
+import { useConversationSync } from '../hooks/use-conversation-sync';
 import { ensureNotifyPermission } from '../lib/notify';
 
 // 데스크톱/태블릿 폭 기준 — 이 이상이면 드로어 대신 고정 사이드바 + 중앙 채팅 칼럼.
@@ -33,6 +34,8 @@ export function ChatScreen() {
   // navis 선제 보고 폴링 → 보고방에 머지 + 크론 목록으로 보고방 미리 생성
   useReports();
   useCrons();
+  // 기기 간 대화 동기화(pull 주기 + 변경분 push)
+  useConversationSync();
 
   // 데스크톱/웹 알림 권한 요청(1회). 네이티브 모바일에선 no-op.
   useEffect(() => {
