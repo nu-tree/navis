@@ -1,7 +1,7 @@
 // navis 데스크톱 셸 (Electron).
 // 우리 RN 컴포넌트를 react-native-web 으로 빌드한 web-build 를 로컬 HTTP 서버로
 // 띄워 BrowserWindow 에 로드한다. (Expo 웹 빌드는 자산 경로가 절대경로라 file:// 불가)
-const { app, BrowserWindow, shell, Notification } = require('electron');
+const { app, BrowserWindow, shell, Notification, ipcMain } = require('electron');
 const path = require('node:path');
 const http = require('node:http');
 const fs = require('node:fs');
@@ -189,6 +189,92 @@ function configureUpdater() {
     console.error('[updater] 설정 실패:', err);
   }
 }
+
+// ── 로컬 에이전트 (실험적) ──────────────────────────────────────────────
+// 이 맥의 파일/터미널에 접근하는 에이전트를 메인 프로세스(Node)에서 실행한다.
+// 보안 기본값: enabled=false, allowWrite=false(읽기 전용). 쓰기/Bash 는 allowWrite 를
+// 켰을 때만 도구 목록에 포함된다. 모델 호출은 CLAUDE_CODE_OAUTH_TOKEN(설정 또는 env).
+function localConfigFile() {
+  return path.join(app.getPath('userData'), 'local-agent.json');
+}
+function loadLocalConfig() {
+  try {
+    return JSON.parse(fs.readFileSync(localConfigFile(), 'utf8'));
+  } catch {
+    return { enabled: false, workdir: '', allowWrite: false, token: '' };
+  }
+}
+function saveLocalConfig(cfg) {
+  fs.writeFileSync(localConfigFile(), JSON.stringify(cfg));
+}
+
+ipcMain.handle('navis-local:config:get', () => {
+  const c = loadLocalConfig();
+  // 토큰 원문은 노출하지 않음 — 존재 여부만.
+  return {
+    enabled: !!c.enabled,
+    workdir: c.workdir || '',
+    allowWrite: !!c.allowWrite,
+    hasToken: !!(c.token || process.env.CLAUDE_CODE_OAUTH_TOKEN),
+  };
+});
+
+ipcMain.handle('navis-local:config:set', (_e, patch) => {
+  const c = loadLocalConfig();
+  const next = {
+    enabled: patch.enabled ?? c.enabled,
+    workdir: patch.workdir ?? c.workdir,
+    allowWrite: patch.allowWrite ?? c.allowWrite,
+    // 토큰은 빈 문자열이 아닐 때만 갱신(빈 값으로 덮어쓰지 않음).
+    token: patch.token ? patch.token : c.token,
+  };
+  saveLocalConfig(next);
+  return { ok: true };
+});
+
+ipcMain.handle('navis-local:run', async (event, { id, prompt }) => {
+  const cfg = loadLocalConfig();
+  const token = cfg.token || process.env.CLAUDE_CODE_OAUTH_TOKEN;
+  if (!cfg.enabled) return { error: '로컬 에이전트가 꺼져 있어요(설정에서 켜기).' };
+  if (!token) return { error: 'CLAUDE_CODE_OAUTH_TOKEN 이 없어요(설정에서 토큰 입력).' };
+  if (!cfg.workdir) return { error: '작업 폴더가 설정되지 않았어요.' };
+  try {
+    process.env.CLAUDE_CODE_OAUTH_TOKEN = token;
+    // 에이전트 SDK 는 ESM → CJS 메인에서 동적 import.
+    const { query } = await import('@anthropic-ai/claude-agent-sdk');
+    // 읽기 전용 기본. allowWrite 일 때만 쓰기/터미널 도구 추가.
+    const readonly = ['Read', 'Grep', 'Glob', 'LS'];
+    const writeTools = ['Edit', 'Write', 'Bash'];
+    const allowedTools = cfg.allowWrite ? [...readonly, ...writeTools] : readonly;
+    let text = '';
+    for await (const m of query({
+      prompt,
+      options: {
+        cwd: cfg.workdir,
+        model: 'claude-opus-4-8',
+        allowedTools,
+        settingSources: [],
+        includePartialMessages: true,
+        permissionMode: cfg.allowWrite ? 'acceptEdits' : 'default',
+      },
+    })) {
+      if (
+        m.type === 'stream_event' &&
+        m.event &&
+        m.event.type === 'content_block_delta' &&
+        m.event.delta &&
+        m.event.delta.type === 'text_delta'
+      ) {
+        event.sender.send(`navis-local:delta:${id}`, m.event.delta.text);
+      }
+      if (m.type === 'result' && m.subtype === 'success') text = m.result;
+    }
+    return { text: text || '(빈 응답)' };
+  } catch (err) {
+    console.error('[local-agent] 실행 실패:', err);
+    return { error: err && err.message ? err.message : String(err) };
+  }
+});
 
 app.whenReady().then(() => {
   void createWindow();

@@ -1,15 +1,23 @@
 import { useMutation } from '@tanstack/react-query';
 import { sendMessageStream, type Attachment } from '../api/navis';
 import { useChatStore } from '../store/chat-store';
+import { useUiStore } from '../store/ui-store';
+import { localAgent, hasLocalAgent } from '../lib/local-agent';
 import { makeId } from '../lib/id';
 
-type SendVars = { text: string; conversationId: string; attachments?: Attachment[] };
+type SendVars = {
+  text: string;
+  conversationId: string;
+  attachments?: Attachment[];
+  // 데스크톱 로컬 에이전트로 보낼지 (내 맥 파일/터미널). 채팅 호출 시점에 결정.
+  local?: boolean;
+};
 
 // 메시지 전송 = TanStack Query mutation. 대화방(conversationId) 단위로 동작해
 // 각 방이 독립 세션·typing 상태를 가진다. 응답은 토큰 스트리밍으로 받아 점진 표시한다.
 export function useSendMessage() {
   const mutation = useMutation({
-    mutationFn: async ({ text, conversationId, attachments }: SendVars) => {
+    mutationFn: async ({ text, conversationId, attachments, local }: SendVars) => {
       const {
         conversations,
         addMessage,
@@ -33,6 +41,33 @@ export function useSendMessage() {
           createdAt: new Date().toISOString(),
         });
       };
+
+      // 로컬 모드: 데스크톱 로컬 에이전트(내 맥 파일/터미널)로 실행. 서버 navis 안 거침.
+      if (local && localAgent) {
+        const res = await localAgent.run(text, {
+          onDelta: (delta) => {
+            ensureBubble();
+            appendMessageText(conversationId, assistantId, delta);
+          },
+        });
+        const replyText = res.error ? `⚠️ 로컬 에이전트: ${res.error}` : res.text ?? '(빈 응답)';
+        if (!started) {
+          addMessage(conversationId, {
+            id: assistantId,
+            role: 'assistant',
+            text: replyText,
+            createdAt: new Date().toISOString(),
+          });
+        } else {
+          setMessageText(conversationId, assistantId, replyText);
+        }
+        return {
+          reply: { text: replyText, createdAt: new Date().toISOString() },
+          sessionId: undefined,
+          contextFull: false,
+          saved: false,
+        };
+      }
 
       const result = await sendMessageStream(
         text,
@@ -93,10 +128,11 @@ export function useSendMessage() {
     },
   });
 
-  // 현재 활성 대화방으로 전송
+  // 현재 활성 대화방으로 전송. 로컬 모드 ON + 데스크톱 로컬 에이전트 가용 시 로컬 실행.
   const send = (text: string, attachments?: Attachment[]) => {
     const { activeId } = useChatStore.getState();
-    mutation.mutate({ text, conversationId: activeId, attachments });
+    const local = hasLocalAgent && useUiStore.getState().localMode;
+    mutation.mutate({ text, conversationId: activeId, attachments, local });
   };
 
   return { send };
