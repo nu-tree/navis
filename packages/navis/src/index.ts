@@ -5,7 +5,7 @@ import { config } from "./config.js";
 import { askClaude } from "./claude/ask.js";
 import { curateTurn } from "./claude/curator.js";
 import { collectImagesFromDataUrls } from "./discord/image.js";
-import { getReports } from "./reports/store.js";
+import { getReports, recordReport } from "./reports/store.js";
 import { fetchCrons } from "./cron/api.js";
 import { fetchMemories, patchMemory, deleteMemory } from "./memories/api.js";
 import { startDiscord } from "./discord/bot.js";
@@ -80,6 +80,11 @@ createServer((req, res) => {
     }
     if (req.method === "GET") {
       handleReports(req, res);
+      return;
+    }
+    // 외부(개발 머신의 Claude Code 등)가 보고를 주입 → 앱/데스크톱이 알림으로 받음.
+    if (req.method === "POST") {
+      void handlePostReport(req, res);
       return;
     }
   }
@@ -213,6 +218,39 @@ async function handleMemories(req: IncomingMessage, res: ServerResponse): Promis
     res.writeHead(502, JSON_HEADERS);
     res.end(JSON.stringify({ error: "upstream error" }));
   }
+}
+
+// 보고 주입 — 외부에서 한 줄 보고를 넣으면 앱/데스크톱이 폴링해 네이티브 알림으로 띄운다.
+// 용도: 개발 머신의 Claude Code 가 작업을 끝내면 "작업 완료" 를 여기로 POST → 맥에서 알림.
+// body: { text: string, title?: string, sourceId?: string }
+//   sourceId 같으면 같은 방으로 묶인다(기본 "claude-code" → "🤖 작업 보고" 방).
+async function handlePostReport(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const token = config.appApiToken;
+  if (!token) {
+    res.writeHead(503, JSON_HEADERS);
+    res.end(JSON.stringify({ error: "app api not configured" }));
+    return;
+  }
+  const auth = req.headers["authorization"];
+  if (typeof auth !== "string" || !verifyBearer(token, auth)) {
+    res.writeHead(401, JSON_HEADERS);
+    res.end(JSON.stringify({ error: "unauthorized" }));
+    return;
+  }
+  const raw = await readBody(req);
+  const body = safeParse(raw);
+  const text = typeof body?.text === "string" ? body.text.trim() : "";
+  if (!text) {
+    res.writeHead(400, JSON_HEADERS);
+    res.end(JSON.stringify({ error: "text required" }));
+    return;
+  }
+  const sourceId = typeof body?.sourceId === "string" && body.sourceId ? body.sourceId : "claude-code";
+  const sourceTitle =
+    typeof body?.title === "string" && body.title ? body.title : "🤖 작업 보고";
+  recordReport({ type: "claude-code", text, sourceId, sourceTitle });
+  res.writeHead(200, JSON_HEADERS);
+  res.end(JSON.stringify({ ok: true }));
 }
 
 // 앱이 선제 보고를 폴링하는 엔드포인트. ?since=<ISO> 로 증분 조회.
