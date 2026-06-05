@@ -70,15 +70,29 @@ export function useSendMessage() {
         };
       }
 
-      const result = await sendMessageStream(
-        text,
-        conv?.sessionId,
-        attachments,
-        (delta) => {
-          ensureBubble();
-          appendMessageText(conversationId, assistantId, delta);
-        },
-      );
+      // 일시적 연결 실패(Railway 콜드스타트·네트워크 블립)는 사용자에게 에러를
+      // 띄우기 전에 조용히 몇 번 재시도한다. 단, 델타가 한 번이라도 도착한 뒤(스트림
+      // 시작됨)의 실패는 재시도하면 본문이 중복되므로 그대로 올려보낸다.
+      const MAX_ATTEMPTS = 3;
+      let result: Awaited<ReturnType<typeof sendMessageStream>> | undefined;
+      for (let attempt = 1; ; attempt++) {
+        try {
+          result = await sendMessageStream(
+            text,
+            conv?.sessionId,
+            attachments,
+            (delta) => {
+              ensureBubble();
+              appendMessageText(conversationId, assistantId, delta);
+            },
+          );
+          break;
+        } catch (err) {
+          if (started || attempt >= MAX_ATTEMPTS) throw err;
+          // 점증 백오프(0.7s → 1.4s)로 잠깐 쉬었다가 재시도.
+          await new Promise((r) => setTimeout(r, attempt * 700));
+        }
+      }
 
       // 델타가 한 번도 안 왔으면 지금 생성, 왔으면 권위 텍스트로 보정.
       if (!started) {
@@ -129,7 +143,7 @@ export function useSendMessage() {
       useChatStore.getState().addMessage(conversationId, {
         id: makeId('a'),
         role: 'assistant',
-        text: '⚠️ 나비스 서버에 연결하지 못했어. 잠시 후 다시 시도해줘.',
+        text: '⚠️ 나비스 서버에 연결하지 못했어요 (자동 재시도 후에도 실패했어요). 잠시 후 다시 보내주세요.',
         createdAt: new Date().toISOString(),
       });
     },

@@ -21,7 +21,26 @@ function git(...args) {
 }
 
 const pkg = JSON.parse(readFileSync(PKG, "utf8"));
-const [maj, min, pat] = pkg.version.split(".").map(Number);
+
+// 자동 릴리스 워크플로(desktop-auto-release.yml)는 태그만 올리고 package.json 은
+// 안 건드린다 → package.json 버전이 최신 태그보다 뒤처질 수 있다. 둘 중 더 높은 쪽을
+// 기준으로 올려 수동/자동 태그가 충돌하지 않게 한다.
+function semverMax(a, b) {
+  const pa = a.split(".").map(Number);
+  const pb = b.split(".").map(Number);
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) > (pb[i] ?? 0) ? a : b;
+  }
+  return a;
+}
+let baseVersion = pkg.version;
+try {
+  const latestTag = git("tag", "--list", "desktop-v*", "--sort=-v:refname").split("\n")[0]?.trim();
+  if (latestTag) baseVersion = semverMax(baseVersion, latestTag.replace(/^desktop-v/, ""));
+} catch {
+  // 태그 조회 실패는 무시 — package.json 버전만으로 진행.
+}
+const [maj, min, pat] = baseVersion.split(".").map(Number);
 
 const arg = process.argv[2] ?? "patch";
 let next;

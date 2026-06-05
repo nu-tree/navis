@@ -96,6 +96,23 @@ export async function handleChatStream(
     res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   };
 
+  // 첫 토큰까지 askClaude(에이전트 사고·도구 호출)가 수십 초 걸릴 수 있다. 그 사이
+  // 바이트가 한 번도 안 흐르면 Railway 엣지·클라가 idle 연결로 보고 끊어버려 앱에
+  // "나비스 서버에 연결하지 못했어요"로 뜬다(잦은 실패의 실제 원인). 즉시 한 번 +
+  // 주기적으로 SSE 주석 핑을 흘려 연결을 살려둔다. 주석(`:`)은 클라 파서가 무시한다.
+  res.write(": open\n\n");
+  let heartbeat: ReturnType<typeof setInterval> | undefined = setInterval(() => {
+    res.write(": ping\n\n");
+  }, 15_000);
+  const stopHeartbeat = () => {
+    if (heartbeat) {
+      clearInterval(heartbeat);
+      heartbeat = undefined;
+    }
+  };
+  // 클라가 먼저 끊으면 핑도 멈춘다(죽은 소켓에 write 방지).
+  req.on("close", stopHeartbeat);
+
   try {
     const result = await askClaude(
       parsed.text,
@@ -104,7 +121,10 @@ export async function handleChatStream(
       false,
       undefined,
       undefined,
-      (delta) => sse("delta", { text: delta }),
+      (delta) => {
+        stopHeartbeat(); // 실제 토큰이 흐르기 시작하면 핑 불필요.
+        sse("delta", { text: delta });
+      },
     );
     const contextFull = result.contextTokens >= config.contextTokenLimit;
     // 권위 있는 최종 텍스트도 함께 보내 클라가 누적분을 보정하게 한다.
@@ -125,5 +145,7 @@ export async function handleChatStream(
       sse("error", { error: "internal error" });
       res.end();
     }
+  } finally {
+    stopHeartbeat();
   }
 }

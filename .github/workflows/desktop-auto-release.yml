@@ -1,0 +1,76 @@
+# navis 데스크톱 자동 릴리스 — main 에 앱/데스크톱 변경이 들어오면 자동 배포.
+#
+# 동작:
+#   1. self-improve PR(또는 일반 PR)이 main 에 머지돼 packages/app/** 또는
+#      packages/desktop/** 가 바뀌면 이 워크플로가 발동한다.
+#   2. 최신 desktop-v* 태그 기준으로 patch 버전을 올려 새 태그를 찍어 push 한다(기록용).
+#   3. 같은 버전을 입력으로 desktop-release.yml(재사용 워크플로)을 호출해 맥/윈도우
+#      빌드 → navis 업로드까지 끝낸다. 설치된 앱은 electron-updater 로 자동 업데이트.
+#
+# → 사용자가 손으로 `pnpm release:desktop` 을 돌리지 않아도 고친 게 데스크톱에 도달한다.
+#
+# 무한 루프 방지: 릴리스 봇이 만든 버전 커밋(release(desktop)) 이나 [skip-release] 가
+#   담긴 커밋에는 발동하지 않는다. 또 태그 push 는 GITHUB_TOKEN 으로 하므로
+#   desktop-release.yml 의 `on: push: tags` 가 재발동하지 않아 중복 빌드도 없다.
+
+name: desktop auto-release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/app/**"
+      - "packages/desktop/**"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-auto-release
+  cancel-in-progress: false
+
+jobs:
+  version:
+    if: ${{ !contains(github.event.head_commit.message, 'release(desktop)') && !contains(github.event.head_commit.message, '[skip-release]') }}
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.next.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 다음 patch 버전 계산 (최신 desktop-v* 태그 기준)
+        id: next
+        run: |
+          set -euo pipefail
+          latest=$(git tag --list 'desktop-v*' --sort=-v:refname | head -1)
+          base="${latest#desktop-v}"
+          if [ -z "$base" ]; then
+            base=$(node -p "require('./packages/desktop/package.json').version")
+          fi
+          maj=$(echo "$base" | cut -d. -f1)
+          min=$(echo "$base" | cut -d. -f2)
+          pat=$(echo "$base" | cut -d. -f3)
+          next="${maj}.${min}.$((pat + 1))"
+          tag="desktop-v${next}"
+          echo "version=$next" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "릴리스: ${base} → ${next} (${tag})"
+
+      - name: 버전 태그 push (기록용)
+        run: |
+          set -euo pipefail
+          git config user.name "navis-bot"
+          git config user.email "navis-bot@users.noreply.github.com"
+          git tag "${{ steps.next.outputs.tag }}"
+          git push origin "${{ steps.next.outputs.tag }}"
+
+  release:
+    needs: version
+    # desktop-release.yml 을 재사용 호출 — 같은 런 안에서 실행돼 GITHUB_TOKEN
+    # 재발동 제약을 받지 않는다. version 입력을 빌드 직전 package.json 에 주입.
+    uses: ./.github/workflows/desktop-release.yml
+    with:
+      version: ${{ needs.version.outputs.version }}
+    secrets: inherit
