@@ -1,5 +1,13 @@
 import { useState } from 'react';
-import { Image, Pressable, ScrollView, View } from 'react-native';
+import {
+  Image,
+  Platform,
+  Pressable,
+  ScrollView,
+  View,
+  type NativeSyntheticEvent,
+  type TextInputKeyPressEventData,
+} from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { cn } from '../../lib/cn';
 import { Input } from '../ui/input';
@@ -16,7 +24,7 @@ export type ChatInputProps = {
 
 // 입력창 자동 성장 범위 — 내용에 맞춰 커지다 MAX 를 넘으면 그때 내부 스크롤.
 const MIN_INPUT_H = 44;
-const MAX_INPUT_H = 600;
+const MAX_INPUT_H = 200;
 
 export function ChatInput({ placeholder = '메시지 입력…', className }: ChatInputProps) {
   const [text, setText] = useState('');
@@ -58,6 +66,16 @@ export function ChatInput({ placeholder = '메시지 입력…', className }: Ch
     setInputHeight(MIN_INPUT_H);
   };
 
+  // 데스크톱/웹: Enter 전송, Shift+Enter 줄바꿈. 네이티브 모바일은 기본(줄바꿈) 유지.
+  const handleKeyPress = (e: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
+    if (Platform.OS !== 'web') return;
+    const ne = e.nativeEvent as TextInputKeyPressEventData & { shiftKey?: boolean };
+    if (ne.key === 'Enter' && !ne.shiftKey) {
+      e.preventDefault?.();
+      if (canSend) submit();
+    }
+  };
+
   return (
     <View className={cn('border-t border-border bg-background', className)}>
       {attachments.length > 0 ? (
@@ -96,6 +114,7 @@ export function ChatInput({ placeholder = '메시지 입력…', className }: Ch
           onChangeText={setText}
           placeholder={placeholder}
           multiline
+          onKeyPress={handleKeyPress}
           onContentSizeChange={(e) => setInputHeight(e.nativeEvent.contentSize.height)}
           // MAX 도달 전엔 내부 스크롤 끄고(그냥 성장), 도달하면 그때부터 스크롤.
           scrollEnabled={inputHeight >= MAX_INPUT_H}
