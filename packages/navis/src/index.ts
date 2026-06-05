@@ -60,6 +60,18 @@ createServer((req, res) => {
       return;
     }
   }
+  // 스트리밍(SSE) 채팅 — 토큰 단위로 응답을 흘려보내 체감 지연을 줄인다(앱 우선 경로).
+  if (req.url === "/api/chat/stream") {
+    if (req.method === "OPTIONS") {
+      res.writeHead(204, CORS_HEADERS);
+      res.end();
+      return;
+    }
+    if (req.method === "POST") {
+      void handleChatStream(req, res);
+      return;
+    }
+  }
   if (req.url?.startsWith("/api/reports")) {
     if (req.method === "OPTIONS") {
       res.writeHead(204, CORS_HEADERS);
@@ -293,6 +305,87 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
     if (!res.headersSent) {
       res.writeHead(500, JSON_HEADERS);
       res.end(JSON.stringify({ error: "internal error" }));
+    }
+  }
+}
+
+// /api/chat 의 스트리밍 버전. 응답 토큰을 SSE 로 흘려보낸다:
+//   event: delta  data: {"text":"..."}   ← 토큰 조각 (여러 번)
+//   event: done   data: {"sessionId","contextFull","saved"}  ← 종료 + 메타
+//   event: error  data: {"error"}         ← 실패
+async function handleChatStream(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const token = config.appApiToken;
+  if (!token) {
+    res.writeHead(503, JSON_HEADERS);
+    res.end(JSON.stringify({ error: "app api not configured" }));
+    return;
+  }
+  const auth = req.headers["authorization"];
+  if (typeof auth !== "string" || !verifyBearer(token, auth)) {
+    res.writeHead(401, JSON_HEADERS);
+    res.end(JSON.stringify({ error: "unauthorized" }));
+    return;
+  }
+
+  const raw = await readBody(req);
+  const body = safeParse(raw);
+  const text = typeof body?.text === "string" ? body.text.trim() : "";
+  const imageUrls = Array.isArray(body?.images)
+    ? (body.images.filter((u) => typeof u === "string") as string[])
+    : [];
+  const images = imageUrls.length > 0 ? await collectImagesFromDataUrls(imageUrls) : [];
+  if (!text && images.length === 0) {
+    res.writeHead(400, JSON_HEADERS);
+    res.end(JSON.stringify({ error: "text or image required" }));
+    return;
+  }
+  const resume =
+    typeof body?.sessionId === "string" && body.sessionId ? body.sessionId : undefined;
+
+  // SSE 헤더. 프록시(Railway) 버퍼링 방지 위해 X-Accel-Buffering 도 끈다.
+  res.writeHead(200, {
+    ...CORS_HEADERS,
+    "content-type": "text/event-stream; charset=utf-8",
+    "cache-control": "no-cache, no-transform",
+    connection: "keep-alive",
+    "x-accel-buffering": "no",
+  });
+
+  const sse = (event: string, data: unknown) => {
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+
+  try {
+    const result = await askClaude(
+      text,
+      resume,
+      images,
+      undefined,
+      false,
+      undefined,
+      undefined,
+      (delta) => sse("delta", { text: delta }),
+    );
+    const contextFull = result.contextTokens >= config.contextTokenLimit;
+    // 권위 있는 최종 텍스트도 함께 보내 클라가 누적분을 보정하게 한다.
+    sse("done", {
+      text: result.text,
+      sessionId: result.sessionId,
+      contextFull,
+      saved: result.saved,
+    });
+    res.end();
+
+    // 사후 큐레이터 — 비스트리밍 경로와 동일하게 저장 누락 보강.
+    curateTurn({ userText: text, assistantText: result.text }).catch(() => {});
+  } catch (err) {
+    console.error("[chat/stream] 처리 실패:", err);
+    if (!res.headersSent) {
+      res.writeHead(500, JSON_HEADERS);
+      res.end(JSON.stringify({ error: "internal error" }));
+    } else {
+      sse("error", { error: "internal error" });
+      res.end();
     }
   }
 }

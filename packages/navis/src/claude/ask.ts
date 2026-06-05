@@ -40,6 +40,9 @@ export async function askClaude(
   // 크론/자율 루틴이 보낸 보고 메시지가 sessionId 매핑 밖이라 그 직후 사용자
   // 질문이 "맥락 없음" 으로 보이던 버그를 메운다. 이미 진행 중 세션은 빈 값.
   historyContext?: string,
+  // 토큰 단위 스트리밍 콜백(있으면). 주면 includePartialMessages 를 켜고 응답 text_delta 를
+  // 그때그때 흘려보낸다(앱 SSE 스트리밍용). 없으면 기존처럼 완성 후 한 번에 반환.
+  onTextDelta?: (delta: string) => void,
 ): Promise<AskResult> {
   let text = "";
   let sessionId = "";
@@ -114,8 +117,8 @@ export async function askClaude(
   if (channelId) {
     systemPromptFinal +=
       "\n\n[디스코드 모드 안내]\n" +
-      "- 이 환경(Railway 컨테이너)에는 소스 파일이 없다. Edit/Write/Bash 로 자기 자신(packages/navis, packages/namory)을 직접 수정하려 시도하지 말 것.\n" +
-      "- 자기 코드 수정 요청은 반드시 mcp__self_modify__request_self_modification 도구로 GitHub Actions 의 코드 수정 서브에이전트에게 위임. 즉시 트리거만 던지면 작업·검토 결과는 별도 메시지로 비동기 보고됨.\n" +
+      "- 이 환경(Railway 컨테이너)에는 소스 파일이 없다. Edit/Write/Bash 로 이 모노레포 코드(packages/** — navis, namory, app, desktop 등)를 직접 수정하려 시도하지 말 것.\n" +
+      "- 코드 수정 요청(어느 패키지든)은 반드시 mcp__self_modify__request_self_modification 도구로 GitHub Actions 의 코드 수정 서브에이전트에게 위임. 즉시 트리거만 던지면 작업·검토 결과는 별도 메시지로 비동기 보고됨.\n" +
       "- 자기 코드 조회는 mcp__repo__read_repo_file / mcp__repo__list_repo_files 사용.\n" +
       "- 사용자 시스템의 다른 파일·셸 작업은 평소대로 허용(자기 수정만 위임).";
   }
@@ -157,10 +160,24 @@ export async function askClaude(
       settingSources: [],
       // 도구 호출 루프 여유.
       maxTurns: 16,
+      // 스트리밍 콜백이 있으면 부분 메시지(text_delta)를 받기 위해 켠다.
+      ...(onTextDelta ? { includePartialMessages: true } : {}),
       // 이전 대화 이어받기 (있을 때만).
       ...(resumeSessionId ? { resume: resumeSessionId } : {}),
     },
   })) {
+    // 부분 메시지: 응답 텍스트 델타를 그때그때 콜백으로 흘려보낸다(앱 스트리밍).
+    // 도구 input 델타·thinking 등은 무시하고 순수 text_delta 만.
+    if (message.type === "stream_event") {
+      if (onTextDelta) {
+        const ev = message.event;
+        if (ev.type === "content_block_delta" && ev.delta.type === "text_delta") {
+          onTextDelta(ev.delta.text);
+        }
+      }
+      continue;
+    }
+
     // 턴 중 save 도구가 실제로 호출됐는지 감지 → 💡 리액션 트리거.
     // 동시에 이 턴의 usage 를 기록해 마지막 turn 이 끝나면 그 값을 컨텍스트
     // 크기로 사용한다(누적 합인 result.usage 는 부정확함).

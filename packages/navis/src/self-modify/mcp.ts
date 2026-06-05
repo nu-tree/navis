@@ -52,13 +52,13 @@ export function buildSelfModifyTools(channelId?: string): McpSdkServerConfigWith
     tools: [
       tool(
         "request_self_modification",
-        "navis 자기 자신(packages/navis 또는 packages/namory 소스)을 수정해 달라는 요청을 GitHub Actions 의 '코드 수정 서브에이전트'에게 위임한다. 즉시 트리거만 던지고 결과는 별도 채널 메시지로 비동기 보고된다. 사용자가 '이거 고쳐줘/maxTurns 올려줘/X 함수 리팩토링해줘' 같은 코드 변경 요청을 할 때 사용.",
+        "이 모노레포의 코드(packages/** — navis, namory, app, desktop 등 모든 패키지)를 수정해 달라는 요청을 GitHub Actions 의 '코드 수정 서브에이전트'에게 위임한다. 즉시 트리거만 던지고 결과는 별도 채널 메시지로 비동기 보고된다. 사용자가 '이거 고쳐줘/앱 버튼 색 바꿔줘/maxTurns 올려줘/X 함수 리팩토링해줘' 같은 코드 변경 요청을 할 때 사용.",
         {
           instruction: z
             .string()
             .min(10)
             .describe(
-              "서브에이전트에게 전달할 자연어 지시. 어떤 파일·어떤 변경인지 가능한 한 구체적으로(예: 'packages/navis/src/claude/ask.ts 의 maxTurns 16을 20으로 올려줘').",
+              "서브에이전트에게 전달할 자연어 지시. 어떤 패키지·어떤 파일·어떤 변경인지 가능한 한 구체적으로(예: 'packages/navis/src/claude/ask.ts 의 maxTurns 16을 20으로', 'packages/app 채팅 입력창 높이 키워줘').",
             ),
         },
         async (args) => {

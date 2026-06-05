@@ -1,3 +1,4 @@
+import { fetch as expoFetch } from 'expo/fetch';
 import { makeId } from '../lib/id';
 import { NAVIS_URL, NAVIS_TOKEN, IS_BACKEND_CONFIGURED } from '../lib/config';
 import type { Report } from '../store/chat-store';
@@ -68,6 +69,81 @@ export async function sendMessage(
     sessionId: data.sessionId,
     contextFull: data.contextFull,
     saved: data.saved,
+  };
+}
+
+// 스트리밍 전송 — /api/chat/stream(SSE)로 토큰 델타를 받아 onDelta 로 흘려준다.
+// expo/fetch 는 RN 기본 fetch 와 달리 response.body(ReadableStream) 스트리밍을 지원한다.
+// 백엔드 미설정이면 목업 응답을 잘게 쪼개 흉내낸다.
+export async function sendMessageStream(
+  text: string,
+  sessionId: string | undefined,
+  attachments: Attachment[] | undefined,
+  onDelta: (delta: string) => void,
+): Promise<SendResult> {
+  if (!IS_BACKEND_CONFIGURED) {
+    const result = await mockReply(text);
+    for (const ch of result.reply.text.match(/.{1,3}/gu) ?? []) {
+      onDelta(ch);
+      await new Promise((r) => setTimeout(r, 12));
+    }
+    return result;
+  }
+
+  const images = attachments?.map((a) => `data:${a.mimeType};base64,${a.base64}`);
+
+  const res = await expoFetch(`${NAVIS_URL}/api/chat/stream`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${NAVIS_TOKEN}`,
+    },
+    body: JSON.stringify({ text, sessionId, images }),
+  });
+
+  if (!res.ok || !res.body) {
+    throw new Error(`navis 스트림 오류: ${res.status}`);
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let done: { text: string; sessionId: string; contextFull: boolean; saved: boolean } | undefined;
+
+  // SSE 프레임은 빈 줄(\n\n)로 구분. event/data 라인을 파싱한다.
+  const handleFrame = (frame: string) => {
+    let event = 'message';
+    const dataLines: string[] = [];
+    for (const line of frame.split('\n')) {
+      if (line.startsWith('event:')) event = line.slice(6).trim();
+      else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim());
+    }
+    if (dataLines.length === 0) return;
+    const payload = JSON.parse(dataLines.join('\n'));
+    if (event === 'delta') onDelta(payload.text as string);
+    else if (event === 'done') done = payload;
+    else if (event === 'error') throw new Error(payload.error ?? '스트림 오류');
+  };
+
+  while (true) {
+    const { value, done: streamDone } = await reader.read();
+    if (streamDone) break;
+    buffer += decoder.decode(value, { stream: true });
+    let idx: number;
+    while ((idx = buffer.indexOf('\n\n')) !== -1) {
+      const frame = buffer.slice(0, idx);
+      buffer = buffer.slice(idx + 2);
+      if (frame.trim()) handleFrame(frame);
+    }
+  }
+
+  if (!done) throw new Error('스트림이 비정상 종료됐어');
+
+  return {
+    reply: { ...assistantMessage(done.text), text: done.text },
+    sessionId: done.sessionId,
+    contextFull: done.contextFull,
+    saved: done.saved,
   };
 }
 

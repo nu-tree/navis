@@ -1,15 +1,23 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChatDrawer, ChatHeader, ChatInput, MessageList } from '../components/chat';
+import { SidebarContent } from '../components/chat/sidebar-content';
 import { Text } from '../components/ui/text';
 import { useActiveConversation, useChatStore, useTotalUnread } from '../store/chat-store';
 import { useReports } from '../hooks/use-reports';
 import { useCrons } from '../hooks/use-crons';
 
+// 데스크톱/태블릿 폭 기준 — 이 이상이면 드로어 대신 고정 사이드바 + 중앙 채팅 칼럼.
+const WIDE_BREAKPOINT = 900;
+// 넓은 화면에서 채팅 본문이 과도하게 늘어나지 않게 가독 폭 상한(Claude 데스크톱 느낌).
+const CHAT_MAX_WIDTH = 900;
+
 // 상태는 Zustand 스토어 / TanStack Query 훅에서 → 화면은 레이아웃 + 드로어 토글만
 export function ChatScreen() {
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const isWide = width >= WIDE_BREAKPOINT;
   const [drawerOpen, setDrawerOpen] = useState(false);
   const active = useActiveConversation();
   const totalUnread = useTotalUnread();
@@ -22,37 +30,51 @@ export function ChatScreen() {
   const isReport = active?.kind === 'report';
 
   return (
-    <View className="flex-1 bg-background" style={{ paddingTop: insets.top }}>
-      <ChatHeader
-        title={active?.title ?? '나비스'}
-        subtitle={isReport ? '보고 전용 · 읽기 전용' : '남운님의 개인 비서'}
-        onMenu={() => setDrawerOpen(true)}
-        onNewChat={() => newConversation()}
-        unread={totalUnread}
-      />
-      <KeyboardAvoidingView
-        className="flex-1"
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={insets.top}
-      >
-        <MessageList />
-        {isReport ? (
-          <View
-            className="border-t border-border bg-background px-4 py-3"
-            style={{ paddingBottom: insets.bottom + 12 }}
-          >
-            <Text variant="caption" className="text-center text-muted-foreground">
-              나비스가 보내는 보고가 모이는 방이야 · 여기선 답장하지 않아도 돼
-            </Text>
-          </View>
-        ) : (
-          <View style={{ paddingBottom: insets.bottom }}>
-            <ChatInput />
-          </View>
-        )}
-      </KeyboardAvoidingView>
+    <View className="flex-1 flex-row bg-background" style={{ paddingTop: insets.top }}>
+      {/* 데스크톱: 고정 사이드바 */}
+      {isWide ? (
+        <View className="w-[300px] border-r border-border bg-surface">
+          <SidebarContent />
+        </View>
+      ) : null}
 
-      <ChatDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
+      <View className="flex-1">
+        <ChatHeader
+          title={active?.title ?? '나비스'}
+          subtitle={isReport ? '보고 전용 · 읽기 전용' : '남운님의 개인 비서'}
+          onMenu={() => setDrawerOpen(true)}
+          onNewChat={() => newConversation()}
+          unread={totalUnread}
+          showMenu={!isWide}
+        />
+        <KeyboardAvoidingView
+          className="flex-1"
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={insets.top}
+        >
+          {/* 넓은 화면에선 본문을 가운데 정렬하고 폭을 제한 */}
+          <View className="w-full flex-1 self-center" style={{ maxWidth: CHAT_MAX_WIDTH }}>
+            <MessageList />
+            {isReport ? (
+              <View
+                className="border-t border-border bg-background px-4 py-3"
+                style={{ paddingBottom: insets.bottom + 12 }}
+              >
+                <Text variant="caption" className="text-center text-muted-foreground">
+                  나비스가 보내는 보고가 모이는 방이야 · 여기선 답장하지 않아도 돼
+                </Text>
+              </View>
+            ) : (
+              <View style={{ paddingBottom: insets.bottom }}>
+                <ChatInput />
+              </View>
+            )}
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+
+      {/* 모바일: 드로어 (넓은 화면에선 고정 사이드바라 불필요) */}
+      {isWide ? null : <ChatDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />}
     </View>
   );
 }

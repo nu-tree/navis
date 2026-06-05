@@ -38,6 +38,10 @@ type ChatStore = {
   selectConversation: (id: string) => void;
   deleteConversation: (id: string) => void;
   addMessage: (conversationId: string, message: ChatMessage) => void;
+  // 스트리밍: 기존 메시지 텍스트에 델타를 이어붙임(점진 표시)
+  appendMessageText: (conversationId: string, messageId: string, delta: string) => void;
+  // 스트리밍 종료 시 권위 있는 최종 텍스트로 보정
+  setMessageText: (conversationId: string, messageId: string, text: string) => void;
   setSessionId: (conversationId: string, sessionId?: string) => void;
   setTyping: (conversationId: string, typing: boolean) => void;
   // 메시지 이모지 리액션 토글 (있으면 제거, 없으면 추가)
@@ -139,6 +143,32 @@ export const useChatStore = create<ChatStore>()(
           updatedAt: now(),
         };
       }),
+    })),
+
+  appendMessageText: (conversationId, messageId, delta) =>
+    set((s) => ({
+      conversations: s.conversations.map((c) =>
+        c.id === conversationId
+          ? {
+              ...c,
+              messages: c.messages.map((m) =>
+                m.id === messageId ? { ...m, text: m.text + delta } : m,
+              ),
+            }
+          : c,
+      ),
+    })),
+
+  setMessageText: (conversationId, messageId, text) =>
+    set((s) => ({
+      conversations: s.conversations.map((c) =>
+        c.id === conversationId
+          ? {
+              ...c,
+              messages: c.messages.map((m) => (m.id === messageId ? { ...m, text } : m)),
+            }
+          : c,
+      ),
     })),
 
   setSessionId: (conversationId, sessionId) =>

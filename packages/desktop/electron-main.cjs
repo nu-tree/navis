@@ -32,9 +32,10 @@ function startStaticServer() {
 
 async function createWindow() {
   const win = new BrowserWindow({
-    width: 480,
-    height: 820,
-    minWidth: 360,
+    // 데스크톱답게 넓게. 앱 레이아웃이 넓은 화면에선 사이드바+채팅으로 반응형 전환된다.
+    width: 1180,
+    height: 800,
+    minWidth: 720,
     minHeight: 560,
     title: '나비스',
     icon: path.join(__dirname, '../app/assets/navis-logo.png'),

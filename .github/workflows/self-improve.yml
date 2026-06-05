@@ -92,9 +92,10 @@ jobs:
           ${INSTRUCTION}
 
           [제약]
-          - 변경 허용 경로: packages/navis/src/**, packages/namory/src/**, packages/navis/README.md, packages/namory/README.md, README.md
-          - 절대 금지: .github/**, Dockerfile, *.lock, .env*, 루트 package.json, 루트 pnpm-workspace.yaml
-          - 수정 후 반드시 'pnpm -r build' 가 성공해야 함 — 깨지면 본인이 고쳐서 통과시킬 것
+          - 변경 허용 경로: packages/** (모든 패키지의 소스·문서 — navis, namory, app, desktop 등 전부)와 루트 README.md
+          - 절대 금지: .github/**, **/*.lock, pnpm-lock.yaml, .env*, 루트 package.json, 루트 pnpm-workspace.yaml
+          - 빌드 설정 파일(각 패키지의 Dockerfile, package.json, app.json 등)은 꼭 필요할 때만 신중히 수정
+          - 수정 후 반드시 'pnpm -r build' 와 'pnpm -r typecheck' 가 성공해야 함 — 깨지면 본인이 고쳐서 통과시킬 것
           - 변경 사유를 짧게 commit message 본문에 남길 것
 
           [실행 모드 — 중요]
@@ -138,7 +139,11 @@ jobs:
           echo "::endgroup::"
 
       - name: 빌드 통과 검증
-        run: pnpm -r build
+        # app/desktop 등 build 스크립트가 없는 패키지는 typecheck 로 검증(pnpm -r 은
+        # 해당 스크립트가 있는 패키지에서만 실행 → 없는 곳은 건너뜀).
+        run: |
+          pnpm -r build
+          pnpm -r typecheck
 
       - name: 변경 사항 커밋
         id: commit

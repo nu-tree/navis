@@ -1,17 +1,62 @@
 import { useMutation } from '@tanstack/react-query';
-import { sendMessage, type Attachment } from '../api/navis';
+import { sendMessageStream, type Attachment } from '../api/navis';
 import { useChatStore } from '../store/chat-store';
 import { makeId } from '../lib/id';
 
 type SendVars = { text: string; conversationId: string; attachments?: Attachment[] };
 
 // 메시지 전송 = TanStack Query mutation. 대화방(conversationId) 단위로 동작해
-// 각 방이 독립 세션·typing 상태를 가진다.
+// 각 방이 독립 세션·typing 상태를 가진다. 응답은 토큰 스트리밍으로 받아 점진 표시한다.
 export function useSendMessage() {
   const mutation = useMutation({
-    mutationFn: ({ text, conversationId, attachments }: SendVars) => {
-      const conv = useChatStore.getState().conversations.find((c) => c.id === conversationId);
-      return sendMessage(text, conv?.sessionId, attachments);
+    mutationFn: async ({ text, conversationId, attachments }: SendVars) => {
+      const {
+        conversations,
+        addMessage,
+        appendMessageText,
+        setMessageText,
+        setTyping,
+      } = useChatStore.getState();
+      const conv = conversations.find((c) => c.id === conversationId);
+
+      // 응답 말풍선은 첫 델타가 올 때 생성(그 전까진 typing 점 표시).
+      const assistantId = makeId('a');
+      let started = false;
+      const ensureBubble = () => {
+        if (started) return;
+        started = true;
+        setTyping(conversationId, false);
+        addMessage(conversationId, {
+          id: assistantId,
+          role: 'assistant',
+          text: '',
+          createdAt: new Date().toISOString(),
+        });
+      };
+
+      const result = await sendMessageStream(
+        text,
+        conv?.sessionId,
+        attachments,
+        (delta) => {
+          ensureBubble();
+          appendMessageText(conversationId, assistantId, delta);
+        },
+      );
+
+      // 델타가 한 번도 안 왔으면 지금 생성, 왔으면 권위 텍스트로 보정.
+      if (!started) {
+        addMessage(conversationId, {
+          id: assistantId,
+          role: 'assistant',
+          text: result.reply.text,
+          createdAt: result.reply.createdAt,
+        });
+      } else {
+        setMessageText(conversationId, assistantId, result.reply.text);
+      }
+
+      return result;
     },
     onMutate: ({ text, conversationId, attachments }) => {
       const { addMessage, setTyping } = useChatStore.getState();
@@ -27,9 +72,8 @@ export function useSendMessage() {
       // onSuccess 에서 💡 부착에 쓸 유저 메시지 id 를 context 로 넘김
       return { userMessageId };
     },
-    onSuccess: ({ reply, sessionId, contextFull, saved }, { conversationId }, context) => {
-      const { addMessage, setSessionId, toggleReaction } = useChatStore.getState();
-      addMessage(conversationId, reply);
+    onSuccess: ({ sessionId, contextFull, saved }, { conversationId }, context) => {
+      const { setSessionId, toggleReaction } = useChatStore.getState();
       setSessionId(conversationId, sessionId && !contextFull ? sessionId : undefined);
       // 저장됐으면 유저 메시지에 💡 (디스코드와 동일)
       if (saved && context?.userMessageId) {
