@@ -16,6 +16,7 @@ import {
   type McpStdioServer,
 } from "./mcp.js";
 import { applySaveNudge } from "./nudge.js";
+import { projectGuidance } from "../projects.js";
 import type { AskResult, InputImage } from "./types.js";
 
 // 프롬프트 한 개를 Claude에 넣고 답변 + 세션 정보를 받는다.
@@ -122,6 +123,9 @@ export async function askClaude(
       "- 자기 코드 조회는 mcp__repo__read_repo_file / mcp__repo__list_repo_files 사용.\n" +
       "- 사용자 시스템의 다른 파일·셸 작업은 평소대로 허용(자기 수정만 위임).";
   }
+
+  // 저장 시 기존 프로젝트 표기를 재사용하도록 가이던스 주입(나비스↔navis 분기 방지).
+  systemPromptFinal += await projectGuidance();
 
   for await (const message of query({
     prompt: promptInput,

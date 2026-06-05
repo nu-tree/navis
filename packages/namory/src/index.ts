@@ -3,6 +3,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { buildMcpServer } from "./mcp.js";
 import { listCrons, createCron, deleteCron, updateCron } from "./tools/cron.js";
 import { listMemories } from "./tools/recent.js";
+import { listProjects } from "./tools/projects.js";
 import { update } from "./tools/update.js";
 import { remove } from "./tools/remove.js";
 import { CATEGORIES, type Category } from "./db/schema.js";
@@ -37,7 +38,8 @@ app.addHook("onRequest", async (req, reply) => {
   if (
     !req.url.startsWith("/mcp") &&
     !req.url.startsWith("/crons") &&
-    !req.url.startsWith("/memories")
+    !req.url.startsWith("/memories") &&
+    !req.url.startsWith("/projects")
   )
     return;
   const headerToken = req.headers.authorization?.replace(/^Bearer\s+/i, "");
@@ -82,6 +84,9 @@ app.all("/mcp", async (req, reply) => {
     }
   }
 });
+
+// 사용 중인 프로젝트 목록 — navis가 저장 시 모델에 주입해 표기 통일에 쓴다.
+app.get("/projects", async () => ({ projects: await listProjects() }));
 
 // 크론 CRUD (navis 스케줄러/대화 도구가 사용). MCP가 아닌 단순 REST —
 // navis가 에이전트 턴 밖(부팅·reconcile)에서도 조회해야 해서 일반 HTTP로 노출.

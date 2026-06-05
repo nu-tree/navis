@@ -1,5 +1,6 @@
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import { config } from "../config.js";
+import { projectGuidance } from "../projects.js";
 
 // 사후 큐레이터(post-turn curator) — 메인 턴이 끝난 뒤 별도 LLM 호출이 "방금 턴에서
 // 뭘 저장할지"만 판단·실행한다. 시스템 프롬프트로만 저장을 유도할 때 누락되던
@@ -92,14 +93,16 @@ export async function curateTurn(input: CurateInput): Promise<boolean> {
     .filter(Boolean)
     .join("\n");
 
+  // 기존 프로젝트 표기를 재사용하도록 가이던스 주입(나비스↔navis 분기 방지).
+  const systemPrompt = CURATOR_SYSTEM_PROMPT + (await projectGuidance());
+
   let saved = false;
   try {
     for await (const _msg of query({
       prompt: turn,
       options: {
-        // 저렴한 빠른 모델로 충분 — 분류·요약·짧은 호출 위주.
         model: config.curatorModel,
-        systemPrompt: CURATOR_SYSTEM_PROMPT,
+        systemPrompt,
         mcpServers: {
           namory: {
             type: "http",
