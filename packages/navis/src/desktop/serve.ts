@@ -246,12 +246,17 @@ const DOWNLOAD_HTML = `<!doctype html>
     $("#go").disabled=true;$("#err").textContent="";
     try{
       var r=await fetch("/api/desktop/list?token="+encodeURIComponent(t));
-      if(r.status===401){$("#err").textContent="토큰이 올바르지 않아요.";$("#go").disabled=false;return}
-      if(!r.ok){throw new Error(r.status)}
+      // 실패 원인을 구분해서 보여준다(토큰 / 서버 / 네트워크).
+      if(r.status===401){
+        sessionStorage.removeItem("navis_dl_tok");
+        $("#err").textContent="토큰이 올바르지 않아요. 앞뒤 공백이나 자동완성으로 들어간 값이 아닌지 확인해줘.";
+        $("#go").disabled=false;return;
+      }
+      if(!r.ok){$("#err").textContent="서버 오류예요 (상태 "+r.status+"). 잠시 후 다시 시도해줘.";$("#go").disabled=false;return}
       var j=await r.json();
       sessionStorage.setItem("navis_dl_tok",t);
       show(t,j.files||[]);
-    }catch(e){$("#err").textContent="오류가 발생했어요. 잠시 후 다시.";$("#go").disabled=false}
+    }catch(e){$("#err").textContent="서버에 연결하지 못했어요. 네트워크 상태를 확인해줘.";$("#go").disabled=false}
   }
   $("#go").onclick=enter;
   $("#tok").addEventListener("keydown",function(e){if(e.key==="Enter")enter()});
