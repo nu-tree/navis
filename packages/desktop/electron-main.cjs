@@ -1,7 +1,7 @@
 // navis 데스크톱 셸 (Electron).
 // 우리 RN 컴포넌트를 react-native-web 으로 빌드한 web-build 를 로컬 HTTP 서버로
 // 띄워 BrowserWindow 에 로드한다. (Expo 웹 빌드는 자산 경로가 절대경로라 file:// 불가)
-const { app, BrowserWindow, shell } = require('electron');
+const { app, BrowserWindow, shell, Notification } = require('electron');
 const path = require('node:path');
 const http = require('node:http');
 const fs = require('node:fs');
@@ -65,7 +65,12 @@ async function createWindow() {
 
 // 자동 업데이트: GitHub Releases 대신 navis(Railway)를 generic provider 로 본다.
 // 빌드 시 워크플로가 updater-config.json({url, token})을 구워 넣으면, 그 URL 의
-// latest*.yml 을 토큰 헤더로 폴링해 새 버전을 받아 설치한다. 파일이 없으면 조용히 비활성.
+// latest*.yml 을 토큰 헤더로 폴링한다. 파일이 없으면 조용히 비활성.
+//
+// 중요(macOS): 미서명 앱은 Squirrel.Mac 이 코드서명을 요구해 *자동 설치*가 불가능하다
+// (Apple Developer 인증서 필요). 그래서 mac 에선 새 버전을 감지하면 자동 설치 대신
+// 네이티브 알림을 띄우고 다운로드 페이지를 열어 수동 재설치를 유도한다.
+// Windows(nsis)는 미서명이어도 자동 다운로드 → 재시작 시 설치가 동작한다.
 function configureUpdater() {
   try {
     const cfgPath = path.join(__dirname, 'updater-config.json');
@@ -74,7 +79,33 @@ function configureUpdater() {
     if (!url) return;
     autoUpdater.setFeedURL({ provider: 'generic', url });
     if (token) autoUpdater.requestHeaders = { Authorization: `Bearer ${token}` };
-    autoUpdater.checkForUpdatesAndNotify();
+
+    // 수동 설치용 다운로드 페이지 = 피드 베이스(.../api/desktop/file)에서 유도.
+    const downloadPage = url.replace(/\/api\/desktop\/file\/?$/, '/download');
+
+    autoUpdater.on('error', (err) => console.error('[updater] 오류:', err));
+
+    if (process.platform === 'darwin') {
+      // 미서명 mac: 자동 다운로드/설치 비활성, 새 버전 알림만.
+      autoUpdater.autoDownload = false;
+      autoUpdater.on('update-available', (info) => {
+        try {
+          const n = new Notification({
+            title: '나비스 새 버전이 있어요',
+            body: `v${info.version} 가 나왔어요. 클릭하면 다운로드 페이지가 열려요.`,
+          });
+          n.on('click', () => void shell.openExternal(downloadPage));
+          n.show();
+        } catch (e) {
+          console.error('[updater] 알림 실패:', e);
+        }
+      });
+      void autoUpdater.checkForUpdates();
+    } else {
+      // Windows: 자동 다운로드 후 재시작 시 설치.
+      autoUpdater.on('update-downloaded', () => autoUpdater.quitAndInstall());
+      void autoUpdater.checkForUpdatesAndNotify();
+    }
   } catch (err) {
     console.error('[updater] 설정 실패:', err);
   }
