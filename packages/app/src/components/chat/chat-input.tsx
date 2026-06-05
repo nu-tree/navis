@@ -14,9 +14,14 @@ export type ChatInputProps = {
   className?: string;
 };
 
+// 입력창 자동 성장 범위 — 내용에 맞춰 커지다 MAX 를 넘으면 그때 내부 스크롤.
+const MIN_INPUT_H = 44;
+const MAX_INPUT_H = 600;
+
 export function ChatInput({ placeholder = '메시지 입력…', className }: ChatInputProps) {
   const [text, setText] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [inputHeight, setInputHeight] = useState(MIN_INPUT_H);
   const { send } = useSendMessage();
   const typing = useIsActiveTyping();
 
@@ -50,6 +55,7 @@ export function ChatInput({ placeholder = '메시지 입력…', className }: Ch
     send(trimmed, attachments.length > 0 ? attachments : undefined);
     setText('');
     setAttachments([]);
+    setInputHeight(MIN_INPUT_H);
   };
 
   return (
@@ -90,7 +96,11 @@ export function ChatInput({ placeholder = '메시지 입력…', className }: Ch
           onChangeText={setText}
           placeholder={placeholder}
           multiline
-          className="max-h-32 flex-1"
+          onContentSizeChange={(e) => setInputHeight(e.nativeEvent.contentSize.height)}
+          // MAX 도달 전엔 내부 스크롤 끄고(그냥 성장), 도달하면 그때부터 스크롤.
+          scrollEnabled={inputHeight >= MAX_INPUT_H}
+          style={{ height: Math.min(Math.max(MIN_INPUT_H, inputHeight), MAX_INPUT_H) }}
+          className="flex-1"
         />
         <Button size="icon" className="rounded-full" disabled={!canSend} onPress={submit}>
           <Text className="text-lg text-primary-foreground">↑</Text>
