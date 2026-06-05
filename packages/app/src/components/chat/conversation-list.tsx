@@ -4,7 +4,11 @@ import { cn } from '../../lib/cn';
 import { Text } from '../ui/text';
 import { confirmDestructive } from '../../lib/confirm';
 import { deleteCron } from '../../api/crons';
+import { DraggableRows } from './draggable-rows';
 import { useChatStore, type Conversation } from '../../store/chat-store';
+
+// 드래그 정렬 슬롯 높이(행 1개분). DraggableRows 의 index 계산에 쓰임.
+const ROW_HEIGHT = 58;
 
 export type ConversationListProps = {
   // 대화방 선택/생성 후 호출 (드로어 닫기 등)
@@ -26,11 +30,14 @@ function preview(conv: Conversation): string {
 function Row({
   conv,
   active,
+  handle,
   onPress,
   onMenu,
 }: {
   conv: Conversation;
   active: boolean;
+  // DraggableRows 가 주는 드래그 핸들 props (없으면 핸들 숨김)
+  handle?: object;
   onPress: () => void;
   onMenu: () => void;
 }) {
@@ -39,11 +46,17 @@ function Row({
   return (
     <Pressable
       onPress={onPress}
+      style={{ height: ROW_HEIGHT }}
       className={cn(
-        'mb-1 flex-row items-center gap-2 rounded-xl px-3 py-2.5 cursor-pointer transition-colors active:opacity-80',
+        'flex-row items-center gap-1.5 rounded-xl px-2.5 cursor-pointer transition-colors active:opacity-80',
         active ? 'bg-secondary' : 'bg-transparent hover:bg-muted',
       )}
     >
+      {handle ? (
+        <View {...handle} className="px-1 py-2 cursor-grab active:cursor-grabbing">
+          <Text className="text-base text-muted-foreground">≡</Text>
+        </View>
+      ) : null}
       <View className="flex-1">
         <Text numberOfLines={1} className={cn('text-sm', (active || hasUnread) && 'font-semibold')}>
           {conv.title}
@@ -103,6 +116,7 @@ export function ConversationList({ onAfterSelect }: ConversationListProps) {
   const deleteConversation = useChatStore((s) => s.deleteConversation);
   const hideConversation = useChatStore((s) => s.hideConversation);
   const unhideConversation = useChatStore((s) => s.unhideConversation);
+  const reorderConversations = useChatStore((s) => s.reorderConversations);
 
   const [menuFor, setMenuFor] = useState<Conversation | null>(null);
   const [showHidden, setShowHidden] = useState(false);
@@ -136,26 +150,38 @@ export function ConversationList({ onAfterSelect }: ConversationListProps) {
     <View className="flex-1">
       <ScrollView contentContainerStyle={{ paddingHorizontal: 8, paddingTop: 4, paddingBottom: 24 }}>
         <SectionLabel>대화</SectionLabel>
-        {chats.map((c) => (
-          <Row
-            key={c.id}
-            conv={c}
-            active={c.id === activeId}
-            onPress={() => select(c.id)}
-            onMenu={() => setMenuFor(c)}
-          />
-        ))}
+        <DraggableRows
+          items={chats}
+          keyOf={(c) => c.id}
+          itemHeight={ROW_HEIGHT}
+          onReorder={(ids) => reorderConversations('chat', ids)}
+          renderRow={(c, handle) => (
+            <Row
+              conv={c}
+              active={c.id === activeId}
+              handle={handle}
+              onPress={() => select(c.id)}
+              onMenu={() => setMenuFor(c)}
+            />
+          )}
+        />
 
         <SectionLabel>보고</SectionLabel>
-        {reports.map((c) => (
-          <Row
-            key={c.id}
-            conv={c}
-            active={c.id === activeId}
-            onPress={() => select(c.id)}
-            onMenu={() => setMenuFor(c)}
-          />
-        ))}
+        <DraggableRows
+          items={reports}
+          keyOf={(c) => c.id}
+          itemHeight={ROW_HEIGHT}
+          onReorder={(ids) => reorderConversations('report', ids)}
+          renderRow={(c, handle) => (
+            <Row
+              conv={c}
+              active={c.id === activeId}
+              handle={handle}
+              onPress={() => select(c.id)}
+              onMenu={() => setMenuFor(c)}
+            />
+          )}
+        />
 
         {hiddenReports.length > 0 ? (
           <>
