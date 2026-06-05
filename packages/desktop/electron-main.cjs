@@ -125,10 +125,11 @@ async function createWindow() {
 // 빌드 시 워크플로가 updater-config.json({url, token})을 구워 넣으면, 그 URL 의
 // latest*.yml 을 토큰 헤더로 폴링한다. 파일이 없으면 조용히 비활성.
 //
-// 중요(macOS): 미서명 앱은 Squirrel.Mac 이 코드서명을 요구해 *자동 설치*가 불가능하다
-// (Apple Developer 인증서 필요). 그래서 mac 에선 새 버전을 감지하면 자동 설치 대신
-// 네이티브 알림을 띄우고 다운로드 페이지를 열어 수동 재설치를 유도한다.
-// Windows(nsis)는 미서명이어도 자동 다운로드 → 재시작 시 설치가 동작한다.
+// macOS(Apple Silicon)는 electron-builder 가 인증서 없이도 ad-hoc 서명을 자동으로 붙여서
+// Squirrel.Mac 자동 다운로드 → 재시작 시 설치가 보통 동작한다(유료 Developer 인증서 불필요).
+// Windows(nsis)도 동일. 그래서 기본은 자동 업데이트를 쓰고, 다운로드 완료/실패 시 한국어
+// 알림을 직접 띄운다(electron-updater 기본 알림은 영어라 안 씀). 자동이 실패하는 환경에선
+// 실패 알림이 다운로드 페이지로 안내한다.
 function configureUpdater() {
   try {
     const cfgPath = path.join(__dirname, 'updater-config.json');
@@ -141,29 +142,38 @@ function configureUpdater() {
     // 수동 설치용 다운로드 페이지 = 피드 베이스(.../api/desktop/file)에서 유도.
     const downloadPage = url.replace(/\/api\/desktop\/file\/?$/, '/download');
 
-    autoUpdater.on('error', (err) => console.error('[updater] 오류:', err));
+    const showNotification = (title, body, onClick) => {
+      try {
+        const n = new Notification({ title, body });
+        if (onClick) n.on('click', onClick);
+        n.show();
+      } catch (e) {
+        console.error('[updater] 알림 실패:', e);
+      }
+    };
 
-    if (process.platform === 'darwin') {
-      // 미서명 mac: 자동 다운로드/설치 비활성, 새 버전 알림만.
-      autoUpdater.autoDownload = false;
-      autoUpdater.on('update-available', (info) => {
-        try {
-          const n = new Notification({
-            title: '나비스 새 버전이 있어요',
-            body: `v${info.version} 가 나왔어요. 클릭하면 다운로드 페이지가 열려요.`,
-          });
-          n.on('click', () => void shell.openExternal(downloadPage));
-          n.show();
-        } catch (e) {
-          console.error('[updater] 알림 실패:', e);
-        }
-      });
-      void autoUpdater.checkForUpdates();
-    } else {
-      // Windows: 자동 다운로드 후 재시작 시 설치.
-      autoUpdater.on('update-downloaded', () => autoUpdater.quitAndInstall());
-      void autoUpdater.checkForUpdatesAndNotify();
-    }
+    // 새 버전 다운로드 완료 → 한국어 알림. 클릭하면 지금 재시작해 설치(아니면 다음 실행 때 적용).
+    autoUpdater.on('update-downloaded', (info) => {
+      showNotification(
+        '나비스 업데이트 준비 완료',
+        `v${info.version} 받았어요. 클릭하면 지금 재시작해서 설치할게요(아니면 다음에 켤 때 적용).`,
+        () => autoUpdater.quitAndInstall(),
+      );
+    });
+
+    // 자동 업데이트가 실패하는 환경(미서명 등)에선 그때만 수동 안내.
+    autoUpdater.on('error', (err) => {
+      console.error('[updater] 오류:', err);
+      showNotification(
+        '나비스 자동 업데이트 실패',
+        '클릭하면 다운로드 페이지에서 직접 받을 수 있어요.',
+        () => void shell.openExternal(downloadPage),
+      );
+    });
+
+    // 모든 플랫폼 자동 다운로드(autoDownload 기본 true). checkForUpdatesAndNotify 대신
+    // checkForUpdates 를 써서 알림 문구를 위처럼 한국어로 직접 띄운다.
+    void autoUpdater.checkForUpdates();
   } catch (err) {
     console.error('[updater] 설정 실패:', err);
   }
