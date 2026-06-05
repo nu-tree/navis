@@ -5,6 +5,7 @@ import { ChatDrawer, ChatHeader, ChatInput, MessageList } from '../components/ch
 import { SidebarContent } from '../components/chat/sidebar-content';
 import { Text } from '../components/ui/text';
 import { useActiveConversation, useChatStore, useTotalUnread } from '../store/chat-store';
+import { useUiStore } from '../store/ui-store';
 import { useReports } from '../hooks/use-reports';
 import { useCrons } from '../hooks/use-crons';
 
@@ -22,6 +23,11 @@ export function ChatScreen() {
   const active = useActiveConversation();
   const totalUnread = useTotalUnread();
   const newConversation = useChatStore((s) => s.newConversation);
+  const sidebarCollapsed = useUiStore((s) => s.sidebarCollapsed);
+  const setSidebarCollapsed = useUiStore((s) => s.setSidebarCollapsed);
+
+  // 데스크톱 고정 사이드바는 접지 않았을 때만. 접으면 헤더 ☰ 로 다시 펼친다.
+  const showSidebar = isWide && !sidebarCollapsed;
 
   // navis 선제 보고 폴링 → 보고방에 머지 + 크론 목록으로 보고방 미리 생성
   useReports();
@@ -31,10 +37,10 @@ export function ChatScreen() {
 
   return (
     <View className="flex-1 flex-row bg-background" style={{ paddingTop: insets.top }}>
-      {/* 데스크톱: 고정 사이드바 */}
-      {isWide ? (
+      {/* 데스크톱: 고정 사이드바 (접기 가능) */}
+      {showSidebar ? (
         <View className="w-[300px] border-r border-border bg-surface">
-          <SidebarContent />
+          <SidebarContent onCollapse={() => setSidebarCollapsed(true)} />
         </View>
       ) : null}
 
@@ -42,10 +48,11 @@ export function ChatScreen() {
         <ChatHeader
           title={active?.title ?? '나비스'}
           subtitle={isReport ? '보고 전용 · 읽기 전용' : '남운님의 개인 비서'}
-          onMenu={() => setDrawerOpen(true)}
+          // 넓은 화면에선 ☰ 로 접힌 사이드바를 펼치고, 모바일에선 드로어를 연다.
+          onMenu={() => (isWide ? setSidebarCollapsed(false) : setDrawerOpen(true))}
           onNewChat={() => newConversation()}
           unread={totalUnread}
-          showMenu={!isWide}
+          showMenu={!showSidebar}
         />
         <KeyboardAvoidingView
           className="flex-1"
