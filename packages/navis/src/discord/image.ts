@@ -53,6 +53,38 @@ async function downscale(
   }
 }
 
+// 앱(/api/chat)이 보낸 data URL(`data:<mime>;base64,<data>`) 배열을 InputImage 로 변환.
+// 디스코드 경로와 동일하게 타입/용량 필터 + 다운스케일(폰 사진은 크므로 필수)을 거친다.
+export async function collectImagesFromDataUrls(
+  dataUrls: string[],
+): Promise<InputImage[]> {
+  const images: InputImage[] = [];
+  for (const url of dataUrls) {
+    if (typeof url !== "string") continue;
+    const match = /^data:([^,;]+)(?:;[^,]*)?;base64,(.+)$/s.exec(url);
+    if (!match) continue;
+    const ct = match[1].trim() as InputImage["mediaType"];
+    if (!ALLOWED_IMAGE_TYPES.has(ct)) continue;
+    try {
+      const buf = Buffer.from(match[2], "base64");
+      if (buf.byteLength > MAX_INPUT_IMAGE_BYTES) {
+        console.warn(`[chat] 이미지 용량 초과로 건너뜀: ${buf.byteLength}B`);
+        continue;
+      }
+      const result = await downscale(buf, ct);
+      const outputBytes = Buffer.byteLength(result.data, "base64");
+      if (outputBytes > MAX_IMAGE_BYTES) {
+        console.warn(`[chat] 다운스케일 후에도 용량 초과로 건너뜀: ${outputBytes}B`);
+        continue;
+      }
+      images.push(result);
+    } catch (err) {
+      console.error("[chat] 이미지 디코드 실패:", err);
+    }
+  }
+  return images;
+}
+
 // 메시지의 첨부 중 이미지를 내려받아 base64로 만든다. 타입·용량 안 맞으면 건너뛴다.
 // 큰 이미지는 Claude 한도에 맞게 축소한 뒤 싣는다.
 export async function collectImages(message: Message): Promise<InputImage[]> {

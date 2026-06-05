@@ -3,6 +3,8 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import type { Client } from "discord.js";
 import { config } from "./config.js";
 import { askClaude } from "./claude/ask.js";
+import { curateTurn } from "./claude/curator.js";
+import { collectImagesFromDataUrls } from "./discord/image.js";
 import { getReports } from "./reports/store.js";
 import { fetchCrons } from "./cron/api.js";
 import { fetchMemories, patchMemory, deleteMemory } from "./memories/api.js";
@@ -250,15 +252,23 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
     const raw = await readBody(req);
     const body = safeParse(raw);
     const text = typeof body?.text === "string" ? body.text.trim() : "";
-    if (!text) {
+
+    // 첨부 이미지: data URL 배열(`data:<mime>;base64,...`) → InputImage (타입/용량/다운스케일).
+    const imageUrls = Array.isArray(body?.images)
+      ? (body.images.filter((u) => typeof u === "string") as string[])
+      : [];
+    const images = imageUrls.length > 0 ? await collectImagesFromDataUrls(imageUrls) : [];
+
+    // 텍스트도 이미지도 없으면 거부(이미지만 보내는 경우는 허용).
+    if (!text && images.length === 0) {
       res.writeHead(400, JSON_HEADERS);
-      res.end(JSON.stringify({ error: "text required" }));
+      res.end(JSON.stringify({ error: "text or image required" }));
       return;
     }
     const resume =
       typeof body?.sessionId === "string" && body.sessionId ? body.sessionId : undefined;
 
-    const result = await askClaude(text, resume);
+    const result = await askClaude(text, resume, images);
     const contextFull = result.contextTokens >= config.contextTokenLimit;
 
     res.writeHead(200, JSON_HEADERS);
@@ -271,6 +281,13 @@ async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<vo
         saved: result.saved,
       }),
     );
+
+    // 사후 큐레이터(A) — 디스코드/CLI 와 동일하게 응답을 보낸 뒤 백그라운드로 한 번 더
+    // 평가해 저장 누락을 메운다. 앱 경로에만 이게 빠져 있어 앱으로 대화하면 namory 에
+    // 기억이 덜 쌓였다(디스코드 대비 "기억 못함" 체감의 원인). fire-and-forget.
+    curateTurn({ userText: text, assistantText: result.text }).catch(() => {
+      // 큐레이터 실패는 무시 — 사용자 응답은 이미 끝났다.
+    });
   } catch (err) {
     console.error("[chat] 처리 실패:", err);
     if (!res.headersSent) {
