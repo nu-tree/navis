@@ -13,6 +13,37 @@ const WEB_DIR = path.join(__dirname, 'web-build');
 
 let server;
 
+// 창 크기·위치·최대화/전체화면 상태를 저장해 다음 실행 때 복원(클로드 데스크톱처럼).
+function windowStateFile() {
+  return path.join(app.getPath('userData'), 'window-state.json');
+}
+
+function loadWindowState() {
+  try {
+    return JSON.parse(fs.readFileSync(windowStateFile(), 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
+function saveWindowState(win) {
+  try {
+    if (win.isDestroyed()) return;
+    // getNormalBounds: 최대화/전체화면이어도 '평상시' 크기를 돌려줌(복원용).
+    const bounds = win.getNormalBounds();
+    fs.writeFileSync(
+      windowStateFile(),
+      JSON.stringify({
+        ...bounds,
+        isMaximized: win.isMaximized(),
+        isFullScreen: win.isFullScreen(),
+      }),
+    );
+  } catch (err) {
+    console.error('[window] 상태 저장 실패:', err);
+  }
+}
+
 function startStaticServer() {
   return new Promise((resolve, reject) => {
     server = http.createServer((req, res) =>
@@ -31,12 +62,20 @@ function startStaticServer() {
 }
 
 async function createWindow() {
+  const saved = loadWindowState();
   const win = new BrowserWindow({
     // 데스크톱답게 넓게. 앱 레이아웃이 넓은 화면에선 사이드바+채팅으로 반응형 전환된다.
-    width: 1180,
-    height: 800,
+    // 저장된 크기·위치가 있으면 복원(없으면 기본값).
+    width: saved.width ?? 1180,
+    height: saved.height ?? 800,
+    x: saved.x,
+    y: saved.y,
     minWidth: 720,
     minHeight: 560,
+    // 마우스 드래그 리사이즈·최대화·전체화면 모두 명시적으로 허용(클로드 데스크톱처럼).
+    resizable: true,
+    maximizable: true,
+    fullscreenable: true,
     title: '나비스',
     icon: path.join(__dirname, '../app/assets/navis-logo.png'),
     backgroundColor: '#0b0b0f',
@@ -46,6 +85,25 @@ async function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
     },
+  });
+
+  // 지난 실행에서 최대화/전체화면이었으면 그 상태로 복원.
+  if (saved.isMaximized) win.maximize();
+  if (saved.isFullScreen) win.setFullScreen(true);
+
+  // 크기·위치·전체화면 변화를 디바운스 저장하고, 닫을 때 최종 저장.
+  let saveTimer;
+  const scheduleSave = () => {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => saveWindowState(win), 400);
+  };
+  win.on('resize', scheduleSave);
+  win.on('move', scheduleSave);
+  win.on('enter-full-screen', scheduleSave);
+  win.on('leave-full-screen', scheduleSave);
+  win.on('close', () => {
+    clearTimeout(saveTimer);
+    saveWindowState(win);
   });
 
   // 외부 링크는 기본 브라우저로
