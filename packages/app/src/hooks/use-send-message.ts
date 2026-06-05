@@ -4,6 +4,7 @@ import { useChatStore } from '../store/chat-store';
 import { useUiStore } from '../store/ui-store';
 import { localAgent, hasLocalAgent } from '../lib/local-agent';
 import { makeId } from '../lib/id';
+import { notify, isWindowHidden } from '../lib/notify';
 
 type SendVars = {
   text: string;
@@ -107,12 +108,21 @@ export function useSendMessage() {
       // onSuccess 에서 💡 부착에 쓸 유저 메시지 id 를 context 로 넘김
       return { userMessageId };
     },
-    onSuccess: ({ sessionId, contextFull, saved }, { conversationId }, context) => {
+    onSuccess: ({ sessionId, contextFull, saved, reply }, { conversationId }, context) => {
       const { setSessionId, toggleReaction } = useChatStore.getState();
       setSessionId(conversationId, sessionId && !contextFull ? sessionId : undefined);
       // 저장됐으면 유저 메시지에 💡
       if (saved && context?.userMessageId) {
         toggleReaction(conversationId, context.userMessageId, '💡');
+      }
+      // 포그라운드에서 같은 방을 보고 있지 않으면 네이티브 알림 (use-reports.ts 패턴과 동일).
+      const watching =
+        !isWindowHidden() && useChatStore.getState().activeId === conversationId;
+      if (!watching && reply?.text) {
+        notify('나비스', reply.text.replace(/\s+/g, ' ').trim().slice(0, 140), () => {
+          useUiStore.getState().setScreen('chat');
+          useChatStore.getState().selectConversation(conversationId);
+        });
       }
     },
     onError: (_err, { conversationId }) => {
