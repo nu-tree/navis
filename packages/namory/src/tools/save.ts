@@ -4,6 +4,7 @@ import { memories, type Category } from "../db/schema.js";
 import { embed } from "../embedding.js";
 import { config } from "../config.js";
 import { projectFilter } from "./filter.js";
+import { normalizeProject } from "./project-normalize.js";
 
 interface DuplicateCandidate {
   id: string;
@@ -62,8 +63,10 @@ export async function save(args: {
   tags?: string[];
   related_ids?: string[];
 }): Promise<SaveResult> {
+  // 프로젝트 표기 정규화(예: "나비스" → "navis") — 중복검사 스코프와 저장값을 한 표준으로.
+  const project = normalizeProject(args.project);
   const embedding = await embed(args.content, "document");
-  const duplicates = await findDuplicates(embedding, args.project);
+  const duplicates = await findDuplicates(embedding, project);
   const skipIfDuplicate = args.skipIfDuplicate ?? true;
 
   if (skipIfDuplicate && duplicates.length > 0) {
@@ -81,7 +84,7 @@ export async function save(args: {
     .values({
       content: args.content,
       category: args.category ?? null,
-      project: args.project ?? null,
+      project: project ?? null,
       source: args.source ?? null,
       metadata,
       embedding,

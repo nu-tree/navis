@@ -2,6 +2,7 @@ import { eq, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { memories, type Category } from "../db/schema.js";
 import { embed } from "../embedding.js";
+import { normalizeProject } from "./project-normalize.js";
 
 // 기억 정정/완료 표시. content가 바뀌면 임베딩을 다시 계산한다.
 // done은 할 일의 완료 상태로, metadata jsonb에 병합(merge)한다.
@@ -21,8 +22,8 @@ export async function update(args: {
     set.embedding = await embed(args.content, "document");
   }
   if (args.category !== undefined) set.category = args.category;
-  // 빈 문자열이면 개인 기억(null)으로 되돌린다.
-  if (args.project !== undefined) set.project = args.project || null;
+  // 빈 문자열이면 개인 기억(null)으로 되돌린다. 표기는 정규화("나비스"→"navis").
+  if (args.project !== undefined) set.project = normalizeProject(args.project) ?? null;
 
   // metadata 패치는 한 번에 병합 — 여러 필드를 한 update 안에서 같이 바꿔도
   // 마지막 sql 표현이 앞을 덮어쓰지 않도록 단일 patch 객체로 모은다.
