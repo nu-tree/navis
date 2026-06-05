@@ -10,16 +10,15 @@ import { scheduleCron, unscheduleCron } from "./scheduler.js";
 
 const ok = (text: string) => ({ content: [{ type: "text" as const, text }] });
 
-// 현재 대화 채널에 묶인 in-process 크론 도구. 발동 결과를 보낼 채널 id를
-// 클로저로 주입하므로(모델이 채널 id를 다루지 않음) 항상 이 대화 채널로 보고된다.
-export function buildCronTools(channelId: string): McpSdkServerConfigWithInstance {
+// in-process 크론 도구. 발동 결과는 앱 보고(/api/reports)로 기록돼 앱/데스크톱이 받는다.
+export function buildCronTools(): McpSdkServerConfigWithInstance {
   return createSdkMcpServer({
     name: "cron",
     version: "0.1.0",
     tools: [
       tool(
         "cron_create",
-        "정기 알림(크론)을 등록한다. 사용자가 '매일/매주 ~해줘'처럼 반복 작업을 요청할 때 사용. 발동 시 prompt를 실행해 지금 이 대화 채널로 결과를 보낸다.",
+        "정기 알림(크론)을 등록한다. 사용자가 '매일/매주 ~해줘'처럼 반복 작업을 요청할 때 사용. 발동 시 prompt를 실행해 결과를 보고로 보낸다(앱/데스크톱 알림).",
         {
           title: z
             .string()
@@ -39,7 +38,7 @@ export function buildCronTools(channelId: string): McpSdkServerConfigWithInstanc
           if (!cron.validate(args.schedule)) {
             return ok(`잘못된 cron 식입니다: ${args.schedule}`);
           }
-          const row = await createCronRemote({ ...args, channelId });
+          const row = await createCronRemote(args);
           scheduleCron(row);
           return ok(
             `등록 완료 — '${row.title}' (${row.schedule}, ${row.timezone}), id=${row.id}`,

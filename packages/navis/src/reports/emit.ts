@@ -1,7 +1,7 @@
 import { recordReport } from "./store.js";
 
 // 선제 보고를 앱(/api/reports)용으로 기록한다. 앱/데스크톱이 폴링해 보고 전용 방에
-// 표시한다. (예전엔 디스코드 전송과 묶여 있었으나, 앱이 디스코드를 대체해 보고 기록만 남김.)
+// 표시한다. (선제 보고 = 크론·다이제스트·캘린더·PR검토 등 navis 가 먼저 보내는 메시지.)
 
 // 선제 보고의 출처(앱에서 방 라우팅에 사용). 크론은 크론마다 다르므로 호출부에서 넘긴다.
 export type ReportMeta = { sourceId: string; sourceTitle: string };

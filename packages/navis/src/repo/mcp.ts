@@ -7,7 +7,7 @@ import { z } from "zod";
 import { config } from "../config.js";
 
 // GitHub Contents API 기반 자기 소스 조회 도구.
-// 디스코드 봇은 컨테이너에 src/가 없어서(dist 만 복사) 자기 코드를 물리적으로 못 본다.
+// 호스팅 컨테이너(Railway)엔 src/가 없어서(dist 만 복사) 자기 코드를 물리적으로 못 본다.
 // 이 도구로 GitHub raw 를 읽어 "이 부분 어떻게 짜여있어?" 같은 질의에 답할 수 있게 한다.
 // 수정은 별도 흐름(Actions self-improve)에서 — 여기서는 읽기만.
 
@@ -66,7 +66,7 @@ export function buildRepoTools(): McpSdkServerConfigWithInstance {
     tools: [
       tool(
         "read_repo_file",
-        "GitHub 레포의 파일 한 개를 읽는다. 디스코드 봇은 컨테이너에 소스가 없으므로 자기 코드를 보려면 이 도구를 써야 한다. 결과는 파일 원문(텍스트). 너무 크면 잘림 안내.",
+        "GitHub 레포의 파일 한 개를 읽는다. 호스팅 컨테이너엔 소스가 없으므로 자기 코드를 보려면 이 도구를 써야 한다. 결과는 파일 원문(텍스트). 너무 크면 잘림 안내.",
         {
           path: z
             .string()

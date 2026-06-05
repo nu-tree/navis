@@ -62,7 +62,7 @@ interface CurateInput {
 
 // 한 턴을 큐레이팅한다. 실패는 삼킴 — 사용자 흐름을 막지 않는 게 최우선.
 // 반환값은 큐레이터가 namory.save 를 한 번이라도 호출했는지 여부 — 호출 측이
-// 디스코드 💡 리액션을 뒤늦게라도 붙일 수 있게 한다.
+// 앱 💡 리액션을 뒤늦게라도 붙일 수 있게 한다.
 export async function curateTurn(input: CurateInput): Promise<boolean> {
   // 팔로업 응답이면 pre-filter 우회 — "응 맛있었어요" 같은 짧은 답도 결과 정보로
   // 의미가 있어 저장 후보가 된다.

@@ -39,13 +39,12 @@ async function parseChatRequest(
 }
 
 // 사후 큐레이터(A) — 응답을 보낸 뒤 백그라운드로 한 번 더 평가해 저장 누락을 메운다.
-// 앱 경로에만 이게 빠져 있어 앱으로 대화하면 namory 에 기억이 덜 쌓였다(디스코드 대비
-// "기억 못함" 체감의 원인). fire-and-forget — 실패는 무시.
+// fire-and-forget — 실패는 무시.
 function curate(text: string, assistantText: string): void {
   curateTurn({ userText: text, assistantText }).catch(() => {});
 }
 
-// navis-app(모바일/데스크톱) 채팅 엔드포인트. 디스코드와 같은 두뇌(askClaude)를 쓰되
+// navis-app(모바일/데스크톱) 채팅 엔드포인트. askClaude(두뇌)를 쓰되
 // 인증은 APP_API_TOKEN Bearer 로 한다. 멀티턴은 클라가 보관한 sessionId 로 이어가고,
 // 컨텍스트가 한도를 넘으면 contextFull:true 를 돌려 클라가 다음 턴부터 세션을 리셋한다.
 export async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -61,7 +60,7 @@ export async function handleChat(req: IncomingMessage, res: ServerResponse): Pro
       text: result.text,
       sessionId: result.sessionId,
       contextFull,
-      // 이 턴에 namory 에 기억을 저장했는지 → 앱이 💡 리액션 표시(디스코드와 동일)
+      // 이 턴에 namory 에 기억을 저장했는지 → 앱이 💡 리액션 표시
       saved: result.saved,
     });
 
@@ -102,7 +101,6 @@ export async function handleChatStream(
       parsed.text,
       parsed.resume,
       parsed.images,
-      undefined,
       false,
       undefined,
       undefined,

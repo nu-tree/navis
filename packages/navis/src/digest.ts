@@ -4,7 +4,7 @@ import { askClaude } from "./claude/ask.js";
 import { emitReport } from "./reports/emit.js";
 
 // 주간 기억 다이제스트 — navis가 정기적으로 최근 기억을 요약해 자기이해 프로필에
-// 반영(자동 압축)하고 요약을 디스코드로 보고한다. namory의 수동 profile_update
+// 반영(자동 압축)하고 요약을 앱 보고로 기록한다. namory의 수동 profile_update
 // 누락을 메우는 자동화. 실행은 navis(두뇌)가 하고, namory는 저장만 한다(서버 LLM 0).
 //
 // 신뢰된 자동화 경로라 askClaude에 allowProfileUpdate=true를 넘겨 이 작업에서만
@@ -36,7 +36,6 @@ export async function runDigest(): Promise<void> {
       buildDigestPrompt(config.digestDays),
       undefined, // 새 세션 (이전 대화 맥락과 분리)
       [],
-      undefined, // 크론 도구 불필요
       true, // profile_update 허용 (신뢰된 자동화 경로)
     );
     // 보고로 기록 — 앱이 /api/reports 로 받아 보고방에 표시.

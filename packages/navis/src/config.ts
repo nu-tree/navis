@@ -104,7 +104,7 @@ export const config = {
   // 기본 150k = opus 200k 창의 75%. 모델 한계·SDK 자동압축 전에 우리가 제어.
   contextTokenLimit: 150_000,
 
-  // 자기 소스 조회용 GitHub 레포. navis가 디스코드 대화 중 read_repo_file/list_repo_files
+  // 자기 소스 조회용 GitHub 레포. navis가 대화 중 read_repo_file/list_repo_files
   // 도구로 자기 코드를 보여줄 수 있게 한다. 컨테이너엔 src/가 없어서(dist만 복사)
   // GitHub Contents API 경유가 유일한 경로.
   //   GITHUB_REPO: "owner/repo" 형태 (예: nu-tree/namory). 미설정이면 도구가 친절한 에러.
@@ -149,7 +149,6 @@ export const config = {
   // 반드시 볼륨이어야 한다. 미설정이면 인스턴스 임시 디스크(.desktop-dist) — 재배포 시 사라짐.
   desktopDir: optional("DESKTOP_DIR") ?? ".desktop-dist",
 
-  // Railway 헬스체크용 포트. 디스코드 봇은 인바운드 HTTP가 필요 없지만
-  // 호스팅 uptime 체크를 위해 /health 만 연다.
+  // HTTP 포트 — 앱 API(/api/*) + 헬스체크(/health) + webhook + 데스크톱 배포.
   port: Number(process.env.PORT) || 3000,
 } as const;

@@ -32,7 +32,6 @@ export async function askClaude(
   prompt: string,
   resumeSessionId?: string,
   images: InputImage[] = [],
-  channelId?: string,
   // 신뢰된 자동화(주간 다이제스트)에서만 true. profile_update를 일시 허용해
   // 자기이해 프로필을 자동 갱신한다. 사용자 대화 경로에선 항상 false(인젝션 방어).
   allowProfileUpdate = false,
@@ -81,18 +80,16 @@ export async function askClaude(
       ? buildImageMessage(promptWithHistory, images)
       : promptWithHistory;
 
-  // 채널 id가 있으면(=실제 대화) 그 채널에 묶인 in-process 크론 도구를 붙인다.
-  // 크론 발동 결과는 이 채널로 가도록 channelId를 클로저로 주입한다.
-  const cronServer = channelId ? buildCronTools(channelId) : undefined;
+  // in-process 크론 도구(등록/조회/삭제/토글). 발동 결과는 앱 보고로 기록된다.
+  const cronServer = buildCronTools();
 
   // 자기 소스 조회 도구(read-only). 호스팅 컨테이너(Railway)엔 src/가 없어서 이 도구로
   // GitHub raw를 읽어야 자기 코드를 볼 수 있다. CLI 모드에서도 풀어둠(레포 어디에 있든
   // 같은 명령으로 동작) — 다만 CLI는 로컬 Read가 더 빠르니 거의 안 쓸 것.
   const repoServer = buildRepoTools();
 
-  // 자기 개선 트리거. 결과(PR 검토)는 앱 보고(/api/reports)로 기록되고, GitHub PR 로도
-  // 확인 가능. 크론 등에서 넘어온 channelId 가 있으면 클로저로 묶인다(없어도 동작).
-  const selfModifyServer = buildSelfModifyTools(channelId);
+  // 자기 개선 트리거. 결과(PR 검토)는 앱 보고(/api/reports)로 기록되고, GitHub PR 로도 확인.
+  const selfModifyServer = buildSelfModifyTools();
 
   // 시스템 프롬프트 자가 갱신 도구(사용자가 "성격 바꿔줘" 요청 시 navis 가 직접 갱신).
   const settingsServer = buildSettingsTools();
@@ -118,17 +115,15 @@ export async function askClaude(
     ? `${baseSystemPrompt}\n\n[운영 컨텍스트] 현재 작업 프로젝트: "${projectContext}". 이 대화에서 mcp__namory__save 를 호출할 때 모든 항목에 project: "${projectContext}" 를 명시할 것.`
     : baseSystemPrompt;
 
-  // 원격 실행(channelId 있음 = 크론/자동 트리거) 운영 안내. 컨테이너에 소스 파일이 없어서
+  // 원격 실행(Railway 컨테이너) 운영 안내. 호스팅 컨테이너엔 소스 파일이 없어서
   // Edit/Write/Bash 로 자기 코드를 직접 수정할 수 없다 — 모델이 그걸 시도하다
   // 실패하고 "셸 접근 막혔다" 같은 답변을 하지 않도록 명시.
-  if (channelId) {
-    systemPromptFinal +=
-      "\n\n[원격 실행 안내]\n" +
-      "- 이 환경(Railway 컨테이너)에는 소스 파일이 없다. Edit/Write/Bash 로 이 모노레포 코드(packages/** — navis, namory, app, desktop 등)를 직접 수정하려 시도하지 말 것.\n" +
-      "- 코드 수정 요청(어느 패키지든)은 반드시 mcp__self_modify__request_self_modification 도구로 GitHub Actions 의 코드 수정 서브에이전트에게 위임. 즉시 트리거만 던지면 작업·검토 결과는 별도 메시지로 비동기 보고됨.\n" +
-      "- 자기 코드 조회는 mcp__repo__read_repo_file / mcp__repo__list_repo_files 사용.\n" +
-      "- 사용자 시스템의 다른 파일·셸 작업은 평소대로 허용(자기 수정만 위임).";
-  }
+  systemPromptFinal +=
+    "\n\n[원격 실행 안내]\n" +
+    "- 이 환경(Railway 컨테이너)에는 소스 파일이 없다. Edit/Write/Bash 로 이 모노레포 코드(packages/** — navis, namory, app, desktop 등)를 직접 수정하려 시도하지 말 것.\n" +
+    "- 코드 수정 요청(어느 패키지든)은 반드시 mcp__self_modify__request_self_modification 도구로 GitHub Actions 의 코드 수정 서브에이전트에게 위임. 즉시 트리거만 던지면 작업·검토 결과는 별도 보고로 전달됨.\n" +
+    "- 자기 코드 조회는 mcp__repo__read_repo_file / mcp__repo__list_repo_files 사용.\n" +
+    "- 사용자 시스템의 다른 파일·셸 작업은 평소대로 허용(자기 수정만 위임).";
 
   // 저장 시 기존 프로젝트 표기를 재사용하도록 가이던스 주입(나비스↔navis 분기 방지).
   systemPromptFinal += await projectGuidance();
@@ -147,7 +142,7 @@ export async function askClaude(
           // 도구가 tool-search 뒤로 deferred 되지 않게 항상 로드.
           alwaysLoad: true,
         },
-        ...(cronServer ? { cron: cronServer } : {}),
+        cron: cronServer,
         repo: repoServer,
         self_modify: selfModifyServer,
         settings: settingsServer,
@@ -160,7 +155,7 @@ export async function askClaude(
       allowedTools: [
         ...NAMORY_TOOLS,
         ...(allowProfileUpdate ? [NAMORY_PROFILE_UPDATE_TOOL] : []),
-        ...(cronServer ? CRON_TOOL_NAMES : []),
+        ...CRON_TOOL_NAMES,
         ...REPO_TOOL_NAMES,
         ...SELF_MODIFY_TOOL_NAMES,
         ...SETTINGS_TOOL_NAMES,

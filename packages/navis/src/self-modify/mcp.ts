@@ -9,9 +9,8 @@ import { config } from "../config.js";
 
 // "코드 수정 서브에이전트" 트리거. navis 가 자연어 지시를 받으면
 // 이 도구를 호출 → GitHub repository_dispatch 로 self-improve 워크플로 발동.
-// 실제 코드 분석/수정/PR 생성은 GitHub Actions 안의 Claude Code(Opus 4.7) 가 수행.
-// 호출 측은 fire-and-forget — 즉시 응답해 흐름을 막지 않는다.
-// channelId 가 있으면 디스코드 채널로 비동기 보고, 없으면(CLI) GitHub PR 로만 결과 확인.
+// 실제 코드 분석/수정/PR 생성은 GitHub Actions 안의 Claude Code 가 수행.
+// 호출 측은 fire-and-forget. 결과(PR 검토)는 webhook → 앱 보고(/api/reports)로 기록된다.
 
 const ok = (text: string) => ({ content: [{ type: "text" as const, text }] });
 const err = (text: string) => ({
@@ -19,40 +18,16 @@ const err = (text: string) => ({
   isError: true,
 });
 
-// dispatch_id → channelId 매핑. webhook 받았을 때 어느 채널로 보고할지 복구용.
-// PR body 메타에도 박지만 매핑 캐시가 더 빠르고 안전. 컨테이너 재시작 시 손실되지만
-// 보통 self-improve 한 회는 10분 안에 끝나므로 영속화 불필요.
-const pendingDispatches = new Map<string, { channelId: string; createdAt: number }>();
-const DISPATCH_TTL_MS = 30 * 60 * 1000; // 30분
-
-export function lookupDispatchChannel(dispatchId: string): string | undefined {
-  pruneExpiredDispatches();
-  return pendingDispatches.get(dispatchId)?.channelId;
-}
-
-export function clearDispatch(dispatchId: string): void {
-  pendingDispatches.delete(dispatchId);
-}
-
-function pruneExpiredDispatches(): void {
-  const cutoff = Date.now() - DISPATCH_TTL_MS;
-  for (const [id, v] of pendingDispatches) {
-    if (v.createdAt < cutoff) pendingDispatches.delete(id);
-  }
-}
-
 export const SELF_MODIFY_TOOL_NAMES = ["mcp__self_modify__request_self_modification"];
 
-// channelId 가 있으면 디스코드로 보고, 없으면 GitHub PR 로만 결과 확인.
-// 디스코드 모드에선 channelId 를 클로저로 받아 dispatch 매핑/payload 에 실어준다.
-export function buildSelfModifyTools(channelId?: string): McpSdkServerConfigWithInstance {
+export function buildSelfModifyTools(): McpSdkServerConfigWithInstance {
   return createSdkMcpServer({
     name: "self_modify",
     version: "0.1.0",
     tools: [
       tool(
         "request_self_modification",
-        "이 모노레포의 코드(packages/** — navis, namory, app, desktop 등 모든 패키지)를 수정해 달라는 요청을 GitHub Actions 의 '코드 수정 서브에이전트'에게 위임한다. 즉시 트리거만 던지고 결과는 별도 채널 메시지로 비동기 보고된다. 사용자가 '이거 고쳐줘/앱 버튼 색 바꿔줘/maxTurns 올려줘/X 함수 리팩토링해줘' 같은 코드 변경 요청을 할 때 사용.",
+        "이 모노레포의 코드(packages/** — navis, namory, app, desktop 등 모든 패키지)를 수정해 달라는 요청을 GitHub Actions 의 '코드 수정 서브에이전트'에게 위임한다. 즉시 트리거만 던지고 결과(PR 검토)는 별도 보고로 비동기 전달된다. 사용자가 '이거 고쳐줘/앱 버튼 색 바꿔줘/maxTurns 올려줘/X 함수 리팩토링해줘' 같은 코드 변경 요청을 할 때 사용.",
         {
           instruction: z
             .string()
@@ -72,10 +47,6 @@ export function buildSelfModifyTools(channelId?: string): McpSdkServerConfigWith
           }
 
           const dispatchId = randomUUID();
-          if (channelId) {
-            pendingDispatches.set(dispatchId, { channelId, createdAt: Date.now() });
-          }
-
           const url = `https://api.github.com/repos/${config.githubRepo}/dispatches`;
           const res = await fetch(url, {
             method: "POST",
@@ -89,14 +60,12 @@ export function buildSelfModifyTools(channelId?: string): McpSdkServerConfigWith
               event_type: "self-improve",
               client_payload: {
                 instruction: args.instruction,
-                channel_id: channelId ?? "",
                 dispatch_id: dispatchId,
               },
             }),
           });
 
           if (!res.ok) {
-            if (channelId) pendingDispatches.delete(dispatchId);
             const body = await res.text();
             console.error(
               `[self-modify] dispatch 실패 status=${res.status} body=${body} repo=${config.githubRepo}`,
@@ -107,18 +76,9 @@ export function buildSelfModifyTools(channelId?: string): McpSdkServerConfigWith
             );
           }
 
-          console.log(
-            `[self-modify] dispatch 성공 id=${dispatchId} channel=${channelId ?? "(cli)"}`,
-          );
-          if (channelId) {
-            return ok(
-              `코드 수정 서브에이전트에게 작업 의뢰 전송 완료 (dispatch_id=${dispatchId}). ` +
-                `Actions 가 격리 환경에서 코드를 수정하고 PR 을 만들면 별도 메시지로 보고됨. ` +
-                `그동안 다른 얘기 계속해도 돼.`,
-            );
-          }
+          console.log(`[self-modify] dispatch 성공 id=${dispatchId}`);
           return ok(
-            "코드 수정 서브에이전트에게 작업 의뢰 전송 완료. PR이 생성되면 GitHub에서 확인할 수 있어요.",
+            "코드 수정 서브에이전트에게 작업 의뢰 전송 완료. 작업·검토가 끝나면 보고로 알려주고, PR 은 GitHub 에서도 확인할 수 있어요.",
           );
         },
       ),

@@ -144,14 +144,13 @@ app.post("/crons", async (req, reply) => {
   const title = typeof b.title === "string" ? b.title.trim() : "";
   const schedule = typeof b.schedule === "string" ? b.schedule.trim() : "";
   const prompt = typeof b.prompt === "string" ? b.prompt.trim() : "";
-  const channelId = typeof b.channelId === "string" ? b.channelId.trim() : "";
   const timezone = typeof b.timezone === "string" ? b.timezone.trim() : undefined;
-  if (!title || !schedule || !prompt || !channelId) {
+  if (!title || !schedule || !prompt) {
     return reply
       .code(400)
-      .send({ error: "title, schedule, prompt, channelId 가 모두 필요합니다" });
+      .send({ error: "title, schedule, prompt 가 모두 필요합니다" });
   }
-  const row = await createCron({ title, schedule, prompt, channelId, timezone });
+  const row = await createCron({ title, schedule, prompt, timezone });
   return reply.code(201).send(row);
 });
 

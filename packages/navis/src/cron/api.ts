@@ -9,7 +9,6 @@ export interface CronRow {
   schedule: string;
   timezone: string;
   prompt: string;
-  channelId: string;
   enabled: boolean;
   lastRunAt: string | null;
 }
@@ -29,7 +28,6 @@ export async function createCronRemote(input: {
   title: string;
   schedule: string;
   prompt: string;
-  channelId: string;
   timezone?: string;
 }): Promise<CronRow> {
   const res = await fetch(`${BASE}/crons`, {

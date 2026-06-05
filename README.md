@@ -1,11 +1,13 @@
 # namory monorepo
 
-> 김남운의 제2의 뇌 시스템. 두 패키지로 구성된다.
+> 김남운의 제2의 뇌 시스템.
 
 | 패키지 | 한 줄 요약 | 자세히 |
 | --- | --- | --- |
 | [`namory`](./packages/namory) | 기억 저장소 — Fastify + MCP 서버. Supabase Postgres + pgvector, Voyage 임베딩 | [README](./packages/namory/README.md) |
-| [`navis`](./packages/navis) | 에이전트 — 디스코드 봇 + 터미널 CLI. Claude Agent SDK + namory MCP | [README](./packages/navis/README.md) |
+| [`navis`](./packages/navis) | 에이전트 — 앱 백엔드(HTTP 서버) + 터미널 CLI. Claude Agent SDK + namory MCP | [README](./packages/navis/README.md) |
+| [`app`](./packages/app) | 모바일/웹 앱 (Expo, React Native). navis 와 대화하는 UI | — |
+| [`desktop`](./packages/desktop) | 데스크톱 앱 (Electron). app 의 웹 빌드를 셸로 감쌈 | — |
 
 ## 역할 분담
 
@@ -13,14 +15,14 @@
 - **navis** = 두뇌(에이전트). 사용자와 대화하고 namory에 저장·조회. 자동화(크론·다이제스트)도 여기서.
 
 ```
-[디스코드 / 터미널]
+[앱(navis-app) / 터미널 CLI]
         ↓
      [navis] ─── Claude Agent SDK (OAuth)
         ↓ MCP
      [namory] ─── Supabase pgvector + Voyage
 ```
 
-namory는 클라이언트가 navis 하나로 한정되지 않는다 — Claude Desktop/Web/Mobile에서도 같은 MCP 엔드포인트로 붙는다. 데스크톱 Claude는 직접, 디스코드/CLI에서는 navis를 거쳐 접근.
+namory는 클라이언트가 navis 하나로 한정되지 않는다 — Claude Desktop/Web/Mobile에서도 같은 MCP 엔드포인트로 붙는다. 데스크톱 Claude는 직접, 앱/CLI에서는 navis를 거쳐 접근.
 
 ## 모노레포
 
@@ -36,7 +38,7 @@ pnpm install
 # namory(기억 서버) 로컬 띄우기
 pnpm namory dev
 
-# navis(디스코드 봇) 띄우기 — 새 터미널
+# navis(앱 백엔드 HTTP 서버) 띄우기 — 새 터미널
 pnpm navis dev
 
 # 또는 CLI만 띄우기

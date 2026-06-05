@@ -9,7 +9,7 @@ import { curateTurn } from "./claude/curator.js";
 import { detectProject } from "./project.js";
 
 // navis CLI — Claude Code 스타일 Ink(React-for-CLI) REPL.
-// 디스코드 봇과 동일한 두뇌(askClaude/curator) 공유, 시작 디렉터리에서 프로젝트
+// 앱과 동일한 두뇌(askClaude/curator) 공유, 시작 디렉터리에서 프로젝트
 // 자동 감지 → 이 대화의 save는 자동 태깅.
 
 type TurnInput =
@@ -68,7 +68,7 @@ function App() {
       addTurn({ kind: "user", text: trimmed });
       setPending(true);
 
-      // 한도 초과 시 새 세션. 디스코드와 동일 로직.
+      // 한도 초과 시 새 세션.
       const overLimit =
         session !== null && session.contextTokens >= config.contextTokenLimit;
       const resumeId = session && !overLimit ? session.sessionId : undefined;
@@ -86,7 +86,6 @@ function App() {
           trimmed,
           resumeId,
           [], // CLI는 이미지 첨부 없음
-          undefined, // 채널 id 없음
           false, // profile_update는 항상 금지(대화 경로)
           projectContext,
         );

@@ -14,7 +14,6 @@ export async function createCron(args: {
   title: string;
   schedule: string;
   prompt: string;
-  channelId: string;
   timezone?: string;
 }) {
   const [row] = await db
@@ -23,7 +22,6 @@ export async function createCron(args: {
       title: args.title,
       schedule: args.schedule,
       prompt: args.prompt,
-      channelId: args.channelId,
       timezone: args.timezone ?? "Asia/Seoul",
     })
     .returning();

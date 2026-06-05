@@ -21,9 +21,8 @@ export const NAMORY_TOOLS = [
 export const NAMORY_PROFILE_UPDATE_TOOL = "mcp__namory__profile_update";
 
 // ── 파일/셸 (코드 수정용) ────────────────────────────────────
-// navis가 코드를 읽고·수정·실행까지 할 수 있게 푼다. 본인만 쓰는 도구라는 전제.
-// 외부에 노출되는 채널(디스코드)에서도 같은 권한이라 인젝션 위험은 ALLOWED_USER_IDS
-// 게이트로 1차 차단(허용 유저 외에는 메시지 자체를 처리하지 않음).
+// navis가 코드를 읽고·수정·실행까지 할 수 있게 푼다. 본인만 쓰는 도구라는 전제
+// (앱 /api/chat 은 APP_API_TOKEN 으로 보호 — 단일 사용자).
 const FILE_TOOLS = ["Read", "Write", "Edit", "NotebookEdit"];
 const SHELL_TOOLS = ["Bash", "BashOutput", "KillShell"];
 const SEARCH_TOOLS = ["Glob", "Grep"];

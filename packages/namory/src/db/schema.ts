@@ -47,7 +47,7 @@ export const memories = pgTable(
   ],
 );
 
-// 선제적 알림 스케줄 — navis가 정해진 시간에 깨어나 prompt를 실행해 channelId로 보고한다.
+// 선제적 알림 스케줄 — navis가 정해진 시간에 깨어나 prompt를 실행해 앱 보고로 기록한다.
 // 영속화는 namory(DB)가, 실제 스케줄링/전송은 navis(node-cron) 프로세스가 담당.
 export const crons = pgTable("crons", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -59,8 +59,6 @@ export const crons = pgTable("crons", {
   timezone: text("timezone").notNull().default("Asia/Seoul"),
   // 발동 시 navis가 실행할 지시문
   prompt: text("prompt").notNull(),
-  // 결과를 보낼 디스코드 채널 id (등록한 대화의 채널)
-  channelId: text("channel_id").notNull(),
   // 비활성화하면 스케줄에서 제외 (삭제 대신 끄기)
   enabled: boolean("enabled").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true })
