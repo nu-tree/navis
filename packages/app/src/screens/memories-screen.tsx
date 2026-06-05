@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Alert, FlatList, Pressable, ScrollView, View } from 'react-native';
+import { FlatList, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '../components/ui/text';
 import { Chip } from '../components/ui/chip';
@@ -8,6 +8,7 @@ import { MemoryEditSheet } from '../components/memory/memory-edit-sheet';
 import { useMemories } from '../hooks/use-memories';
 import { useUiStore } from '../store/ui-store';
 import { categoryLabel } from '../lib/category';
+import { confirmDestructive } from '../lib/confirm';
 import type { Memory, MemoryPatch } from '../api/navis';
 
 export function MemoriesScreen() {
@@ -34,10 +35,12 @@ export function MemoriesScreen() {
   );
 
   const confirmDelete = (m: Memory) => {
-    Alert.alert('기억 삭제', '이 기억을 영구 삭제할까?', [
-      { text: '취소', style: 'cancel' },
-      { text: '삭제', style: 'destructive', onPress: () => remove.mutate(m.id) },
-    ]);
+    confirmDestructive({
+      title: '기억 삭제',
+      message: '이 기억을 영구 삭제할까?',
+      confirmLabel: '삭제',
+      onConfirm: () => remove.mutate(m.id),
+    });
   };
 
   const handleSave = (id: string, p: MemoryPatch) => {
