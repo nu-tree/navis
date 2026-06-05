@@ -12,6 +12,7 @@
     "dist": "pnpm web:build && electron-builder",
     "dist:mac": "pnpm web:build && electron-builder --mac",
     "dist:win": "pnpm web:build && electron-builder --win",
+    "icon:mac": "node scripts/make-mac-icon.mjs",
     "release": "pnpm web:build && electron-builder --publish never && node scripts/upload.mjs"
   },
   "build": {
@@ -39,7 +40,7 @@
         "zip"
       ],
       "category": "public.app-category.productivity",
-      "icon": "../app/assets/navis-logo.png"
+      "icon": "../app/assets/navis-logo-mac.png"
     },
     "win": {
       "target": "nsis",
