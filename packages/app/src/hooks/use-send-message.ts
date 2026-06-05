@@ -75,7 +75,7 @@ export function useSendMessage() {
     onSuccess: ({ sessionId, contextFull, saved }, { conversationId }, context) => {
       const { setSessionId, toggleReaction } = useChatStore.getState();
       setSessionId(conversationId, sessionId && !contextFull ? sessionId : undefined);
-      // 저장됐으면 유저 메시지에 💡 (디스코드와 동일)
+      // 저장됐으면 유저 메시지에 💡
       if (saved && context?.userMessageId) {
         toggleReaction(conversationId, context.userMessageId, '💡');
       }

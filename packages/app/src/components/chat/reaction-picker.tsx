@@ -1,7 +1,7 @@
 import { Modal, Pressable, View } from 'react-native';
 import { Text } from '../ui/text';
 
-// 빠른 이모지 (💡 = namory 저장 표시, 디스코드 리액션 느낌)
+// 빠른 이모지 리액션 (💡 = namory 저장 표시)
 const QUICK_EMOJIS = ['💡', '👍', '❤️', '😂', '🎉', '🔥', '✅', '👀'];
 
 export type ReactionPickerProps = {
@@ -35,9 +35,8 @@ export function ReactionPicker({ open, onClose, onPick, onCopy }: ReactionPicker
           {onCopy ? (
             <Pressable
               onPress={onCopy}
-              className="flex-row items-center justify-center gap-2 rounded-xl border-t border-border pt-3 active:opacity-70"
+              className="flex-row items-center justify-center gap-2 rounded-xl border-t border-border pt-3 cursor-pointer active:opacity-70 hover:opacity-80"
             >
-              <Text className="text-base">📋</Text>
               <Text className="text-[15px] font-semibold text-foreground">복사</Text>
             </Pressable>
           ) : null}
