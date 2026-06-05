@@ -3,7 +3,7 @@ import { KeyboardAvoidingView, Platform, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChatDrawer, ChatHeader, ChatInput, MessageList } from '../components/chat';
 import { Text } from '../components/ui/text';
-import { useActiveConversation, useChatStore } from '../store/chat-store';
+import { useActiveConversation, useChatStore, useTotalUnread } from '../store/chat-store';
 import { useReports } from '../hooks/use-reports';
 import { useCrons } from '../hooks/use-crons';
 
@@ -12,6 +12,7 @@ export function ChatScreen() {
   const insets = useSafeAreaInsets();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const active = useActiveConversation();
+  const totalUnread = useTotalUnread();
   const newConversation = useChatStore((s) => s.newConversation);
 
   // navis 선제 보고 폴링 → 보고방에 머지 + 크론 목록으로 보고방 미리 생성
@@ -27,6 +28,7 @@ export function ChatScreen() {
         subtitle={isReport ? '보고 전용 · 읽기 전용' : '남운님의 개인 비서'}
         onMenu={() => setDrawerOpen(true)}
         onNewChat={() => newConversation()}
+        unread={totalUnread}
       />
       <KeyboardAvoidingView
         className="flex-1"

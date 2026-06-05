@@ -9,10 +9,19 @@ export type ChatHeaderProps = {
   subtitle?: string;
   onMenu: () => void;
   onNewChat: () => void;
+  // 다른 방의 안 읽은 메시지 총합 (>0 이면 ☰ 위에 빨간 점)
+  unread?: number;
   className?: string;
 };
 
-export function ChatHeader({ title, subtitle, onMenu, onNewChat, className }: ChatHeaderProps) {
+export function ChatHeader({
+  title,
+  subtitle,
+  onMenu,
+  onNewChat,
+  unread = 0,
+  className,
+}: ChatHeaderProps) {
   return (
     <View
       className={cn(
@@ -22,6 +31,13 @@ export function ChatHeader({ title, subtitle, onMenu, onNewChat, className }: Ch
     >
       <Pressable hitSlop={8} onPress={onMenu} className="h-9 w-9 items-center justify-center rounded-lg active:bg-secondary">
         <Text className="text-xl text-foreground">☰</Text>
+        {unread > 0 ? (
+          <View className="absolute right-1 top-1 min-w-[16px] items-center justify-center rounded-full bg-destructive px-1">
+            <Text className="text-[10px] font-bold text-destructive-foreground">
+              {unread > 99 ? '99+' : unread}
+            </Text>
+          </View>
+        ) : null}
       </Pressable>
 
       <Avatar source={NAVIS_LOGO} size={30} className="rounded-lg bg-transparent" />

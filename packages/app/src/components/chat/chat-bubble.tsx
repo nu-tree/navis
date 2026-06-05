@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Image, Pressable, View } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { cn } from '../../lib/cn';
 import { formatTime } from '../../lib/format';
 import { Text } from '../ui/text';
@@ -19,6 +20,13 @@ export function ChatBubble({ message, className }: ChatBubbleProps) {
   const activeId = useChatStore((s) => s.activeId);
   const toggleReaction = useChatStore((s) => s.toggleReaction);
   const reactions = message.reactions ?? [];
+  const images = message.images ?? [];
+  const hasText = message.text.trim().length > 0;
+
+  const copyText = async () => {
+    if (hasText) await Clipboard.setStringAsync(message.text);
+    setPickerOpen(false);
+  };
 
   return (
     <View
@@ -31,18 +39,30 @@ export function ChatBubble({ message, className }: ChatBubbleProps) {
       <Pressable onLongPress={() => setPickerOpen(true)} delayLongPress={250}>
         <View
           className={cn(
-            'rounded-2xl px-4 py-2.5',
+            'overflow-hidden rounded-2xl',
+            hasText && 'px-4 py-2.5',
             isUser ? 'rounded-br-md bg-primary' : 'rounded-bl-md bg-card',
           )}
         >
-          <Text
-            className={cn(
-              'text-[15px] leading-5',
-              isUser ? 'text-primary-foreground' : 'text-card-foreground',
-            )}
-          >
-            {message.text}
-          </Text>
+          {images.map((uri) => (
+            <Image
+              key={uri}
+              source={{ uri }}
+              className={cn('mb-1 h-48 w-60 rounded-xl bg-secondary', !hasText && 'mb-0')}
+              resizeMode="cover"
+            />
+          ))}
+          {hasText ? (
+            <Text
+              selectable
+              className={cn(
+                'text-[15px] leading-5',
+                isUser ? 'text-primary-foreground' : 'text-card-foreground',
+              )}
+            >
+              {message.text}
+            </Text>
+          ) : null}
         </View>
       </Pressable>
 
@@ -59,6 +79,7 @@ export function ChatBubble({ message, className }: ChatBubbleProps) {
       <ReactionPicker
         open={pickerOpen}
         onClose={() => setPickerOpen(false)}
+        onCopy={hasText ? copyText : undefined}
         onPick={(emoji) => {
           toggleReaction(activeId, message.id, emoji);
           setPickerOpen(false);

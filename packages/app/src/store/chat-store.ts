@@ -15,6 +15,8 @@ export type Conversation = {
   sessionId?: string;
   createdAt: string;
   updatedAt: string;
+  // 카톡식 안 읽은 메시지 수 — 비활성 방에 navis 메시지/보고가 오면 +1, 방 열면 0.
+  unread?: number;
 };
 
 // navis /api/reports 응답 항목
@@ -104,7 +106,12 @@ export const useChatStore = create<ChatStore>()(
     return conv.id;
   },
 
-  selectConversation: (id) => set({ activeId: id }),
+  selectConversation: (id) =>
+    set((s) => ({
+      activeId: id,
+      // 방을 열면 읽음 처리
+      conversations: s.conversations.map((c) => (c.id === id ? { ...c, unread: 0 } : c)),
+    })),
 
   deleteConversation: (id) =>
     set((s) => {
@@ -122,10 +129,13 @@ export const useChatStore = create<ChatStore>()(
       conversations: s.conversations.map((c) => {
         if (c.id !== conversationId) return c;
         const namingFromFirst = c.messages.length === 0 && message.role === 'user';
+        // navis(assistant) 가 안 보고 있는 방에 보낸 메시지만 안 읽음으로 카운트
+        const incoming = message.role === 'assistant' && s.activeId !== conversationId;
         return {
           ...c,
           messages: [...c.messages, message],
           title: namingFromFirst ? titleFromText(message.text) : c.title,
+          unread: incoming ? (c.unread ?? 0) + 1 : c.unread,
           updatedAt: now(),
         };
       }),
@@ -199,7 +209,9 @@ export const useChatStore = create<ChatStore>()(
         createdAt: report.createdAt,
       };
 
-      // 방이 없으면 보고와 함께 생성
+      const isActive = s.activeId === id;
+
+      // 방이 없으면 보고와 함께 생성 (새 방은 비활성 → 안 읽음 1)
       if (!existing) {
         const room: Conversation = {
           id,
@@ -208,6 +220,7 @@ export const useChatStore = create<ChatStore>()(
           messages: [message],
           createdAt: report.createdAt,
           updatedAt: report.createdAt,
+          unread: isActive ? 0 : 1,
         };
         return { conversations: [...s.conversations, room] };
       }
@@ -215,7 +228,12 @@ export const useChatStore = create<ChatStore>()(
       return {
         conversations: s.conversations.map((c) =>
           c.id === id
-            ? { ...c, messages: [...c.messages, message], updatedAt: report.createdAt }
+            ? {
+                ...c,
+                messages: [...c.messages, message],
+                updatedAt: report.createdAt,
+                unread: isActive ? 0 : (c.unread ?? 0) + 1,
+              }
             : c,
         ),
       };
@@ -236,3 +254,7 @@ export const useActiveConversation = (): Conversation | undefined =>
 
 export const useIsActiveTyping = (): boolean =>
   useChatStore((s) => s.typingIds.includes(s.activeId));
+
+// 비활성 방들의 안 읽은 메시지 총합 — 헤더 메뉴(☰) 뱃지용
+export const useTotalUnread = (): number =>
+  useChatStore((s) => s.conversations.reduce((sum, c) => sum + (c.unread ?? 0), 0));

@@ -3,6 +3,13 @@ import { NAVIS_URL, NAVIS_TOKEN, IS_BACKEND_CONFIGURED } from '../lib/config';
 import type { Report } from '../store/chat-store';
 import type { ChatMessage } from '../types';
 
+// 첨부 이미지. uri=표시용 로컬 경로, base64/mimeType=백엔드 전송용.
+export type Attachment = {
+  uri: string;
+  base64: string;
+  mimeType: string;
+};
+
 export type SendResult = {
   reply: ChatMessage;
   sessionId: string;
@@ -29,11 +36,18 @@ function assistantMessage(text: string): ChatMessage {
 }
 
 // navis 백엔드(/api/chat)로 메시지 전송. sessionId 가 있으면 그 대화를 이어간다.
+// 첨부 이미지는 data URL(base64) 배열로 보낸다 → 백엔드가 Claude 비전에 전달.
 // 백엔드 미설정(.env 없음)이면 목업 응답으로 폴백.
-export async function sendMessage(text: string, sessionId?: string): Promise<SendResult> {
+export async function sendMessage(
+  text: string,
+  sessionId?: string,
+  attachments?: Attachment[],
+): Promise<SendResult> {
   if (!IS_BACKEND_CONFIGURED) {
     return mockReply(text);
   }
+
+  const images = attachments?.map((a) => `data:${a.mimeType};base64,${a.base64}`);
 
   const res = await fetch(`${NAVIS_URL}/api/chat`, {
     method: 'POST',
@@ -41,7 +55,7 @@ export async function sendMessage(text: string, sessionId?: string): Promise<Sen
       'content-type': 'application/json',
       authorization: `Bearer ${NAVIS_TOKEN}`,
     },
-    body: JSON.stringify({ text, sessionId }),
+    body: JSON.stringify({ text, sessionId, images }),
   });
 
   if (!res.ok) {

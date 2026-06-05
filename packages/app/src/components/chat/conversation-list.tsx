@@ -26,6 +26,8 @@ function Row({
   onPress: () => void;
   onDelete?: () => void;
 }) {
+  const unread = conv.unread ?? 0;
+  const hasUnread = unread > 0;
   return (
     <Pressable
       onPress={onPress}
@@ -35,13 +37,27 @@ function Row({
       )}
     >
       <View className="flex-1">
-        <Text numberOfLines={1} className={cn('text-sm', active && 'font-semibold')}>
+        <Text
+          numberOfLines={1}
+          className={cn('text-sm', (active || hasUnread) && 'font-semibold')}
+        >
           {conv.title}
         </Text>
-        <Text variant="caption" numberOfLines={1} className="text-muted-foreground">
+        <Text
+          variant="caption"
+          numberOfLines={1}
+          className={cn(hasUnread ? 'text-foreground' : 'text-muted-foreground')}
+        >
           {preview(conv)}
         </Text>
       </View>
+      {hasUnread ? (
+        <View className="min-w-[20px] items-center justify-center rounded-full bg-destructive px-1.5 py-0.5">
+          <Text className="text-xs font-bold text-destructive-foreground">
+            {unread > 99 ? '99+' : unread}
+          </Text>
+        </View>
+      ) : null}
       {onDelete ? (
         <Pressable hitSlop={8} onPress={onDelete} className="px-1.5 py-1 active:opacity-60">
           <Text className="text-muted-foreground">✕</Text>
