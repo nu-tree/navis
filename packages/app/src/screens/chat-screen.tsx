@@ -42,7 +42,7 @@ export function ChatScreen() {
   const isReport = active?.kind === 'report';
 
   return (
-    <View className="flex-1 flex-row bg-background" style={{ paddingTop: insets.top }}>
+    <View className="flex-1 flex-row" style={{ paddingTop: insets.top }}>
       {/* 데스크톱: 고정 사이드바 (접기 가능) */}
       {showSidebar ? (
         <View className="w-[300px] border-r border-border bg-surface">

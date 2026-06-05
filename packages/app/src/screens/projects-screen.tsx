@@ -88,7 +88,7 @@ export function ProjectsScreen() {
       : '정리할 기억이 아직 없어';
 
   return (
-    <View className="flex-1 bg-background" style={{ paddingTop: insets.top }}>
+    <View className="flex-1" style={{ paddingTop: insets.top }}>
       <View className="flex-row items-center gap-2 border-b border-border px-2 py-2.5">
         <Pressable
           hitSlop={8}

@@ -1,41 +1,42 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   // NativeWind v4 — RN/Expo 용 Tailwind
-  content: ['./App.tsx', './src/**/*.{js,jsx,ts,tsx}'],
+  content: ['./App.tsx', './app.tsx', './src/**/*.{js,jsx,ts,tsx}'],
   presets: [require('nativewind/preset')],
   theme: {
     extend: {
-      // 시맨틱 디자인 토큰 (shadcn 스타일, navis 다크 테마)
+      // 시맨틱 디자인 토큰 — 값은 CSS 변수(RGB 채널)로 두고 테마(다크/라이트)에 따라
+      // lib/theme.ts 의 vars() 로 런타임 교체한다. global.css 의 :root 가 다크 기본값.
       colors: {
-        background: '#0b0b0f',
-        surface: '#15151b',
-        border: '#2a2a33',
-        input: '#1f1f27',
-        ring: '#6366f1',
-        foreground: '#fafafa',
+        background: 'rgb(var(--background) / <alpha-value>)',
+        surface: 'rgb(var(--surface) / <alpha-value>)',
+        border: 'rgb(var(--border) / <alpha-value>)',
+        input: 'rgb(var(--input) / <alpha-value>)',
+        ring: 'rgb(var(--ring) / <alpha-value>)',
+        foreground: 'rgb(var(--foreground) / <alpha-value>)',
         muted: {
-          DEFAULT: '#1f1f27',
-          foreground: '#9b9ba8',
+          DEFAULT: 'rgb(var(--muted) / <alpha-value>)',
+          foreground: 'rgb(var(--muted-foreground) / <alpha-value>)',
         },
         card: {
-          DEFAULT: '#1b1b22',
-          foreground: '#fafafa',
+          DEFAULT: 'rgb(var(--card) / <alpha-value>)',
+          foreground: 'rgb(var(--card-foreground) / <alpha-value>)',
         },
         primary: {
-          DEFAULT: '#6366f1',
-          foreground: '#ffffff',
+          DEFAULT: 'rgb(var(--primary) / <alpha-value>)',
+          foreground: 'rgb(var(--primary-foreground) / <alpha-value>)',
         },
         secondary: {
-          DEFAULT: '#27272f',
-          foreground: '#e5e5ea',
+          DEFAULT: 'rgb(var(--secondary) / <alpha-value>)',
+          foreground: 'rgb(var(--secondary-foreground) / <alpha-value>)',
         },
         accent: {
-          DEFAULT: '#8b5cf6',
-          foreground: '#ffffff',
+          DEFAULT: 'rgb(var(--accent) / <alpha-value>)',
+          foreground: 'rgb(var(--accent-foreground) / <alpha-value>)',
         },
         destructive: {
-          DEFAULT: '#ef4444',
-          foreground: '#ffffff',
+          DEFAULT: 'rgb(var(--destructive) / <alpha-value>)',
+          foreground: 'rgb(var(--destructive-foreground) / <alpha-value>)',
         },
       },
       borderRadius: {
