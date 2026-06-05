@@ -230,15 +230,23 @@ const DOWNLOAD_HTML = `<!doctype html>
     if(x.endsWith(".exe"))return "Windows (.exe)";
     if(x.endsWith(".appimage"))return "Linux (.AppImage)";
     return name}
+  function ver(name){var m=name.match(/(\\d+\\.\\d+\\.\\d+)/);return m?m[1]:"0.0.0"}
+  function cmpVer(a,b){var pa=a.split(".").map(Number),pb=b.split(".").map(Number);
+    for(var i=0;i<3;i++){var d=(pa[i]||0)-(pb[i]||0);if(d)return d}return 0}
   function show(token,files){
     $("#login").classList.add("hidden");
     var box=$("#list");box.classList.remove("hidden");
     var installers=files.filter(function(f){var x=f.name.toLowerCase();
       return x.endsWith(".dmg")||x.endsWith(".exe")||x.endsWith(".appimage")});
     if(!installers.length){box.innerHTML='<p class="sub">아직 올라온 설치파일이 없어요.</p>';return}
-    box.innerHTML=installers.map(function(f){
+    // 플랫폼(확장자)별로 최신 버전 하나만 — 옛 버전 잔여물이 섞여 보이지 않게.
+    var byPlat={};
+    installers.forEach(function(f){var ext=f.name.slice(f.name.lastIndexOf(".")).toLowerCase();
+      if(!byPlat[ext]||cmpVer(ver(f.name),ver(byPlat[ext].name))>0)byPlat[ext]=f});
+    var latest=Object.keys(byPlat).map(function(k){return byPlat[k]});
+    box.innerHTML=latest.map(function(f){
       var href="/api/desktop/file/"+encodeURIComponent(f.name)+"?token="+encodeURIComponent(token);
-      return '<a class="dl" href="'+href+'"><span>'+platLabel(f.name)+'</span><small>'+fmt(f.size)+'</small></a>'
+      return '<a class="dl" href="'+href+'"><span>'+platLabel(f.name)+' · v'+ver(f.name)+'</span><small>'+fmt(f.size)+'</small></a>'
     }).join("");
   }
   async function enter(){
