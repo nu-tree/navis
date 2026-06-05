@@ -117,6 +117,7 @@ export function ConversationList({ onAfterSelect }: ConversationListProps) {
   const hideConversation = useChatStore((s) => s.hideConversation);
   const unhideConversation = useChatStore((s) => s.unhideConversation);
   const reorderConversations = useChatStore((s) => s.reorderConversations);
+  const newConversation = useChatStore((s) => s.newConversation);
 
   const [menuFor, setMenuFor] = useState<Conversation | null>(null);
   const [showHidden, setShowHidden] = useState(false);
@@ -127,6 +128,11 @@ export function ConversationList({ onAfterSelect }: ConversationListProps) {
 
   const select = (id: string) => {
     selectConversation(id);
+    onAfterSelect?.();
+  };
+
+  const handleNew = () => {
+    newConversation();
     onAfterSelect?.();
   };
 
@@ -149,7 +155,20 @@ export function ConversationList({ onAfterSelect }: ConversationListProps) {
   return (
     <View className="flex-1">
       <ScrollView contentContainerStyle={{ paddingHorizontal: 8, paddingTop: 4, paddingBottom: 24 }}>
-        <SectionLabel>대화</SectionLabel>
+        <View className="flex-row items-center justify-between px-3 pb-1 pt-3">
+          <Text variant="caption" className="uppercase tracking-wide text-muted-foreground">
+            대화
+          </Text>
+          <Pressable
+            hitSlop={8}
+            onPress={handleNew}
+            className="rounded-md px-1.5 py-0.5 cursor-pointer active:opacity-60 hover:bg-secondary"
+          >
+            <Text variant="caption" className="text-muted-foreground">
+              + 새 대화
+            </Text>
+          </Pressable>
+        </View>
         <DraggableRows
           items={chats}
           keyOf={(c) => c.id}

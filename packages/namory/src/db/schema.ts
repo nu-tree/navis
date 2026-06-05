@@ -78,6 +78,13 @@ export const profile = pgTable("profile", {
     .defaultNow(),
 });
 
+// 앱에서 편집하는 일반 설정(key→value). 예: system_prompt(봇 성격).
+export const settings = pgTable("settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+});
+
 // 대화방 동기화 — 앱/데스크톱이 기기 간 채팅을 맞추기 위한 서버 사본.
 // id 는 클라이언트가 만든 방 id(uuid 아님)라 text PK. messages 는 통째 jsonb.
 // 머지는 방 단위 Last-Write-Wins(updatedAt), 삭제는 deletedAt 툼스톤으로 전파.

@@ -1,0 +1,136 @@
+import { useEffect, useState } from 'react';
+import { Pressable, ScrollView, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { cn } from '../lib/cn';
+import { Text } from '../components/ui/text';
+import { Input } from '../components/ui/input';
+import { Button } from '../components/ui/button';
+import { LocalAgentSheet } from '../components/local-agent-sheet';
+import { useUiStore } from '../store/ui-store';
+import { useThemeStore } from '../store/theme-store';
+import { hasLocalAgent } from '../lib/local-agent';
+import { fetchSystemPrompt, saveSystemPrompt } from '../api/settings';
+import type { ThemeName } from '../lib/theme';
+
+function ThemeOption({ value, label, active, onPress }: { value: ThemeName; label: string; active: boolean; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      className={cn(
+        'flex-1 items-center rounded-xl border px-4 py-3 cursor-pointer active:opacity-80',
+        active ? 'border-primary bg-primary' : 'border-border bg-secondary hover:bg-muted',
+      )}
+    >
+      <Text className={cn('text-[15px] font-medium', active ? 'text-primary-foreground' : 'text-secondary-foreground')}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+export function SettingsScreen() {
+  const insets = useSafeAreaInsets();
+  const setScreen = useUiStore((s) => s.setScreen);
+  const theme = useThemeStore((s) => s.theme);
+  const setTheme = useThemeStore((s) => s.setTheme);
+
+  const [prompt, setPrompt] = useState('');
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [savedMsg, setSavedMsg] = useState('');
+  const [localSheet, setLocalSheet] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    fetchSystemPrompt()
+      .then((v) => {
+        if (alive) {
+          setPrompt(v);
+          setLoaded(true);
+        }
+      })
+      .catch(() => {
+        if (alive) setLoaded(true);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const save = async () => {
+    setSaving(true);
+    setSavedMsg('');
+    try {
+      await saveSystemPrompt(prompt.trim());
+      setSavedMsg('저장됨 — 다음 턴부터 적용');
+    } catch {
+      setSavedMsg('저장 실패');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <View className="flex-1" style={{ paddingTop: insets.top }}>
+      <View className="flex-row items-center gap-2 border-b border-border px-2 py-2.5">
+        <Pressable
+          hitSlop={8}
+          onPress={() => setScreen('chat')}
+          className="h-9 w-9 items-center justify-center rounded-lg cursor-pointer active:bg-secondary hover:bg-secondary"
+        >
+          <Text className="text-2xl text-foreground">‹</Text>
+        </Pressable>
+        <Text variant="subtitle">설정</Text>
+      </View>
+
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 32, gap: 24 }}>
+        {/* 테마 */}
+        <View className="gap-2">
+          <Text className="font-semibold text-foreground">테마</Text>
+          <View className="flex-row gap-2">
+            <ThemeOption value="dark" label="다크" active={theme === 'dark'} onPress={() => setTheme('dark')} />
+            <ThemeOption value="light" label="라이트" active={theme === 'light'} onPress={() => setTheme('light')} />
+          </View>
+        </View>
+
+        {/* 시스템 프롬프트 */}
+        <View className="gap-2">
+          <Text className="font-semibold text-foreground">시스템 프롬프트 (나비스 성격·지침)</Text>
+          <Text variant="caption" className="text-muted-foreground">
+            navis 의 행동 지침이에요. 대화에서 "성격 바꿔줘" 라고 해도 navis 가 직접 갱신해요.
+          </Text>
+          <Input
+            value={prompt}
+            onChangeText={setPrompt}
+            placeholder={loaded ? '시스템 프롬프트…' : '불러오는 중…'}
+            editable={loaded}
+            multiline
+            className="min-h-48"
+            style={{ textAlignVertical: 'top' }}
+          />
+          <View className="flex-row items-center gap-3">
+            <Button label="저장" loading={saving} disabled={!loaded} onPress={save} />
+            {savedMsg ? (
+              <Text variant="caption" className="text-muted-foreground">
+                {savedMsg}
+              </Text>
+            ) : null}
+          </View>
+        </View>
+
+        {/* 로컬 에이전트 (데스크톱) */}
+        {hasLocalAgent ? (
+          <View className="gap-2">
+            <Text className="font-semibold text-foreground">로컬 에이전트 (실험적)</Text>
+            <Text variant="caption" className="text-muted-foreground">
+              내 맥의 파일/터미널 접근. 기본 읽기 전용 — 설정에서 작업 폴더·토큰·쓰기 허용을 정해요.
+            </Text>
+            <Button label="로컬 에이전트 설정 열기" variant="secondary" onPress={() => setLocalSheet(true)} />
+          </View>
+        ) : null}
+      </ScrollView>
+
+      <LocalAgentSheet open={localSheet} onClose={() => setLocalSheet(false)} />
+    </View>
+  );
+}

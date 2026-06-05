@@ -7,6 +7,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ChatScreen } from './src/screens/chat-screen';
 import { MemoriesScreen } from './src/screens/memories-screen';
 import { ProjectsScreen } from './src/screens/projects-screen';
+import { SettingsScreen } from './src/screens/settings-screen';
 import { SpaceBackground } from './src/components/space-background';
 import { useUiStore } from './src/store/ui-store';
 import { useThemeStore } from './src/store/theme-store';
@@ -18,6 +19,7 @@ function Screen() {
   const screen = useUiStore((s) => s.screen);
   if (screen === 'memories') return <MemoriesScreen />;
   if (screen === 'projects') return <ProjectsScreen />;
+  if (screen === 'settings') return <SettingsScreen />;
   return <ChatScreen />;
 }
 

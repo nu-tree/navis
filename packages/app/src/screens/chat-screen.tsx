@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChatDrawer, ChatHeader, ChatInput, MessageList } from '../components/chat';
 import { SidebarContent } from '../components/chat/sidebar-content';
 import { Text } from '../components/ui/text';
-import { useActiveConversation, useChatStore, useTotalUnread } from '../store/chat-store';
+import { useActiveConversation, useTotalUnread } from '../store/chat-store';
 import { useUiStore } from '../store/ui-store';
 import { useReports } from '../hooks/use-reports';
 import { useCrons } from '../hooks/use-crons';
@@ -24,7 +24,6 @@ export function ChatScreen() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const active = useActiveConversation();
   const totalUnread = useTotalUnread();
-  const newConversation = useChatStore((s) => s.newConversation);
   const sidebarCollapsed = useUiStore((s) => s.sidebarCollapsed);
   const setSidebarCollapsed = useUiStore((s) => s.setSidebarCollapsed);
 
@@ -59,7 +58,6 @@ export function ChatScreen() {
           subtitle={isReport ? '보고 전용 · 읽기 전용' : '남운님의 개인 비서'}
           // 넓은 화면에선 ☰ 로 접힌 사이드바를 펼치고, 모바일에선 드로어를 연다.
           onMenu={() => (isWide ? setSidebarCollapsed(false) : setDrawerOpen(true))}
-          onNewChat={() => newConversation()}
           unread={totalUnread}
           showMenu={!showSidebar}
         />

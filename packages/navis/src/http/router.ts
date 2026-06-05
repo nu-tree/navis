@@ -16,6 +16,7 @@ import {
   handlePutConversation,
   handleDeleteConversation,
 } from "./conversations.js";
+import { handleGetSystemPrompt, handlePutSystemPrompt } from "./settings.js";
 import { handleGithubWebhook } from "./webhook.js";
 
 // HTTP 요청 1건을 적절한 핸들러로 라우팅한다. createServer 콜백에서 호출.
@@ -65,6 +66,13 @@ export function route(req: IncomingMessage, res: ServerResponse): void {
   if (req.url?.startsWith("/api/memories")) {
     if (req.method === "OPTIONS") return handlePreflight(res);
     return void handleMemories(req, res);
+  }
+
+  // 설정 — 시스템 프롬프트 조회/저장(앱 설정 화면)
+  if (req.url?.startsWith("/api/settings/system-prompt")) {
+    if (req.method === "OPTIONS") return handlePreflight(res);
+    if (req.method === "GET") return void handleGetSystemPrompt(req, res);
+    if (req.method === "PUT") return void handlePutSystemPrompt(req, res);
   }
 
   // 대화 동기화 — GET(pull 전체) / PUT(방 upsert) / DELETE(툼스톤)

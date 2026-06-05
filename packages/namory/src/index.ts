@@ -9,6 +9,7 @@ import {
   upsertConversation,
   softDeleteConversation,
 } from "./tools/conversations.js";
+import { getSetting, setSetting } from "./tools/settings.js";
 import { update } from "./tools/update.js";
 import { remove } from "./tools/remove.js";
 import { CATEGORIES, type Category } from "./db/schema.js";
@@ -45,7 +46,8 @@ app.addHook("onRequest", async (req, reply) => {
     !req.url.startsWith("/crons") &&
     !req.url.startsWith("/memories") &&
     !req.url.startsWith("/projects") &&
-    !req.url.startsWith("/conversations")
+    !req.url.startsWith("/conversations") &&
+    !req.url.startsWith("/settings")
   )
     return;
   const headerToken = req.headers.authorization?.replace(/^Bearer\s+/i, "");
@@ -93,6 +95,21 @@ app.all("/mcp", async (req, reply) => {
 
 // 사용 중인 프로젝트 목록 — navis가 저장 시 모델에 주입해 표기 통일에 쓴다.
 app.get("/projects", async () => ({ projects: await listProjects() }));
+
+// 일반 설정(key→value). 시스템 프롬프트 등을 앱에서 편집/조회.
+app.get<{ Params: { key: string } }>("/settings/:key", async (req) => ({
+  key: req.params.key,
+  value: await getSetting(req.params.key),
+}));
+
+app.put<{ Params: { key: string } }>("/settings/:key", async (req, reply) => {
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  if (typeof b.value !== "string") {
+    return reply.code(400).send({ error: "value(string) 필요" });
+  }
+  await setSetting(req.params.key, b.value);
+  return { key: req.params.key, ok: true };
+});
 
 // 대화방 동기화 — 앱이 기기 간 채팅을 맞춘다. GET(전체 pull)·PUT(방 upsert)·DELETE(툼스톤).
 app.get("/conversations", async () => ({ conversations: await listConversations() }));

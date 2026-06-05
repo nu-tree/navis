@@ -135,9 +135,10 @@ export const config = {
   digestTimezone: "Asia/Seoul",
   digestDays: 7, // 요약 대상 기간(일) — 지난 한 주
 
-  // 봇 성격·행동 지침. 코드에 두지 않고 SYSTEM_PROMPT 환경변수로만 주입한다
-  // (레포 공개 대비 — 프롬프트는 .env / Railway 변수에만 존재). 없으면 즉시 종료.
-  systemPrompt: required("SYSTEM_PROMPT"),
+  // 봇 성격·행동 지침의 "초기/폴백" 값. 이제 1순위는 namory(DB)의 settings.system_prompt
+  // (앱 설정에서 편집·navis 가 직접 갱신). env 는 DB 가 비었을 때의 폴백, 없으면 내장 기본값.
+  // → 더 이상 필수 아님(system-prompt.ts 의 getSystemPrompt 가 우선순위 처리).
+  systemPrompt: optional("SYSTEM_PROMPT"),
 
   // 모바일/데스크톱 앱(navis-app)이 /api/chat 을 호출할 때 쓰는 인증 토큰.
   // 미설정이면 /api/chat 라우트가 비활성(503). 앱의 EXPO_PUBLIC_NAVIS_TOKEN 과 동일 값.

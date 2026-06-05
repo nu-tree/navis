@@ -3,6 +3,8 @@ import { config } from "../config.js";
 import { buildCronTools, CRON_TOOL_NAMES } from "../cron/mcp.js";
 import { buildRepoTools, REPO_TOOL_NAMES } from "../repo/mcp.js";
 import { buildSelfModifyTools, SELF_MODIFY_TOOL_NAMES } from "../self-modify/mcp.js";
+import { buildSettingsTools, SETTINGS_TOOL_NAMES } from "../settings/mcp.js";
+import { getSystemPrompt } from "../system-prompt.js";
 import { buildGoogleTools, GOOGLE_TOOL_NAMES } from "../google/mcp.js";
 import { isCalendarEnabled } from "../google/auth.js";
 import {
@@ -92,6 +94,9 @@ export async function askClaude(
   // 확인 가능. 크론 등에서 넘어온 channelId 가 있으면 클로저로 묶인다(없어도 동작).
   const selfModifyServer = buildSelfModifyTools(channelId);
 
+  // 시스템 프롬프트 자가 갱신 도구(사용자가 "성격 바꿔줘" 요청 시 navis 가 직접 갱신).
+  const settingsServer = buildSettingsTools();
+
   // 구글 캘린더 in-process MCP. env 셋(client/secret/refresh) 다 채워졌을 때만 활성.
   // 일정 조회·생성은 어느 경로(앱/CLI)에서든 동일하게 의미 있음.
   const googleServer = isCalendarEnabled() ? buildGoogleTools() : undefined;
@@ -108,9 +113,10 @@ export async function askClaude(
 
   // 프로젝트 컨텍스트가 있으면 시스템 프롬프트에 부속문을 합성. 코드로 강제 인젝션
   // 하지 않고 모델에 지시 — 큐레이터도 같은 규칙으로 따라온다.
+  const baseSystemPrompt = await getSystemPrompt();
   let systemPromptFinal = projectContext
-    ? `${config.systemPrompt}\n\n[운영 컨텍스트] 현재 작업 프로젝트: "${projectContext}". 이 대화에서 mcp__namory__save 를 호출할 때 모든 항목에 project: "${projectContext}" 를 명시할 것.`
-    : config.systemPrompt;
+    ? `${baseSystemPrompt}\n\n[운영 컨텍스트] 현재 작업 프로젝트: "${projectContext}". 이 대화에서 mcp__namory__save 를 호출할 때 모든 항목에 project: "${projectContext}" 를 명시할 것.`
+    : baseSystemPrompt;
 
   // 원격 실행(channelId 있음 = 크론/자동 트리거) 운영 안내. 컨테이너에 소스 파일이 없어서
   // Edit/Write/Bash 로 자기 코드를 직접 수정할 수 없다 — 모델이 그걸 시도하다
@@ -144,6 +150,7 @@ export async function askClaude(
         ...(cronServer ? { cron: cronServer } : {}),
         repo: repoServer,
         self_modify: selfModifyServer,
+        settings: settingsServer,
         ...(googleServer ? { google: googleServer } : {}),
         ...extraServers,
       },
@@ -156,6 +163,7 @@ export async function askClaude(
         ...(cronServer ? CRON_TOOL_NAMES : []),
         ...REPO_TOOL_NAMES,
         ...SELF_MODIFY_TOOL_NAMES,
+        ...SETTINGS_TOOL_NAMES,
         ...(googleServer ? GOOGLE_TOOL_NAMES : []),
         ...BUILTIN_TOOLS,
         ...extraToolNames,

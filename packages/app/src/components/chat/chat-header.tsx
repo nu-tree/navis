@@ -8,7 +8,6 @@ export type ChatHeaderProps = {
   title: string;
   subtitle?: string;
   onMenu: () => void;
-  onNewChat: () => void;
   // 다른 방의 안 읽은 메시지 총합 (>0 이면 ☰ 위에 빨간 점)
   unread?: number;
   // 데스크톱 고정 사이드바 모드에선 햄버거(☰)를 숨긴다.
@@ -20,7 +19,6 @@ export function ChatHeader({
   title,
   subtitle,
   onMenu,
-  onNewChat,
   unread = 0,
   showMenu = true,
   className,
@@ -57,10 +55,6 @@ export function ChatHeader({
           </Text>
         ) : null}
       </View>
-
-      <Pressable hitSlop={8} onPress={onNewChat} className="h-9 w-9 items-center justify-center rounded-lg cursor-pointer transition-colors active:bg-secondary hover:bg-secondary">
-        <Text className="text-2xl text-foreground">＋</Text>
-      </Pressable>
     </View>
   );
 }
