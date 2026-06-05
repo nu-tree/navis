@@ -82,17 +82,17 @@ export async function askClaude(
   // 크론 발동 결과는 이 채널로 가도록 channelId를 클로저로 주입한다.
   const cronServer = channelId ? buildCronTools(channelId) : undefined;
 
-  // 자기 소스 조회 도구(read-only). 디스코드 봇은 컨테이너에 src/가 없어서 이 도구로
+  // 자기 소스 조회 도구(read-only). 호스팅 컨테이너(Railway)엔 src/가 없어서 이 도구로
   // GitHub raw를 읽어야 자기 코드를 볼 수 있다. CLI 모드에서도 풀어둠(레포 어디에 있든
   // 같은 명령으로 동작) — 다만 CLI는 로컬 Read가 더 빠르니 거의 안 쓸 것.
   const repoServer = buildRepoTools();
 
-  // 자기 개선 트리거. channelId 있으면 결과를 디스코드 채널로 보고, 없으면(CLI 모드)
-  // GitHub PR 로만 결과 확인 가능. webhook 매핑용 channelId 는 있을 때만 클로저로 묶인다.
+  // 자기 개선 트리거. 결과(PR 검토)는 앱 보고(/api/reports)로 기록되고, GitHub PR 로도
+  // 확인 가능. 크론 등에서 넘어온 channelId 가 있으면 클로저로 묶인다(없어도 동작).
   const selfModifyServer = buildSelfModifyTools(channelId);
 
   // 구글 캘린더 in-process MCP. env 셋(client/secret/refresh) 다 채워졌을 때만 활성.
-  // CLI/디스코드 모드 모두 노출 — 일정 조회·생성은 어느 채널이든 동일하게 의미 있음.
+  // 일정 조회·생성은 어느 경로(앱/CLI)에서든 동일하게 의미 있음.
   const googleServer = isCalendarEnabled() ? buildGoogleTools() : undefined;
 
   // 선택 외부 연동(노션). env에 토큰이 있을 때만 설정이 채워진다.
@@ -111,12 +111,12 @@ export async function askClaude(
     ? `${config.systemPrompt}\n\n[운영 컨텍스트] 현재 작업 프로젝트: "${projectContext}". 이 대화에서 mcp__namory__save 를 호출할 때 모든 항목에 project: "${projectContext}" 를 명시할 것.`
     : config.systemPrompt;
 
-  // 디스코드 모드(channelId 있음) 운영 안내. 컨테이너에 소스 파일이 없어서
+  // 원격 실행(channelId 있음 = 크론/자동 트리거) 운영 안내. 컨테이너에 소스 파일이 없어서
   // Edit/Write/Bash 로 자기 코드를 직접 수정할 수 없다 — 모델이 그걸 시도하다
   // 실패하고 "셸 접근 막혔다" 같은 답변을 하지 않도록 명시.
   if (channelId) {
     systemPromptFinal +=
-      "\n\n[디스코드 모드 안내]\n" +
+      "\n\n[원격 실행 안내]\n" +
       "- 이 환경(Railway 컨테이너)에는 소스 파일이 없다. Edit/Write/Bash 로 이 모노레포 코드(packages/** — navis, namory, app, desktop 등)를 직접 수정하려 시도하지 말 것.\n" +
       "- 코드 수정 요청(어느 패키지든)은 반드시 mcp__self_modify__request_self_modification 도구로 GitHub Actions 의 코드 수정 서브에이전트에게 위임. 즉시 트리거만 던지면 작업·검토 결과는 별도 메시지로 비동기 보고됨.\n" +
       "- 자기 코드 조회는 mcp__repo__read_repo_file / mcp__repo__list_repo_files 사용.\n" +

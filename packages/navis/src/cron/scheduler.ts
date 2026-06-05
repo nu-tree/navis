@@ -1,15 +1,13 @@
 import cron, { type ScheduledTask } from "node-cron";
-import type { Client } from "discord.js";
 import { askClaude } from "../claude/ask.js";
-import { sendToChannel } from "../discord/send.js";
+import { emitReport } from "../reports/emit.js";
 import { fetchCrons, patchCronRemote, type CronRow } from "./api.js";
 
 // 선제적 알림 스케줄러. 영속화는 namory(REST /crons)가, 스케줄링/전송은 여기서.
-// 부팅 시 namory에서 잡을 읽어 등록하고, 발동하면 askClaude로 실행해 채널로 보낸다.
+// 부팅 시 namory에서 잡을 읽어 등록하고, 발동하면 askClaude로 실행해 앱 보고로 기록한다.
 
 // id → {task, sig}. sig는 schedule|timezone|enabled 로, 바뀐 잡만 다시 건다.
 const jobs = new Map<string, { task: ScheduledTask; sig: string }>();
-let discord: Client | undefined;
 
 const sigOf = (c: CronRow) => `${c.schedule}|${c.timezone}|${c.enabled}`;
 
@@ -48,19 +46,17 @@ async function runCron(c: CronRow): Promise<void> {
   const meta = { sourceId: c.id, sourceTitle: `⏰ ${c.title}` };
   try {
     const { text } = await askClaude(c.prompt, undefined, [], c.channelId);
-    await sendToChannel(discord, c.channelId, text, "cron", meta);
+    emitReport(text, "cron", meta);
     // 성공한 실행 시각을 기록 (lastRunAt 업데이트). 실패해도 흐름은 유지.
     void patchCronRemote(c.id, { lastRunAt: new Date().toISOString() });
   } catch (err) {
     console.error(`[cron] '${c.title}' 실행 실패:`, err);
-    // 사용자가 실패를 인지할 수 있도록 Discord 채널에도 알림.
-    sendToChannel(
-      discord,
-      c.channelId,
+    // 사용자가 실패를 인지할 수 있도록 보고방에도 알림.
+    emitReport(
       `⚠️ 크론 '${c.title}' 실행에 실패했어요. Railway 로그를 확인해주세요.`,
       "cron",
       meta,
-    ).catch(() => {}); // 알림 실패는 무시(무한 루프 방지)
+    );
   }
 }
 
@@ -73,8 +69,7 @@ export async function reconcile(): Promise<void> {
 }
 
 // 부팅 시 호출. 초기 로드 + 1분마다 동기화(직접 DB 변경/다중 인스턴스 대비).
-export async function startCronScheduler(client: Client | undefined): Promise<void> {
-  discord = client;
+export async function startCronScheduler(): Promise<void> {
   await reconcile().catch((err) => console.error("[cron] 초기 로드 실패:", err));
   cron.schedule("* * * * *", () => void reconcile().catch(() => {}));
   console.log(`[cron] 스케줄러 시작 (등록 ${jobs.size}건)`);

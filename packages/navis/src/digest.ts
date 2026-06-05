@@ -1,8 +1,7 @@
 import cron from "node-cron";
-import type { Client } from "discord.js";
 import { config } from "./config.js";
 import { askClaude } from "./claude/ask.js";
-import { sendToChannel } from "./discord/send.js";
+import { emitReport } from "./reports/emit.js";
 
 // 주간 기억 다이제스트 — navis가 정기적으로 최근 기억을 요약해 자기이해 프로필에
 // 반영(자동 압축)하고 요약을 디스코드로 보고한다. namory의 수동 profile_update
@@ -28,10 +27,8 @@ function buildDigestPrompt(days: number): string {
   ].join("\n");
 }
 
-let discord: Client | undefined;
-
-// 다이제스트 1회 실행: navis가 요약→프로필 갱신을 수행하고, 채널이 설정돼 있으면
-// 요약을 보고한다. 수동 트리거(테스트)에도 재사용할 수 있게 분리.
+// 다이제스트 1회 실행: navis가 요약→프로필 갱신을 수행하고, 요약을 앱 보고로 기록한다.
+// 수동 트리거(테스트)에도 재사용할 수 있게 분리.
 export async function runDigest(): Promise<void> {
   console.log("[digest] 발동");
   try {
@@ -42,31 +39,19 @@ export async function runDigest(): Promise<void> {
       undefined, // 크론 도구 불필요
       true, // profile_update 허용 (신뢰된 자동화 경로)
     );
-    // 항상 보고로 기록(앱이 받음) + 디스코드 채널 있으면 추가 전송.
-    await sendToChannel(
-      discord,
-      config.navisChannelId,
-      `**주간 기억 다이제스트**\n\n${text}`,
-      "digest",
-    );
+    // 보고로 기록 — 앱이 /api/reports 로 받아 보고방에 표시.
+    emitReport(`**주간 기억 다이제스트**\n\n${text}`, "digest");
   } catch (err) {
     console.error("[digest] 실행 실패:", err);
-    try {
-      await sendToChannel(
-        discord,
-        config.navisChannelId,
-        `[다이제스트] 실행 실패: ${err instanceof Error ? err.message : String(err)}`,
-        "digest",
-      );
-    } catch {
-      // 전송 실패는 무시 (이미 console.error로 기록됨)
-    }
+    emitReport(
+      `[다이제스트] 실행 실패: ${err instanceof Error ? err.message : String(err)}`,
+      "digest",
+    );
   }
 }
 
 // 부팅 시 호출. digestSchedule(cron 식)에 맞춰 주기 실행을 등록한다.
-export function startDigestScheduler(client: Client | undefined): void {
-  discord = client;
+export function startDigestScheduler(): void {
   if (!cron.validate(config.digestSchedule)) {
     console.error(`[digest] 잘못된 cron 식, 스케줄러 미시작: ${config.digestSchedule}`);
     return;

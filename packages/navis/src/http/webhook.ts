@@ -1,8 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import type { Client } from "discord.js";
 import { config } from "../config.js";
-import { lookupDispatchChannel, clearDispatch } from "../self-modify/mcp.js";
 import { reviewPullRequest } from "../self-modify/review.js";
 import { readBody } from "./respond.js";
 
@@ -33,7 +31,6 @@ function verifySignature(secret: string, payload: string, signature: string): bo
 export async function handleGithubWebhook(
   req: IncomingMessage,
   res: ServerResponse,
-  client: Client | undefined,
 ): Promise<void> {
   try {
     const secret = config.githubWebhookSecret;
@@ -66,32 +63,14 @@ export async function handleGithubWebhook(
     const head = payload.pull_request.head?.ref ?? "";
     if (!head.startsWith("navis/self-improve/")) return;
 
-    // PR body 에서 dispatch_id / channel_id 메타 파싱
-    const body = payload.pull_request.body ?? "";
-    const dispatchId = body.match(/dispatch_id:\s*`([^`]+)`/)?.[1];
-    const bodyChannelId = body.match(/channel_id:\s*`([^`]+)`/)?.[1];
-
-    // 채널 lookup 우선순위: in-memory 매핑 → PR body 메타 → 포기
-    const channelId =
-      (dispatchId ? lookupDispatchChannel(dispatchId) : undefined) ?? bodyChannelId;
-    if (!channelId) {
-      console.warn(`[webhook] PR #${payload.pull_request.number} 채널 lookup 실패 — 검토 스킵`);
-      return;
-    }
-    if (dispatchId) clearDispatch(dispatchId);
-
     // 원래 작업 지시는 PR body 의 ``` 블록에 박혀있음(워크플로 yaml 참조)
+    const body = payload.pull_request.body ?? "";
     const instruction =
       body.match(/##\s*작업 지시\s*\n```\n([\s\S]*?)\n```/)?.[1]?.trim() ??
       "(지시 파싱 실패)";
 
-    // 디스코드 비활성이면 PR 검토 보고 경로(채널)가 없으므로 스킵.
-    if (!client) return;
-
-    // fire-and-forget — 디스코드 메인 흐름과 독립
+    // fire-and-forget — 검토 결과는 앱 보고(/api/reports)로 기록된다.
     void reviewPullRequest({
-      client,
-      channelId,
       prNumber: payload.pull_request.number,
       prTitle: payload.pull_request.title,
       prUrl: payload.pull_request.html_url,

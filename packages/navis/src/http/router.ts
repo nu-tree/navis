@@ -1,5 +1,4 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import type { Client } from "discord.js";
 import {
   handleDesktopUpload,
   handleDesktopList,
@@ -15,8 +14,7 @@ import { handleMemories } from "./memories.js";
 import { handleGithubWebhook } from "./webhook.js";
 
 // HTTP 요청 1건을 적절한 핸들러로 라우팅한다. createServer 콜백에서 호출.
-// 디스코드 client 는 webhook(PR 검토 보고)에서만 필요해 클로저로 받는다.
-export function route(req: IncomingMessage, res: ServerResponse, client: Client | undefined): void {
+export function route(req: IncomingMessage, res: ServerResponse): void {
   if (req.url === "/health") {
     res.writeHead(200, { "content-type": "application/json" });
     res.end(JSON.stringify({ ok: true }));
@@ -24,7 +22,7 @@ export function route(req: IncomingMessage, res: ServerResponse, client: Client 
   }
 
   if (req.url === "/webhook/github" && req.method === "POST") {
-    void handleGithubWebhook(req, res, client);
+    void handleGithubWebhook(req, res);
     return;
   }
 

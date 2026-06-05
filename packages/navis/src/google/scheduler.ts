@@ -1,8 +1,7 @@
 import cron from "node-cron";
-import type { Client } from "discord.js";
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import { config } from "../config.js";
-import { sendToChannel } from "../discord/send.js";
+import { emitReport } from "../reports/emit.js";
 import { getCalendar, isCalendarEnabled } from "./auth.js";
 
 // 자동 일정 처리 스케줄러.
@@ -42,15 +41,12 @@ function markNotified(id: string): void {
   }
 }
 
-let discord: Client | undefined;
-
-export function startCalendarScheduler(client: Client | undefined): void {
-  discord = client;
+export function startCalendarScheduler(): void {
   if (!isCalendarEnabled()) {
     console.log("[calendar] 비활성 (GOOGLE_* env 미설정) — 스케줄러 미시작");
     return;
   }
-  // navisChannelId 가 없어도 동작 — 알림은 앱(/api/reports)으로 간다. 디스코드는 옵션.
+  // 알림은 앱(/api/reports)으로 간다.
   cron.schedule(UPCOMING_CHECK_CRON, () => void runUpcomingCheck(), { timezone: TIMEZONE });
   cron.schedule(FOLLOWUP_CRON, () => void runDailyFollowup(), { timezone: TIMEZONE });
   console.log(
@@ -86,7 +82,7 @@ async function runUpcomingCheck(): Promise<void> {
     }
   } catch (err) {
     console.error("[calendar] upcoming 실패:", err);
-    await sendToChannel(discord, config.navisChannelId, `[calendar] upcoming 확인 실패: ${err instanceof Error ? err.message : String(err)}`, "calendar").catch(() => {});
+    emitReport(`[calendar] upcoming 확인 실패: ${err instanceof Error ? err.message : String(err)}`, "calendar");
   }
 }
 
@@ -110,7 +106,7 @@ async function notifyUpcoming(e: {
     verdict,
   ];
   if (e.htmlLink) lines.push("", e.htmlLink);
-  await sendToChannel(discord, config.navisChannelId, lines.join("\n"), "calendar");
+  emitReport(lines.join("\n"), "calendar");
 }
 
 // 다가오는 일정 1건에 대해 sub-agent 가 namory 컨텍스트 보고 짧게 평가.
@@ -120,7 +116,7 @@ const UPCOMING_SYSTEM_PROMPT = `너는 navis 의 일정 도우미 서브에이�
 1) namory recall 로 일정 제목/장소/참가자 관련 과거 기억을 1~2회 찾아본다(필요할 때만).
 2) 다음 3가지를 골라 짧게: 빠뜨릴 만한 준비물·맥락, 시간/장소 주의, 한 줄 격려/조언.
 3) 모르면 모른다고. 추측 금지. 5줄 넘기지 말 것.
-4) markdown 헤더 금지(디스코드에 그대로 발송). 머리말("**임박한 일정**") 붙이지 말 것 — 호출자가 붙임.`;
+4) markdown 헤더 금지(앱에 그대로 표시). 머리말("**임박한 일정**") 붙이지 말 것 — 호출자가 붙임.`;
 
 async function evaluateUpcoming(e: {
   summary?: string | null;
@@ -197,16 +193,11 @@ async function runDailyFollowup(): Promise<void> {
     }
     const summary = await runFollowupAgent(events);
     if (summary) {
-      await sendToChannel(
-        discord,
-        config.navisChannelId,
-        `**오늘 일정 follow-up**\n\n${summary}`,
-        "calendar",
-      );
+      emitReport(`**오늘 일정 follow-up**\n\n${summary}`, "calendar");
     }
   } catch (err) {
     console.error("[calendar] follow-up 실패:", err);
-    await sendToChannel(discord, config.navisChannelId, `[calendar] follow-up 실패: ${err instanceof Error ? err.message : String(err)}`, "calendar").catch(() => {});
+    emitReport(`[calendar] follow-up 실패: ${err instanceof Error ? err.message : String(err)}`, "calendar");
   }
 }
 
@@ -219,7 +210,7 @@ const FOLLOWUP_SYSTEM_PROMPT = `너는 navis 의 일정 follow-up 서브에이�
 규칙:
 - source 는 항상 "navis-calendar-followup". project 는 비워둠.
 - 도구 호출 결과의 duplicates 가 있으면 그 항목은 이미 namory 에 있다는 뜻 — 다시 안 만들고 다음으로 진행.
-- markdown 헤더 금지(디스코드에 그대로 발송). 머리말 금지.`;
+- markdown 헤더 금지(앱에 그대로 표시). 머리말 금지.`;
 
 interface RawCalEvent {
   id?: string | null;

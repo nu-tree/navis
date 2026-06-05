@@ -80,22 +80,7 @@ function optionalGoogleAuth():
   return { clientId, clientSecret, refreshToken };
 }
 
-// 허용된 디스코드 유저 ID 목록 (쉼표 구분). 디스코드 봇 모드에서만 필수.
-// CLI 모드는 디스코드와 무관하므로 비어 있어도 통과 — 실제 검증은 startDiscord() 진입 시.
-function parseAllowedUsers(): string[] {
-  const raw = process.env.ALLOWED_USER_IDS ?? "";
-  return raw
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
 export const config = {
-  // 디스코드 봇 모드에서만 필요. CLI 모드(navis 명령)는 사용 안 함.
-  // 실제 사용 진입점(startDiscord)에서 검증해 누락 시 그때 종료한다.
-  discordToken: optional("DISCORD_TOKEN"),
-  allowedUserIds: parseAllowedUsers(),
-
   // Claude Code 구독 OAuth 토큰. SDK가 process.env에서 자동으로 읽으므로
   // 여기선 존재 여부만 검증한다 (없으면 인증 실패로 모든 호출이 깨짐).
   // `claude setup-token` 으로 발급.
@@ -141,17 +126,11 @@ export const config = {
   // 발급: Google Cloud Console OAuth 동의 화면(테스트 모드) → Web app 클라이언트 →
   // OAuth Playground 에서 refresh_token 1회 발급(README 참조).
   google: optionalGoogleAuth(),
-  // navis 가 사용자에게 먼저 말 거는(자동 트리거) 메시지가 가는 통합 채널.
-  //   - 주간 기억 다이제스트
-  //   - 다가오는 캘린더 일정 알림 + 매일 23시 follow-up
-  //   - (미래) dreaming · 선제 조언 등
-  // 미설정이면 자동 트리거 전체 비활성. 모델이 직접 호출하는 도구는 그대로 동작.
-  navisChannelId: optional("NAVIS_CHANNEL_ID"),
 
   // 주간 기억 다이제스트: navis가 정기적으로 최근 기억을 요약해 자기이해 프로필에
-  // 반영하고(자동 압축), 요약을 디스코드로 보고한다. namory의 수동 profile_update
+  // 반영하고(자동 압축), 요약을 앱 보고로 기록한다. namory의 수동 profile_update
   // 누락을 메우는 자동화. 이 경로에서만 profile_update를 허용(대화 경로는 계속 차단).
-  // 스케줄·기간은 운영 튜닝이라 코드 상수, 채널은 navisChannelId 공용.
+  // 스케줄·기간은 운영 튜닝이라 코드 상수.
   digestSchedule: "0 9 * * 1", // 월요일 09시 KST
   digestTimezone: "Asia/Seoul",
   digestDays: 7, // 요약 대상 기간(일) — 지난 한 주

@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { config } from "../config.js";
 import { askClaude } from "../claude/ask.js";
 import { curateTurn } from "../claude/curator.js";
-import { collectImagesFromDataUrls } from "../discord/image.js";
+import { collectImagesFromDataUrls } from "../claude/images.js";
 import type { InputImage } from "../claude/types.js";
 import {
   CORS_HEADERS,
