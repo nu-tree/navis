@@ -17,6 +17,8 @@ export type Conversation = {
   updatedAt: string;
   // 카톡식 안 읽은 메시지 수 — 비활성 방에 navis 메시지/보고가 오면 +1, 방 열면 0.
   unread?: number;
+  // 보고방 숨김 — 목록에서 가리되 데이터/크론은 유지(언제든 다시 보이게).
+  hidden?: boolean;
 };
 
 // navis /api/reports 응답 항목
@@ -50,6 +52,11 @@ type ChatStore = {
   ensureReportRoom: (sourceId: string, title: string) => void;
   // navis 선제 보고를 출처(sourceId) 방에 추가(없으면 방 생성, 중복 id 무시)
   appendReport: (report: Report) => void;
+  // 보고방 숨김/해제
+  hideConversation: (id: string) => void;
+  unhideConversation: (id: string) => void;
+  // 같은 kind 안에서 보이는 방들의 새 순서(id 배열)로 재정렬 — 드래그앤드롭용
+  reorderConversations: (kind: ConversationKind, orderedVisibleIds: string[]) => void;
 };
 
 function now(): string {
@@ -224,6 +231,36 @@ export const useChatStore = create<ChatStore>()(
         updatedAt: ts,
       };
       return { conversations: [...s.conversations, room] };
+    }),
+
+  hideConversation: (id) =>
+    set((s) => ({
+      conversations: s.conversations.map((c) =>
+        c.id === id ? { ...c, hidden: true } : c,
+      ),
+    })),
+
+  unhideConversation: (id) =>
+    set((s) => ({
+      conversations: s.conversations.map((c) =>
+        c.id === id ? { ...c, hidden: false } : c,
+      ),
+    })),
+
+  // 보이는(숨김 아닌) kind 슬롯을 새 순서로 채운다. 숨김·다른 kind 항목은 자리 유지.
+  reorderConversations: (kind, orderedVisibleIds) =>
+    set((s) => {
+      const byId = new Map(s.conversations.map((c) => [c.id, c] as const));
+      const next = orderedVisibleIds
+        .map((id) => byId.get(id))
+        .filter((c): c is Conversation => !!c && c.kind === kind && !c.hidden);
+      if (next.length === 0) return s;
+      let i = 0;
+      return {
+        conversations: s.conversations.map((c) =>
+          c.kind === kind && !c.hidden ? next[i++] ?? c : c,
+        ),
+      };
     }),
 
   appendReport: (report) =>

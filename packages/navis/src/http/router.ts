@@ -9,7 +9,7 @@ import {
 import { handlePreflight } from "./respond.js";
 import { handleChat, handleChatStream } from "./chat.js";
 import { handleReports, handlePostReport } from "./reports.js";
-import { handleCrons } from "./crons.js";
+import { handleCrons, handleDeleteCron } from "./crons.js";
 import { handleMemories } from "./memories.js";
 import { handleGithubWebhook } from "./webhook.js";
 
@@ -46,7 +46,15 @@ export function route(req: IncomingMessage, res: ServerResponse): void {
 
   if (req.url?.startsWith("/api/crons")) {
     if (req.method === "OPTIONS") return handlePreflight(res);
-    if (req.method === "GET") return void handleCrons(req, res);
+    const curl = new URL(req.url, "http://localhost");
+    if (req.method === "GET" && curl.pathname === "/api/crons") {
+      return void handleCrons(req, res);
+    }
+    // DELETE /api/crons/:id — 크론 삭제(앱 "크론 보고방 나가기")
+    if (req.method === "DELETE" && curl.pathname.startsWith("/api/crons/")) {
+      const id = decodeURIComponent(curl.pathname.slice("/api/crons/".length));
+      return void handleDeleteCron(req, res, id);
+    }
   }
 
   if (req.url?.startsWith("/api/memories")) {

@@ -6,7 +6,7 @@ import { config } from "../config.js";
 // 네이티브 앱은 CORS 무관하지만 데스크톱(Electron/웹뷰) preflight 대비 헤더를 둔다.
 export const CORS_HEADERS = {
   "access-control-allow-origin": "*",
-  "access-control-allow-methods": "POST, OPTIONS",
+  "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS",
   "access-control-allow-headers": "authorization, content-type",
 } as const;
 

@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { fetchCrons } from "../cron/api.js";
+import { fetchCrons, deleteCronRemote } from "../cron/api.js";
+import { unscheduleCron } from "../cron/scheduler.js";
 import { requireAppAuth, sendJson } from "./respond.js";
 
 // 앱이 크론 목록을 받아 크론마다 보고방을 미리 만든다(한눈에 보기). 프롬프트 등 민감
@@ -19,6 +20,25 @@ export async function handleCrons(req: IncomingMessage, res: ServerResponse): Pr
     sendJson(res, 200, { crons: safe });
   } catch (err) {
     console.error("[crons] 조회 실패:", err);
+    sendJson(res, 502, { error: "upstream error" });
+  }
+}
+
+// 크론 삭제 — namory(영속)에서 지우고 로컬 스케줄러에서도 즉시 내린다.
+// 앱에서 "크론 보고방 나가기" 가 이걸 호출한다.
+export async function handleDeleteCron(
+  req: IncomingMessage,
+  res: ServerResponse,
+  id: string,
+): Promise<void> {
+  if (!requireAppAuth(req, res)) return;
+  if (!id) return sendJson(res, 400, { error: "cron id required" });
+  try {
+    await deleteCronRemote(id); // namory DELETE /crons/:id
+    unscheduleCron(id); // 등록된 node-cron 잡 중단(있으면)
+    sendJson(res, 200, { ok: true, id });
+  } catch (err) {
+    console.error("[crons] 삭제 실패:", err);
     sendJson(res, 502, { error: "upstream error" });
   }
 }
