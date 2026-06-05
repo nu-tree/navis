@@ -113,8 +113,19 @@ async function createWindow() {
   });
 
   if (isDev) {
-    // 개발: Expo 웹 dev 서버 (packages/app 에서 `pnpm web` 먼저 실행)
-    await win.loadURL('http://localhost:8081');
+    // 개발: Expo 웹 dev 서버(packages/app 에서 `pnpm web`). 아직 안 떴을 수 있으니
+    // 붙을 때까지 재시도 — 두 프로세스 시작 순서에 안 휘둘리고, ERR_CONNECTION_REFUSED 로
+    // 죽지 않게. 서버가 뜨면 자동으로 로드된다.
+    const devUrl = 'http://localhost:8081';
+    for (let i = 0; i < 120; i++) {
+      try {
+        await win.loadURL(devUrl);
+        break;
+      } catch {
+        if (i === 0) console.log(`[dev] ${devUrl} 대기 중… (packages/app 에서 pnpm web 실행)`);
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+    }
   } else {
     const port = await startStaticServer();
     await win.loadURL(`http://127.0.0.1:${port}`);
