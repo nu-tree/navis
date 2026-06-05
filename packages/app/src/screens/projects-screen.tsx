@@ -97,26 +97,33 @@ export function ProjectsScreen() {
       </View>
 
       {categories.length > 0 ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          className="max-h-12 border-b border-border"
-          contentContainerStyle={{ gap: 8, paddingHorizontal: 12, paddingVertical: 8 }}
-        >
-          <Chip label="전체" count={memories.length} active={filter === null} onPress={() => setFilter(null)} />
-          {categories.map(([cat, n]) => (
-            <Chip
-              key={cat}
-              label={categoryLabel(cat)}
-              count={n}
-              active={filter === cat}
-              onPress={() => setFilter(filter === cat ? null : cat)}
-            />
-          ))}
-        </ScrollView>
+        <View className="border-b border-border" style={{ height: 52 }}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={{ flexGrow: 0 }}
+            contentContainerStyle={{
+              gap: 8,
+              paddingHorizontal: 12,
+              alignItems: 'center',
+            }}
+          >
+            <Chip label="전체" count={memories.length} active={filter === null} onPress={() => setFilter(null)} />
+            {categories.map(([cat, n]) => (
+              <Chip
+                key={cat}
+                label={categoryLabel(cat)}
+                count={n}
+                active={filter === cat}
+                onPress={() => setFilter(filter === cat ? null : cat)}
+              />
+            ))}
+          </ScrollView>
+        </View>
       ) : null}
 
       <SectionList
+        className="flex-1"
         sections={sections}
         keyExtractor={(m) => m.id}
         stickySectionHeadersEnabled
