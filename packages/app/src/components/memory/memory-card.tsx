@@ -1,21 +1,30 @@
 import { View } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Text } from '../ui/text';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { formatDate } from '../../lib/format';
+import { categoryLabel } from '../../lib/category';
 import type { Memory } from '../../api/navis';
 
 export type MemoryCardProps = {
   memory: Memory;
+  // 리스트에서의 순서 — 등장 애니메이션을 살짝 계단식으로 지연시키는 데 쓴다.
+  index?: number;
   onEdit: () => void;
   onDelete: () => void;
 };
 
-export function MemoryCard({ memory, onEdit, onDelete }: MemoryCardProps) {
+export function MemoryCard({ memory, index = 0, onEdit, onDelete }: MemoryCardProps) {
   return (
-    <View className="mb-2 rounded-2xl border border-border bg-card p-3.5">
+    <Animated.View
+      entering={FadeInDown.duration(260).delay(Math.min(index, 8) * 35)}
+      className="mb-2 rounded-2xl border border-border bg-card p-3.5 transition-colors hover:border-muted-foreground"
+    >
       <View className="mb-1.5 flex-row items-center gap-2">
-        {memory.category ? <Badge label={memory.category} variant="secondary" /> : null}
+        {memory.category ? (
+          <Badge label={categoryLabel(memory.category)} variant="secondary" />
+        ) : null}
         {memory.project ? (
           <Text variant="caption" className="text-muted-foreground">
             #{memory.project}
@@ -39,6 +48,6 @@ export function MemoryCard({ memory, onEdit, onDelete }: MemoryCardProps) {
           onPress={onDelete}
         />
       </View>
-    </View>
+    </Animated.View>
   );
 }

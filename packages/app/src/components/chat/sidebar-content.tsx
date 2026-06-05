@@ -14,8 +14,8 @@ export type SidebarContentProps = {
 export function SidebarContent({ onAfterSelect, onCollapse }: SidebarContentProps) {
   const setScreen = useUiStore((s) => s.setScreen);
 
-  const goMemories = () => {
-    setScreen('memories');
+  const go = (screen: 'memories' | 'projects') => () => {
+    setScreen(screen);
     onAfterSelect?.();
   };
 
@@ -27,7 +27,7 @@ export function SidebarContent({ onAfterSelect, onCollapse }: SidebarContentProp
           <Pressable
             hitSlop={8}
             onPress={onCollapse}
-            className="h-8 w-8 items-center justify-center rounded-lg active:bg-secondary"
+            className="h-8 w-8 items-center justify-center rounded-lg cursor-pointer active:bg-secondary hover:bg-secondary"
           >
             <Text className="text-lg text-muted-foreground">‹</Text>
           </Pressable>
@@ -35,13 +35,20 @@ export function SidebarContent({ onAfterSelect, onCollapse }: SidebarContentProp
       </View>
       <ConversationList onAfterSelect={onAfterSelect} />
 
-      <Pressable
-        onPress={goMemories}
-        className="mx-2 mb-1 flex-row items-center gap-2 rounded-xl border-t border-border px-3 py-3 active:bg-secondary"
-      >
-        <Text className="text-base">🧠</Text>
-        <Text className="font-medium">내 기억</Text>
-      </Pressable>
+      <View className="border-t border-border pt-1">
+        <Pressable
+          onPress={go('memories')}
+          className="mx-2 flex-row items-center rounded-xl px-3 py-2.5 cursor-pointer transition-colors active:bg-secondary hover:bg-secondary"
+        >
+          <Text className="font-medium">내 기억</Text>
+        </Pressable>
+        <Pressable
+          onPress={go('projects')}
+          className="mx-2 mb-1 flex-row items-center rounded-xl px-3 py-2.5 cursor-pointer transition-colors active:bg-secondary hover:bg-secondary"
+        >
+          <Text className="font-medium">프로젝트별 정리</Text>
+        </Pressable>
+      </View>
     </>
   );
 }

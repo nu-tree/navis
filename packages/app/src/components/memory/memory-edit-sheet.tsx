@@ -4,17 +4,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '../ui/text';
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
-import { Select, type SelectOption } from '../ui/select';
+import { Select } from '../ui/select';
+import { CATEGORY_OPTIONS } from '../../lib/category';
 import type { Memory, MemoryPatch } from '../../api/navis';
-
-const CATEGORY_OPTIONS: SelectOption[] = [
-  { label: '결정 (decision)', value: 'decision' },
-  { label: '배움 (learning)', value: 'learning' },
-  { label: '아이디어 (idea)', value: 'idea' },
-  { label: '감정 (feeling)', value: 'feeling' },
-  { label: '사람 (people)', value: 'people' },
-  { label: '할 일 (todo)', value: 'todo' },
-];
 
 export type MemoryEditSheetProps = {
   memory: Memory | null;

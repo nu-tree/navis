@@ -33,7 +33,7 @@ export function ChatHeader({
       )}
     >
       {showMenu ? (
-        <Pressable hitSlop={8} onPress={onMenu} className="h-9 w-9 items-center justify-center rounded-lg active:bg-secondary">
+        <Pressable hitSlop={8} onPress={onMenu} className="h-9 w-9 items-center justify-center rounded-lg cursor-pointer transition-colors active:bg-secondary hover:bg-secondary">
           <Text className="text-xl text-foreground">☰</Text>
           {unread > 0 ? (
             <View className="absolute right-1 top-1 min-w-[16px] items-center justify-center rounded-full bg-destructive px-1">
@@ -58,7 +58,7 @@ export function ChatHeader({
         ) : null}
       </View>
 
-      <Pressable hitSlop={8} onPress={onNewChat} className="h-9 w-9 items-center justify-center rounded-lg active:bg-secondary">
+      <Pressable hitSlop={8} onPress={onNewChat} className="h-9 w-9 items-center justify-center rounded-lg cursor-pointer transition-colors active:bg-secondary hover:bg-secondary">
         <Text className="text-2xl text-foreground">＋</Text>
       </Pressable>
     </View>

@@ -1,7 +1,6 @@
 import { Pressable, ScrollView, View } from 'react-native';
 import { cn } from '../../lib/cn';
 import { Text } from '../ui/text';
-import { Button } from '../ui/button';
 import { useChatStore, type Conversation } from '../../store/chat-store';
 
 export type ConversationListProps = {
@@ -32,8 +31,8 @@ function Row({
     <Pressable
       onPress={onPress}
       className={cn(
-        'mb-1 flex-row items-center gap-2 rounded-xl px-3 py-2.5 active:opacity-80',
-        active ? 'bg-secondary' : 'bg-transparent',
+        'mb-1 flex-row items-center gap-2 rounded-xl px-3 py-2.5 cursor-pointer transition-colors active:opacity-80',
+        active ? 'bg-secondary' : 'bg-transparent hover:bg-muted',
       )}
     >
       <View className="flex-1">
@@ -59,7 +58,11 @@ function Row({
         </View>
       ) : null}
       {onDelete ? (
-        <Pressable hitSlop={8} onPress={onDelete} className="px-1.5 py-1 active:opacity-60">
+        <Pressable
+          hitSlop={8}
+          onPress={onDelete}
+          className="rounded-md px-1.5 py-1 cursor-pointer active:opacity-60 hover:bg-secondary"
+        >
           <Text className="text-muted-foreground">✕</Text>
         </Pressable>
       ) : null}
@@ -80,7 +83,6 @@ export function ConversationList({ onAfterSelect }: ConversationListProps) {
   const activeId = useChatStore((s) => s.activeId);
   const selectConversation = useChatStore((s) => s.selectConversation);
   const deleteConversation = useChatStore((s) => s.deleteConversation);
-  const newConversation = useChatStore((s) => s.newConversation);
 
   const chats = conversations.filter((c) => c.kind === 'chat');
   const reports = conversations.filter((c) => c.kind === 'report');
@@ -90,18 +92,9 @@ export function ConversationList({ onAfterSelect }: ConversationListProps) {
     onAfterSelect?.();
   };
 
-  const handleNew = () => {
-    newConversation();
-    onAfterSelect?.();
-  };
-
   return (
     <View className="flex-1">
-      <View className="px-3 pb-1 pt-1">
-        <Button label="＋  새 대화" variant="secondary" onPress={handleNew} />
-      </View>
-
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 8, paddingBottom: 24 }}>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 8, paddingTop: 4, paddingBottom: 24 }}>
         <SectionLabel>대화</SectionLabel>
         {chats.map((c) => (
           <Row

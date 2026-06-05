@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type Screen = 'chat' | 'memories';
+export type Screen = 'chat' | 'memories' | 'projects';
 
 type UiStore = {
   screen: Screen;

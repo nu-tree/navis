@@ -5,13 +5,16 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ChatScreen } from './src/screens/chat-screen';
 import { MemoriesScreen } from './src/screens/memories-screen';
+import { ProjectsScreen } from './src/screens/projects-screen';
 import { useUiStore } from './src/store/ui-store';
 
 const queryClient = new QueryClient();
 
 function Root() {
   const screen = useUiStore((s) => s.screen);
-  return screen === 'memories' ? <MemoriesScreen /> : <ChatScreen />;
+  if (screen === 'memories') return <MemoriesScreen />;
+  if (screen === 'projects') return <ProjectsScreen />;
+  return <ChatScreen />;
 }
 
 export default function App() {

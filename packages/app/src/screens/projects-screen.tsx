@@ -1,37 +1,46 @@
 import { useMemo, useState } from 'react';
-import { Alert, FlatList, Pressable, ScrollView, View } from 'react-native';
+import { Alert, Pressable, SectionList, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '../components/ui/text';
-import { Chip } from '../components/ui/chip';
 import { MemoryCard } from '../components/memory/memory-card';
 import { MemoryEditSheet } from '../components/memory/memory-edit-sheet';
 import { useMemories } from '../hooks/use-memories';
 import { useUiStore } from '../store/ui-store';
-import { categoryLabel } from '../lib/category';
 import type { Memory, MemoryPatch } from '../api/navis';
 
-export function MemoriesScreen() {
+const NO_PROJECT = '__none__';
+
+type Section = { project: string; title: string; data: Memory[] };
+
+export function ProjectsScreen() {
   const insets = useSafeAreaInsets();
   const setScreen = useUiStore((s) => s.setScreen);
   const { memories, isLoading, isFetching, isError, refetch, remove, patch } = useMemories();
   const [editing, setEditing] = useState<Memory | null>(null);
-  // null = 전체, 그 외엔 해당 분류만
-  const [filter, setFilter] = useState<string | null>(null);
 
-  // 실제 존재하는 분류만 칩으로 노출 (+ 각 개수)
-  const categories = useMemo(() => {
-    const counts = new Map<string, number>();
+  // 프로젝트별로 묶기 — 기억 많은 프로젝트가 위로, "프로젝트 없음"은 항상 맨 아래.
+  const sections = useMemo<Section[]>(() => {
+    const groups = new Map<string, Memory[]>();
     for (const m of memories) {
-      if (!m.category) continue;
-      counts.set(m.category, (counts.get(m.category) ?? 0) + 1);
+      const key = m.project?.trim() || NO_PROJECT;
+      const arr = groups.get(key);
+      if (arr) arr.push(m);
+      else groups.set(key, [m]);
     }
-    return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+    return [...groups.entries()]
+      .map(([project, data]) => ({
+        project,
+        title: project === NO_PROJECT ? '프로젝트 없음' : project,
+        data,
+      }))
+      .sort((a, b) => {
+        if (a.project === NO_PROJECT) return 1;
+        if (b.project === NO_PROJECT) return -1;
+        return b.data.length - a.data.length;
+      });
   }, [memories]);
 
-  const filtered = useMemo(
-    () => (filter ? memories.filter((m) => m.category === filter) : memories),
-    [memories, filter],
-  );
+  const projectCount = sections.filter((s) => s.project !== NO_PROJECT).length;
 
   const confirmDelete = (m: Memory) => {
     Alert.alert('기억 삭제', '이 기억을 영구 삭제할까?', [
@@ -48,9 +57,7 @@ export function MemoriesScreen() {
     ? '기억을 불러오지 못했어'
     : isLoading
       ? '불러오는 중…'
-      : filter
-        ? '이 분류의 기억이 없어'
-        : '아직 기억이 없어';
+      : '정리할 기억이 아직 없어';
 
   return (
     <View className="flex-1 bg-background" style={{ paddingTop: insets.top }}>
@@ -63,41 +70,34 @@ export function MemoriesScreen() {
           <Text className="text-2xl text-foreground">‹</Text>
         </Pressable>
         <View className="flex-1">
-          <Text variant="subtitle">내 기억</Text>
+          <Text variant="subtitle">프로젝트별 정리</Text>
           <Text variant="caption" className="text-muted-foreground">
-            {filter ? `${filtered.length} / ${memories.length}개` : `${memories.length}개`}
+            {projectCount}개 프로젝트 · 기억 {memories.length}개
           </Text>
         </View>
       </View>
 
-      {categories.length > 0 ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          className="max-h-12 border-b border-border"
-          contentContainerStyle={{ gap: 8, paddingHorizontal: 12, paddingVertical: 8 }}
-        >
-          <Chip label="전체" count={memories.length} active={filter === null} onPress={() => setFilter(null)} />
-          {categories.map(([cat, n]) => (
-            <Chip
-              key={cat}
-              label={categoryLabel(cat)}
-              count={n}
-              active={filter === cat}
-              onPress={() => setFilter(filter === cat ? null : cat)}
-            />
-          ))}
-        </ScrollView>
-      ) : null}
-
-      <FlatList
-        data={filtered}
+      <SectionList
+        sections={sections}
         keyExtractor={(m) => m.id}
+        stickySectionHeadersEnabled
         contentContainerStyle={{
           padding: 12,
           paddingBottom: insets.bottom + 24,
           flexGrow: 1,
         }}
+        renderSectionHeader={({ section }) => (
+          <View className="-mx-3 mb-2 mt-1 flex-row items-center gap-2 bg-background px-3 py-1.5">
+            <Text className="text-sm font-semibold text-foreground">
+              {section.project === NO_PROJECT ? section.title : `#${section.title}`}
+            </Text>
+            <View className="rounded-full bg-secondary px-2 py-0.5">
+              <Text className="text-[11px] font-semibold text-muted-foreground">
+                {section.data.length}
+              </Text>
+            </View>
+          </View>
+        )}
         renderItem={({ item, index }) => (
           <MemoryCard
             memory={item}

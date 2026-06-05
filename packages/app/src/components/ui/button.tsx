@@ -5,14 +5,14 @@ import { cn } from '../../lib/cn';
 import { Text } from './text';
 
 const buttonVariants = cva(
-  'flex-row items-center justify-center gap-2 rounded-xl active:opacity-80',
+  'flex-row items-center justify-center gap-2 rounded-xl cursor-pointer transition-opacity active:opacity-80 hover:opacity-90',
   {
     variants: {
       variant: {
         default: 'bg-primary',
         secondary: 'bg-secondary',
         outline: 'border border-border bg-transparent',
-        ghost: 'bg-transparent active:bg-secondary',
+        ghost: 'bg-transparent active:bg-secondary hover:bg-secondary',
         destructive: 'bg-destructive',
       },
       size: {
