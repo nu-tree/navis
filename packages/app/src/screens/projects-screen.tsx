@@ -7,10 +7,12 @@ import { MemoryCard } from '../components/memory/memory-card';
 import { MemoryEditSheet } from '../components/memory/memory-edit-sheet';
 import { useMemories } from '../hooks/use-memories';
 import { useUiStore } from '../store/ui-store';
-import { categoryLabel } from '../lib/category';
 import type { Memory, MemoryPatch } from '../api/navis';
 
 const NO_PROJECT = '__none__';
+
+const projectKey = (m: Memory) => m.project?.trim() || NO_PROJECT;
+const projectTitle = (key: string) => (key === NO_PROJECT ? '프로젝트 없음' : key);
 
 type Section = { project: string; title: string; data: Memory[] };
 
@@ -19,21 +21,25 @@ export function ProjectsScreen() {
   const setScreen = useUiStore((s) => s.setScreen);
   const { memories, isLoading, isFetching, isError, refetch, remove, patch } = useMemories();
   const [editing, setEditing] = useState<Memory | null>(null);
-  // null = 전체, 그 외엔 해당 분류만
+  // null = 전체, 그 외엔 해당 프로젝트만 (navis / 구미공모전 / 프로젝트 없음 …)
   const [filter, setFilter] = useState<string | null>(null);
 
-  // 존재하는 분류만 칩으로 (+ 개수)
-  const categories = useMemo(() => {
+  // 존재하는 프로젝트만 칩으로 (+ 개수). "프로젝트 없음"은 항상 맨 뒤.
+  const projects = useMemo(() => {
     const counts = new Map<string, number>();
     for (const m of memories) {
-      if (!m.category) continue;
-      counts.set(m.category, (counts.get(m.category) ?? 0) + 1);
+      const key = projectKey(m);
+      counts.set(key, (counts.get(key) ?? 0) + 1);
     }
-    return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+    return [...counts.entries()].sort((a, b) => {
+      if (a[0] === NO_PROJECT) return 1;
+      if (b[0] === NO_PROJECT) return -1;
+      return b[1] - a[1];
+    });
   }, [memories]);
 
   const visible = useMemo(
-    () => (filter ? memories.filter((m) => m.category === filter) : memories),
+    () => (filter ? memories.filter((m) => projectKey(m) === filter) : memories),
     [memories, filter],
   );
 
@@ -49,7 +55,7 @@ export function ProjectsScreen() {
     return [...groups.entries()]
       .map(([project, data]) => ({
         project,
-        title: project === NO_PROJECT ? '프로젝트 없음' : project,
+        title: projectTitle(project),
         data,
       }))
       .sort((a, b) => {
@@ -96,7 +102,7 @@ export function ProjectsScreen() {
         </View>
       </View>
 
-      {categories.length > 0 ? (
+      {projects.length > 1 ? (
         <View className="border-b border-border" style={{ height: 52 }}>
           <ScrollView
             horizontal
@@ -109,13 +115,13 @@ export function ProjectsScreen() {
             }}
           >
             <Chip label="전체" count={memories.length} active={filter === null} onPress={() => setFilter(null)} />
-            {categories.map(([cat, n]) => (
+            {projects.map(([key, n]) => (
               <Chip
-                key={cat}
-                label={categoryLabel(cat)}
+                key={key}
+                label={projectTitle(key)}
                 count={n}
-                active={filter === cat}
-                onPress={() => setFilter(filter === cat ? null : cat)}
+                active={filter === key}
+                onPress={() => setFilter(filter === key ? null : key)}
               />
             ))}
           </ScrollView>
