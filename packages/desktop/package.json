@@ -1,6 +1,6 @@
 {
   "name": "navis-desktop",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "private": true,
   "description": "navis 데스크톱 앱 (Electron — macOS/Windows)",
   "author": "nu-tree",
