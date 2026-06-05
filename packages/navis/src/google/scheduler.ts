@@ -4,6 +4,21 @@ import { config } from "../config.js";
 import { emitReport } from "../reports/emit.js";
 import { getCalendar, isCalendarEnabled } from "./auth.js";
 
+// 캘린더 작업 실패를 "한눈에 에러임을 알 수 있게" 보고로 남긴다(로그도 같이).
+// 알려진 인증 오류(invalid_grant 등)는 원인·조치까지 풀어서 적는다.
+function reportCalendarError(job: "다가오는 일정 확인" | "일정 follow-up", err: unknown): void {
+  const raw = err instanceof Error ? err.message : String(err);
+  console.error(`[calendar] ${job} 실패:`, err);
+  const isAuth = /invalid_grant|invalid_client|unauthorized|invalid_token|token/i.test(raw);
+  const cause = isAuth
+    ? "구글 인증 토큰 만료/취소(invalid_grant) — GOOGLE_REFRESH_TOKEN 재발급이 필요해요. (OAuth 동의화면이 '테스트' 모드면 7일마다 만료 → '게시'로 전환 권장)"
+    : raw;
+  emitReport(
+    `⚠️ 캘린더 오류 — ${job} 실패\n\n원인: ${cause}`,
+    "calendar",
+  );
+}
+
 // 자동 일정 처리 스케줄러.
 //
 // 잡 1) 다가오는 일정 알림 (매 30분)
@@ -81,9 +96,7 @@ async function runUpcomingCheck(): Promise<void> {
       markNotified(e.id); // 성공/실패 모두 mark — 실패해도 다음 cron에서 중복 알림 방지
     }
   } catch (err) {
-    // 폴링 실패(예: invalid_grant=토큰 만료)는 30분마다 반복되므로 보고로 띄우지 않고
-    // 로그만 남긴다 — 보고방 스팸 방지. 토큰을 고치면 정상 알림이 다시 뜬다.
-    console.error("[calendar] upcoming 실패:", err);
+    reportCalendarError("다가오는 일정 확인", err);
   }
 }
 
@@ -197,8 +210,7 @@ async function runDailyFollowup(): Promise<void> {
       emitReport(`**오늘 일정 follow-up**\n\n${summary}`, "calendar");
     }
   } catch (err) {
-    // 실패는 로그만(보고방 스팸 방지).
-    console.error("[calendar] follow-up 실패:", err);
+    reportCalendarError("일정 follow-up", err);
   }
 }
 
