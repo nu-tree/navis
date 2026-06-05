@@ -95,7 +95,7 @@ async function runReview(
   for await (const message of query({
     prompt,
     options: {
-      // 코드 리뷰는 정확도 중요. sonnet 충분 (opus 까진 과함).
+      // 코드 리뷰는 정확도 중요 — Opus 4.8 사용(config.reviewModel).
       model: config.reviewModel,
       systemPrompt: REVIEW_SYSTEM_PROMPT,
       // 도구 호출 불필요 — diff 는 프롬프트에 다 박아둠.

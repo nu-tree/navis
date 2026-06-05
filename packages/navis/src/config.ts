@@ -92,16 +92,16 @@ export const config = {
   // namory 엔드포인트 보호 토큰 (namory의 NAMORY_TOKEN과 동일 값).
   namoryToken: required("NAMORY_TOKEN"),
 
-  // 모델 (구독 한도에 따라 가용 모델 다름). 기본 sonnet = 비용/품질 균형.
+  // 모델 — 전부 Opus 4.8 로 통일(메인·큐레이터·검토). 최고 품질 우선.
   // 운영 튜닝 상수 — 바꾸려면 코드 수정(보안·환경 무관 값은 env로 빼지 않는다).
-  model: "claude-sonnet-4-6",
-  // 큐레이터(사후 저장 판단)용 경량 모델. 메인 모델보다 저렴하고 빠른 Haiku 사용.
-  curatorModel: "claude-haiku-4-5-20251001",
-  reviewModel: process.env.NAVIS_REVIEW_MODEL ?? "claude-sonnet-4-6",
+  model: "claude-opus-4-8",
+  // 큐레이터(사후 저장 판단)도 Opus 4.8 (예전엔 경량 Haiku 였음).
+  curatorModel: "claude-opus-4-8",
+  reviewModel: process.env.NAVIS_REVIEW_MODEL ?? "claude-opus-4-8",
 
   // 대화 맥락 유지 한도(토큰). 한 대화의 컨텍스트가 이걸 넘으면 다음 메시지부터
   // 새 세션으로 리셋하고 사용자에게 알린다. 잊힌 맥락은 namory가 받쳐줌.
-  // 기본 150k = sonnet 200k 창의 75%. 모델 한계·SDK 자동압축 전에 우리가 제어.
+  // 기본 150k = opus 200k 창의 75%. 모델 한계·SDK 자동압축 전에 우리가 제어.
   contextTokenLimit: 150_000,
 
   // 자기 소스 조회용 GitHub 레포. navis가 디스코드 대화 중 read_repo_file/list_repo_files

@@ -12,7 +12,7 @@ import { config } from "../config.js";
 // - 중복 방지: 저장 전 recall로 유사 기억이 이미 있는지 점검(임계값 이상이면 스킵)
 // - 출처 표기: source="navis-curator" 로 수동 저장과 구분 가능
 
-const CURATOR_MODEL = "claude-haiku-4-5-20251001";
+const CURATOR_MODEL = "claude-opus-4-8";
 
 // 큐레이터 시스템 프롬프트는 personality가 아닌 instruction이므로 코드 상수로 둔다
 // (SYSTEM_PROMPT env와 분리 — 봇 성격은 메인 턴에만 적용).
