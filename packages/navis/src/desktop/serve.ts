@@ -11,7 +11,7 @@
 // 인증은 navis 의 기존 APP_API_TOKEN(config.appApiToken)을 그대로 재사용한다.
 // 토큰은 Authorization: Bearer 헤더 또는 ?token= 쿼리(브라우저 다운로드 링크용)로 받는다.
 import { createReadStream, createWriteStream } from "node:fs";
-import { mkdir, readdir, stat } from "node:fs/promises";
+import { mkdir, readdir, stat, unlink } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import { timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -45,6 +45,21 @@ function authed(req: IncomingMessage, url: URL): boolean {
   const b = Buffer.from(token);
   if (a.length !== b.length) return false;
   return timingSafeEqual(a, b);
+}
+
+// 파일명에서 시맨틱 버전(X.Y.Z) 추출. 없으면 undefined(=버전 무관 파일, 예: latest*.yml).
+function parseVersion(name: string): string | undefined {
+  return name.match(/\d+\.\d+\.\d+/)?.[0];
+}
+
+function compareVersion(a: string, b: string): number {
+  const pa = a.split(".").map(Number);
+  const pb = b.split(".").map(Number);
+  for (let i = 0; i < 3; i++) {
+    const d = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (d) return d;
+  }
+  return 0;
 }
 
 // 경로 탈출 방지: basename 만 취하고 DIR 안으로 resolve 되는지 재확인.
@@ -143,6 +158,65 @@ export async function handleDesktopList(
     console.error("[desktop] 목록 실패:", err);
     res.writeHead(500, { "content-type": "application/json" });
     res.end(JSON.stringify({ error: "list failed" }));
+  }
+}
+
+// POST /api/desktop/prune — 플랫폼별 최신 버전만 남기고 옛 버전 설치파일(+blockmap)을 지운다.
+// 릴리스 후 upload.mjs 가 모든 업로드를 마친 뒤 한 번 호출. 같은 아티팩트의 옛 버전이
+// 쌓여 다운로드 페이지에 중복으로 보이거나 디스크를 먹는 걸 막는다.
+//   - 그룹 키 = 파일명에서 버전(X.Y.Z)을 뺀 것. 예) Navis-0.1.5-arm64.dmg → "Navis--arm64.dmg".
+//     같은 키 안에서 최신 버전만 남기고 나머지 삭제(blockmap 도 자기 키로 함께 정리됨).
+//   - 버전이 없는 파일(latest*.yml, builder-debug.yml 등)은 그룹에 안 들어가 항상 보존.
+export async function handleDesktopPrune(
+  req: IncomingMessage,
+  res: ServerResponse,
+  url: URL,
+): Promise<void> {
+  if (!authed(req, url)) {
+    res.writeHead(401, { "content-type": "application/json" });
+    res.end(JSON.stringify({ error: "unauthorized" }));
+    return;
+  }
+  try {
+    const names = await readdir(DIR).catch(() => [] as string[]);
+
+    // 버전 있는 파일만 "버전 제거 키"로 그룹핑.
+    const groups = new Map<string, string[]>();
+    for (const n of names) {
+      if (!parseVersion(n)) continue;
+      const key = n.replace(/\d+\.\d+\.\d+/, "");
+      const arr = groups.get(key) ?? [];
+      arr.push(n);
+      groups.set(key, arr);
+    }
+
+    const deleted: string[] = [];
+    for (const arr of groups.values()) {
+      if (arr.length < 2) continue;
+      // 그룹 내 최신 버전 파일.
+      const latest = arr.reduce((a, b) =>
+        compareVersion(parseVersion(a) ?? "0.0.0", parseVersion(b) ?? "0.0.0") >= 0 ? a : b,
+      );
+      for (const n of arr) {
+        if (n === latest) continue;
+        const p = safePath(n);
+        if (!p) continue;
+        try {
+          await unlink(p);
+          deleted.push(n);
+        } catch (err) {
+          console.error(`[desktop] prune 삭제 실패 ${n}:`, err);
+        }
+      }
+    }
+
+    if (deleted.length) console.log(`[desktop] prune: ${deleted.length}개 삭제 — ${deleted.join(", ")}`);
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ deleted }));
+  } catch (err) {
+    console.error("[desktop] prune 실패:", err);
+    res.writeHead(500, { "content-type": "application/json" });
+    res.end(JSON.stringify({ error: "prune failed" }));
   }
 }
 

@@ -4,6 +4,7 @@ import {
   handleDesktopUpload,
   handleDesktopList,
   handleDesktopFile,
+  handleDesktopPrune,
   handleDownloadPage,
 } from "../desktop/serve.js";
 import { handlePreflight } from "./respond.js";
@@ -67,6 +68,9 @@ export function route(req: IncomingMessage, res: ServerResponse, client: Client 
     }
     if (durl.pathname === "/api/desktop/list" && req.method === "GET") {
       return void handleDesktopList(req, res, durl);
+    }
+    if (durl.pathname === "/api/desktop/prune" && req.method === "POST") {
+      return void handleDesktopPrune(req, res, durl);
     }
     if (durl.pathname.startsWith("/api/desktop/file/") && req.method === "GET") {
       return void handleDesktopFile(req, res, durl);

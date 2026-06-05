@@ -50,3 +50,18 @@ for (const name of targets) {
   console.log(`[upload] OK ${name} (${(body.length / 1048576).toFixed(1)} MB)`);
 }
 console.log(`[upload] 완료 — ${targets.length}개 파일 → ${NAVIS_URL}`);
+
+// 업로드가 끝나면 플랫폼별 옛 버전 설치파일을 정리(최신만 유지).
+const pruneRes = await fetch(`${NAVIS_URL}/api/desktop/prune`, {
+  method: "POST",
+  headers: { Authorization: `Bearer ${NAVIS_TOKEN}` },
+});
+if (pruneRes.ok) {
+  const { deleted } = await pruneRes.json().catch(() => ({ deleted: [] }));
+  console.log(
+    deleted?.length ? `[prune] 옛 버전 ${deleted.length}개 삭제 — ${deleted.join(", ")}` : "[prune] 삭제할 옛 버전 없음",
+  );
+} else {
+  // 정리는 부가 작업 — 실패해도 릴리스 자체는 성공으로 둔다.
+  console.warn(`[prune] 정리 실패 ${pruneRes.status} (무시)`);
+}
