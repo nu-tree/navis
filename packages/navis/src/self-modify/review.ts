@@ -56,7 +56,7 @@ export async function reviewPullRequest(input: ReviewInput): Promise<void> {
 }
 
 // GitHub Pulls API 의 diff 미디어타입으로 raw diff 텍스트 받음. 너무 크면 잘라서 전달.
-const MAX_DIFF_CHARS = 60_000; // sonnet 컨텍스트 안에서 안전한 크기
+const MAX_DIFF_CHARS = 60_000; // 검토 모델(Opus 4.8) 컨텍스트 안에서 안전한 크기
 async function fetchPrDiff(prNumber: number): Promise<string> {
   const url = `https://api.github.com/repos/${config.githubRepo}/pulls/${prNumber}`;
   const res = await fetch(url, {
