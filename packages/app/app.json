@@ -3,7 +3,7 @@
     "name": "나비스",
     "slug": "navis",
     "scheme": "navis",
-    "version": "0.1.0",
+    "version": "0.1.2",
     "orientation": "portrait",
     "icon": "./assets/navis-logo.png",
     "userInterfaceStyle": "automatic",
@@ -14,7 +14,10 @@
       "enabled": true,
       "checkAutomatically": "ON_LOAD",
       "fallbackToCacheTimeout": 0,
-      "url": "https://u.expo.dev/e6b968a5-0016-4cce-b55a-babc17f9b2fd"
+      "url": "https://u.expo.dev/e6b968a5-0016-4cce-b55a-babc17f9b2fd",
+      "requestHeaders": {
+        "expo-channel-name": "preview"
+      }
     },
     "ios": {
       "supportsTablet": true,
