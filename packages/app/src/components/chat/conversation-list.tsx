@@ -6,6 +6,7 @@ import { confirmDestructive } from '../../lib/confirm';
 import { deleteCron } from '../../api/crons';
 import { DraggableRows } from './draggable-rows';
 import { useChatStore, type Conversation } from '../../store/chat-store';
+import { useUiStore } from '../../store/ui-store';
 
 // 드래그 정렬 슬롯 높이(행 1개분). DraggableRows 의 index 계산에 쓰임.
 const ROW_HEIGHT = 58;
@@ -87,14 +88,6 @@ function Row({
   );
 }
 
-function SectionLabel({ children }: { children: string }) {
-  return (
-    <Text variant="caption" className="px-3 pb-1 pt-3 uppercase tracking-wide text-muted-foreground">
-      {children}
-    </Text>
-  );
-}
-
 // 방 액션 시트(바텀시트) — 선택한 방에 맞는 동작만 노출.
 function ActionRow({ label, onPress, danger }: { label: string; onPress: () => void; danger?: boolean }) {
   return (
@@ -118,6 +111,8 @@ export function ConversationList({ onAfterSelect }: ConversationListProps) {
   const unhideConversation = useChatStore((s) => s.unhideConversation);
   const reorderConversations = useChatStore((s) => s.reorderConversations);
   const newConversation = useChatStore((s) => s.newConversation);
+
+  const chatTab = useUiStore((s) => s.chatTab);
 
   const [menuFor, setMenuFor] = useState<Conversation | null>(null);
   const [showHidden, setShowHidden] = useState(false);
@@ -155,79 +150,91 @@ export function ConversationList({ onAfterSelect }: ConversationListProps) {
   return (
     <View className="flex-1">
       <ScrollView contentContainerStyle={{ paddingHorizontal: 8, paddingTop: 4, paddingBottom: 24 }}>
-        <View className="flex-row items-center justify-between px-3 pb-1 pt-3">
-          <Text variant="caption" className="uppercase tracking-wide text-muted-foreground">
-            대화
-          </Text>
-          <Pressable
-            hitSlop={8}
-            onPress={handleNew}
-            className="rounded-md px-1.5 py-0.5 cursor-pointer active:opacity-60 hover:bg-secondary"
-          >
-            <Text variant="caption" className="text-muted-foreground">
-              + 새 대화
-            </Text>
-          </Pressable>
-        </View>
-        <DraggableRows
-          items={chats}
-          keyOf={(c) => c.id}
-          itemHeight={ROW_HEIGHT}
-          onReorder={(ids) => reorderConversations('chat', ids)}
-          renderRow={(c, handle) => (
-            <Row
-              conv={c}
-              active={c.id === activeId}
-              handle={handle}
-              onPress={() => select(c.id)}
-              onMenu={() => setMenuFor(c)}
-            />
-          )}
-        />
-
-        <SectionLabel>보고</SectionLabel>
-        <DraggableRows
-          items={reports}
-          keyOf={(c) => c.id}
-          itemHeight={ROW_HEIGHT}
-          onReorder={(ids) => reorderConversations('report', ids)}
-          renderRow={(c, handle) => (
-            <Row
-              conv={c}
-              active={c.id === activeId}
-              handle={handle}
-              onPress={() => select(c.id)}
-              onMenu={() => setMenuFor(c)}
-            />
-          )}
-        />
-
-        {hiddenReports.length > 0 ? (
+        {/* 채팅 탭 — 일반 대화방만 */}
+        {chatTab === 'chat' ? (
           <>
-            <Pressable
-              onPress={() => setShowHidden((v) => !v)}
-              className="mt-1 px-3 py-2 cursor-pointer active:opacity-70"
-            >
-              <Text variant="caption" className="text-muted-foreground">
-                {showHidden ? '▾' : '▸'} 숨긴 보고방 {hiddenReports.length}
+            <View className="flex-row items-center justify-end px-3 pb-1 pt-2">
+              <Pressable
+                hitSlop={8}
+                onPress={handleNew}
+                className="rounded-md px-1.5 py-0.5 cursor-pointer active:opacity-60 hover:bg-secondary"
+              >
+                <Text variant="caption" className="text-muted-foreground">
+                  + 새 대화
+                </Text>
+              </Pressable>
+            </View>
+            <DraggableRows
+              items={chats}
+              keyOf={(c) => c.id}
+              itemHeight={ROW_HEIGHT}
+              onReorder={(ids) => reorderConversations('chat', ids)}
+              renderRow={(c, handle) => (
+                <Row
+                  conv={c}
+                  active={c.id === activeId}
+                  handle={handle}
+                  onPress={() => select(c.id)}
+                  onMenu={() => setMenuFor(c)}
+                />
+              )}
+            />
+          </>
+        ) : null}
+
+        {/* 보고서 탭 — navis 선제 보고방만 */}
+        {chatTab === 'report' ? (
+          <>
+            <DraggableRows
+              items={reports}
+              keyOf={(c) => c.id}
+              itemHeight={ROW_HEIGHT}
+              onReorder={(ids) => reorderConversations('report', ids)}
+              renderRow={(c, handle) => (
+                <Row
+                  conv={c}
+                  active={c.id === activeId}
+                  handle={handle}
+                  onPress={() => select(c.id)}
+                  onMenu={() => setMenuFor(c)}
+                />
+              )}
+            />
+
+            {reports.length === 0 ? (
+              <Text variant="caption" className="px-3 pt-4 text-center text-muted-foreground">
+                아직 보고방이 없어 · navis가 보고를 보내면 여기에 모여
               </Text>
-            </Pressable>
-            {showHidden
-              ? hiddenReports.map((c) => (
-                  <Pressable
-                    key={c.id}
-                    onPress={() => unhideConversation(c.id)}
-                    className="mb-1 flex-row items-center justify-between rounded-xl px-3 py-2 cursor-pointer active:opacity-80 hover:bg-muted"
-                  >
-                    <Text numberOfLines={1} className="flex-1 text-sm text-muted-foreground">
-                      {c.title}
-                    </Text>
-                    <Text variant="caption" className="text-muted-foreground">
-                      다시 보이기
-                    </Text>
-                  </Pressable>
-                ))
-              : null}
+            ) : null}
+
+            {hiddenReports.length > 0 ? (
+              <>
+                <Pressable
+                  onPress={() => setShowHidden((v) => !v)}
+                  className="mt-1 px-3 py-2 cursor-pointer active:opacity-70"
+                >
+                  <Text variant="caption" className="text-muted-foreground">
+                    {showHidden ? '▾' : '▸'} 숨긴 보고방 {hiddenReports.length}
+                  </Text>
+                </Pressable>
+                {showHidden
+                  ? hiddenReports.map((c) => (
+                      <Pressable
+                        key={c.id}
+                        onPress={() => unhideConversation(c.id)}
+                        className="mb-1 flex-row items-center justify-between rounded-xl px-3 py-2 cursor-pointer active:opacity-80 hover:bg-muted"
+                      >
+                        <Text numberOfLines={1} className="flex-1 text-sm text-muted-foreground">
+                          {c.title}
+                        </Text>
+                        <Text variant="caption" className="text-muted-foreground">
+                          다시 보이기
+                        </Text>
+                      </Pressable>
+                    ))
+                  : null}
+              </>
+            ) : null}
           </>
         ) : null}
       </ScrollView>

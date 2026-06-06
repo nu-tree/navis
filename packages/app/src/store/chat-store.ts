@@ -96,8 +96,10 @@ function emptyConversation(): Conversation {
 }
 
 // 시드: 첫 실행 시 보여줄 빈 대화방(저장된 대화가 있으면 persist 가 덮어쓴다).
+// id 는 생성 id(`c_…`)·과거 카운터 id(`c0`)와 겹치지 않는 예약값으로 둔다 — 'c0' 면
+// 서버에 남은 실제 대화 'c0' 의 툼스톤에 시드 방이 휩쓸려 사라질 수 있다.
 const SEED_CHAT: Conversation = {
-  id: 'c0',
+  id: 'seed-chat',
   title: '나비스와의 대화',
   kind: 'chat',
   messages: [],
@@ -121,12 +123,20 @@ const REPORT_DIGEST: Conversation = {
 
 export const useChatStore = create<ChatStore>()(
   persist(
-    (set) => ({
+    (set, get) => ({
   conversations: [SEED_CHAT, REPORT_DIGEST],
   activeId: SEED_CHAT.id,
   typingIds: [],
 
   newConversation: () => {
+    // 이미 비어 있는 새 대화 방이 있으면 또 만들지 않고 그 방으로 — 빈 방 쌓임 방지.
+    const existing = get().conversations.find(
+      (c) => c.kind === 'chat' && !c.hidden && c.messages.length === 0,
+    );
+    if (existing) {
+      set({ activeId: existing.id });
+      return existing.id;
+    }
     const conv = emptyConversation();
     set((s) => ({ conversations: [conv, ...s.conversations], activeId: conv.id }));
     return conv.id;
@@ -376,3 +386,9 @@ export const useIsActiveTyping = (): boolean =>
 // 비활성 방들의 안 읽은 메시지 총합 — 헤더 메뉴(☰) 뱃지용
 export const useTotalUnread = (): number =>
   useChatStore((s) => s.conversations.reduce((sum, c) => sum + (c.unread ?? 0), 0));
+
+// 보고방의 안 읽은 보고 총합 — "보고서" 탭 뱃지용
+export const useTotalReportUnread = (): number =>
+  useChatStore((s) =>
+    s.conversations.reduce((sum, c) => (c.kind === 'report' ? sum + (c.unread ?? 0) : sum), 0),
+  );

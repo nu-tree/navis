@@ -1,7 +1,9 @@
 import { Pressable, View } from 'react-native';
+import { cn } from '../../lib/cn';
 import { Text } from '../ui/text';
 import { ConversationList } from './conversation-list';
-import { useUiStore } from '../../store/ui-store';
+import { useUiStore, type ChatTab } from '../../store/ui-store';
+import { useChatStore, useTotalReportUnread } from '../../store/chat-store';
 import { hasLocalAgent } from '../../lib/local-agent';
 
 export type SidebarContentProps = {
@@ -10,6 +12,58 @@ export type SidebarContentProps = {
   // 데스크톱 고정 사이드바에서 접기 버튼(‹) 표시. 모바일 드로어에선 생략.
   onCollapse?: () => void;
 };
+
+// 클로드 데스크톱식 상단 탭(채팅 / 보고서). 누르면 사이드바 목록과 본문이 함께 바뀐다.
+function TabBar() {
+  const chatTab = useUiStore((s) => s.chatTab);
+  const setChatTab = useUiStore((s) => s.setChatTab);
+  const reportUnread = useTotalReportUnread();
+
+  // 탭을 바꾸면 본문도 따라가도록 그 탭의 첫 방을 연다(현재 방 종류가 다를 때만).
+  const switchTab = (tab: ChatTab) => {
+    if (tab === chatTab) return;
+    setChatTab(tab);
+    const { conversations, activeId, selectConversation } = useChatStore.getState();
+    const active = conversations.find((c) => c.id === activeId);
+    if (active?.kind === tab) return;
+    const first = conversations.find((c) => c.kind === tab && !c.hidden);
+    if (first) selectConversation(first.id);
+  };
+
+  const tabs: { key: ChatTab; label: string; badge?: number }[] = [
+    { key: 'chat', label: '채팅' },
+    { key: 'report', label: '보고서', badge: reportUnread },
+  ];
+
+  return (
+    <View className="mx-3 mb-2 flex-row gap-1 rounded-xl bg-muted p-1">
+      {tabs.map((t) => {
+        const active = chatTab === t.key;
+        return (
+          <Pressable
+            key={t.key}
+            onPress={() => switchTab(t.key)}
+            className={cn(
+              'flex-1 flex-row items-center justify-center gap-1.5 rounded-lg py-1.5 cursor-pointer transition-colors',
+              active ? 'bg-background' : 'hover:bg-secondary',
+            )}
+          >
+            <Text className={cn('text-sm', active ? 'font-semibold' : 'text-muted-foreground')}>
+              {t.label}
+            </Text>
+            {t.badge ? (
+              <View className="min-w-[18px] items-center justify-center rounded-full bg-destructive px-1 py-0.5">
+                <Text className="text-[10px] font-bold text-destructive-foreground">
+                  {t.badge > 99 ? '99+' : t.badge}
+                </Text>
+              </View>
+            ) : null}
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
 
 // 대화 목록 + "내 기억"·"설정" 진입. 모바일 드로어와 데스크톱 고정 사이드바가 함께 쓴다.
 export function SidebarContent({ onAfterSelect, onCollapse }: SidebarContentProps) {
@@ -36,6 +90,7 @@ export function SidebarContent({ onAfterSelect, onCollapse }: SidebarContentProp
           </Pressable>
         ) : null}
       </View>
+      <TabBar />
       <ConversationList onAfterSelect={onAfterSelect} />
 
       <View className="border-t border-border pt-1">

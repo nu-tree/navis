@@ -2,9 +2,16 @@ import { create } from 'zustand';
 
 export type Screen = 'chat' | 'memories' | 'projects' | 'settings';
 
+// 사이드바 상단 탭 — 클로드 데스크톱처럼 "채팅"과 "보고서"를 분리한다.
+// 채팅 탭은 일반 대화방만, 보고서 탭은 navis 선제 보고방만 보여준다.
+export type ChatTab = 'chat' | 'report';
+
 type UiStore = {
   screen: Screen;
   setScreen: (screen: Screen) => void;
+  // 채팅/보고서 탭 (사이드바 + 본문이 함께 따른다)
+  chatTab: ChatTab;
+  setChatTab: (tab: ChatTab) => void;
   // 데스크톱 고정 사이드바 접기 (넓은 화면에서만 의미)
   sidebarCollapsed: boolean;
   setSidebarCollapsed: (collapsed: boolean) => void;
@@ -19,6 +26,8 @@ type UiStore = {
 export const useUiStore = create<UiStore>((set) => ({
   screen: 'chat',
   setScreen: (screen) => set({ screen }),
+  chatTab: 'chat',
+  setChatTab: (tab) => set({ chatTab: tab }),
   sidebarCollapsed: false,
   setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),

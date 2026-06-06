@@ -41,6 +41,15 @@ export function ChatScreen() {
     ensureNotifyPermission();
   }, []);
 
+  // 탭 상태는 저장하지 않으므로 항상 '채팅'으로 시작한다. 다만 저장돼 있던 활성 방이
+  // 보고방이면 첫 진입 화면이 사이드바(채팅 탭)와 어긋난다 → 탭을 활성 방 종류에 맞춘다.
+  const setChatTab = useUiStore((s) => s.setChatTab);
+  useEffect(() => {
+    if (active?.kind === 'report') setChatTab('report');
+    // 최초 마운트 시 1회만 — 이후 탭 전환은 사용자가 제어.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const isReport = active?.kind === 'report';
 
   return (
