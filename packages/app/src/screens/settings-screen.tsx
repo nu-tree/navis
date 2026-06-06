@@ -12,6 +12,19 @@ import { hasLocalAgent } from '../lib/local-agent';
 import { fetchSystemPrompt, saveSystemPrompt } from '../api/settings';
 import type { ThemeName } from '../lib/theme';
 
+// 설정 화면 안의 다른 화면(내 기억·프로젝트별 정리)으로 가는 행.
+function NavRow({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      className="flex-row items-center justify-between bg-secondary px-4 py-3 cursor-pointer active:opacity-80 hover:bg-muted"
+    >
+      <Text className="font-medium text-foreground">{label}</Text>
+      <Text className="text-lg text-muted-foreground">›</Text>
+    </Pressable>
+  );
+}
+
 function ThemeOption({ value, label, active, onPress }: { value: ThemeName; label: string; active: boolean; onPress: () => void }) {
   return (
     <Pressable
@@ -84,6 +97,16 @@ export function SettingsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 32, gap: 24 }}>
+        {/* 기억 · 데이터 — 예전엔 사이드바에 있던 진입점을 설정 안으로 모음 */}
+        <View className="gap-2">
+          <Text className="font-semibold text-foreground">기억 · 데이터</Text>
+          <View className="overflow-hidden rounded-xl border border-border">
+            <NavRow label="내 기억" onPress={() => setScreen('memories')} />
+            <View className="h-px bg-border" />
+            <NavRow label="프로젝트별 정리" onPress={() => setScreen('projects')} />
+          </View>
+        </View>
+
         {/* 테마 */}
         <View className="gap-2">
           <Text className="font-semibold text-foreground">테마</Text>

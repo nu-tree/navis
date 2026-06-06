@@ -99,19 +99,7 @@ export function SidebarContent({ onAfterSelect, onCollapse }: SidebarContentProp
       <ConversationList onAfterSelect={onAfterSelect} />
 
       <View className="border-t border-border pt-1">
-        <Pressable
-          onPress={go('memories')}
-          className="mx-2 flex-row items-center rounded-xl px-3 py-2.5 cursor-pointer transition-colors active:bg-secondary hover:bg-secondary"
-        >
-          <Text className="font-medium">내 기억</Text>
-        </Pressable>
-        <Pressable
-          onPress={go('projects')}
-          className="mx-2 flex-row items-center rounded-xl px-3 py-2.5 cursor-pointer transition-colors active:bg-secondary hover:bg-secondary"
-        >
-          <Text className="font-medium">프로젝트별 정리</Text>
-        </Pressable>
-
+        {/* '내 기억'·'프로젝트별 정리' 는 설정 화면 안으로 옮겼다(사이드바 간소화). */}
         {hasLocalAgent ? (
           <Pressable
             onPress={() => setLocalMode(!localMode)}

@@ -92,7 +92,7 @@ export function ProjectsScreen() {
       <View className="flex-row items-center gap-2 border-b border-border px-2 py-2.5">
         <Pressable
           hitSlop={8}
-          onPress={() => setScreen('chat')}
+          onPress={() => setScreen('settings')}
           className="h-9 w-9 items-center justify-center rounded-lg cursor-pointer active:bg-secondary hover:bg-secondary"
         >
           <Text className="text-2xl text-foreground">‹</Text>
