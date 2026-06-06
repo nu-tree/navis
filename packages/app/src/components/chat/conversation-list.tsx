@@ -24,7 +24,11 @@ const cronIdOf = (c: Conversation) => c.id.slice('report:'.length);
 
 function preview(conv: Conversation): string {
   const last = conv.messages[conv.messages.length - 1];
-  if (!last) return conv.kind === 'report' ? '아직 보고가 없어' : '새 대화';
+  if (!last) {
+    if (conv.kind === 'report') return '아직 보고가 없어';
+    if (conv.kind === 'code') return '내 맥에서 코딩 시작';
+    return '새 대화';
+  }
   return last.text.replace(/\s+/g, ' ').slice(0, 38);
 }
 
@@ -111,6 +115,7 @@ export function ConversationList({ onAfterSelect }: ConversationListProps) {
   const unhideConversation = useChatStore((s) => s.unhideConversation);
   const reorderConversations = useChatStore((s) => s.reorderConversations);
   const newConversation = useChatStore((s) => s.newConversation);
+  const newCodeSession = useChatStore((s) => s.newCodeSession);
 
   const chatTab = useUiStore((s) => s.chatTab);
 
@@ -120,6 +125,12 @@ export function ConversationList({ onAfterSelect }: ConversationListProps) {
   const chats = conversations.filter((c) => c.kind === 'chat' && !c.hidden);
   const reports = conversations.filter((c) => c.kind === 'report' && !c.hidden);
   const hiddenReports = conversations.filter((c) => c.kind === 'report' && c.hidden);
+  const codeSessions = conversations.filter((c) => c.kind === 'code' && !c.hidden);
+
+  const handleNewCode = () => {
+    newCodeSession();
+    onAfterSelect?.();
+  };
 
   const select = (id: string) => {
     selectConversation(id);
@@ -237,6 +248,43 @@ export function ConversationList({ onAfterSelect }: ConversationListProps) {
             ) : null}
           </>
         ) : null}
+
+        {/* 코드 탭 — 로컬 에이전트(클로드 코드) 세션만 */}
+        {chatTab === 'code' ? (
+          <>
+            <View className="flex-row items-center justify-end px-3 pb-1 pt-2">
+              <Pressable
+                hitSlop={8}
+                onPress={handleNewCode}
+                className="rounded-md px-1.5 py-0.5 cursor-pointer active:opacity-60 hover:bg-secondary"
+              >
+                <Text variant="caption" className="text-muted-foreground">
+                  + 새 코드 세션
+                </Text>
+              </Pressable>
+            </View>
+            <DraggableRows
+              items={codeSessions}
+              keyOf={(c) => c.id}
+              itemHeight={ROW_HEIGHT}
+              onReorder={(ids) => reorderConversations('code', ids)}
+              renderRow={(c, handle) => (
+                <Row
+                  conv={c}
+                  active={c.id === activeId}
+                  handle={handle}
+                  onPress={() => select(c.id)}
+                  onMenu={() => setMenuFor(c)}
+                />
+              )}
+            />
+            {codeSessions.length === 0 ? (
+              <Text variant="caption" className="px-3 pt-4 text-center text-muted-foreground">
+                "+ 새 코드 세션"으로 내 맥 폴더에서 코딩을 시작해
+              </Text>
+            ) : null}
+          </>
+        ) : null}
       </ScrollView>
 
       {/* 방 액션 시트 */}
@@ -265,16 +313,17 @@ export function ConversationList({ onAfterSelect }: ConversationListProps) {
               <ActionRow label="크론 삭제하고 나가기" danger onPress={() => leaveCron(menuFor)} />
             ) : null}
 
-            {menuFor?.kind === 'chat' ? (
+            {menuFor?.kind === 'chat' || menuFor?.kind === 'code' ? (
               <ActionRow
-                label="대화 삭제"
+                label={menuFor?.kind === 'code' ? '코드 세션 삭제' : '대화 삭제'}
                 danger
                 onPress={() => {
                   const target = menuFor;
+                  const isCode = target?.kind === 'code';
                   closeMenu();
                   confirmDestructive({
-                    title: '대화 삭제',
-                    message: '이 대화를 삭제할까?',
+                    title: isCode ? '코드 세션 삭제' : '대화 삭제',
+                    message: isCode ? '이 코드 세션을 삭제할까?' : '이 대화를 삭제할까?',
                     confirmLabel: '삭제',
                     onConfirm: () => deleteConversation(target.id),
                   });

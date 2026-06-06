@@ -2,9 +2,10 @@ import { create } from 'zustand';
 
 export type Screen = 'chat' | 'memories' | 'projects' | 'settings';
 
-// 사이드바 상단 탭 — 클로드 데스크톱처럼 "채팅"과 "보고서"를 분리한다.
-// 채팅 탭은 일반 대화방만, 보고서 탭은 navis 선제 보고방만 보여준다.
-export type ChatTab = 'chat' | 'report';
+// 사이드바 상단 탭 — 클로드 데스크톱처럼 "채팅 · 보고서 · 코드"를 분리한다.
+// 채팅 탭은 일반 대화방, 보고서 탭은 navis 선제 보고방, 코드 탭은 내 맥에서 도는
+// 로컬 에이전트(클로드 코드) 세션만 보여준다. 코드 탭은 데스크톱에서만 노출.
+export type ChatTab = 'chat' | 'report' | 'code';
 
 type UiStore = {
   screen: Screen;

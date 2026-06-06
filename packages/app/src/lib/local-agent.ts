@@ -21,8 +21,9 @@ type LocalAgentApi = {
   setConfig: (patch: LocalAgentConfigPatch) => Promise<{ ok: boolean }>;
   run: (
     prompt: string,
-    opts?: { onDelta?: (text: string) => void },
-  ) => Promise<{ text?: string; error?: string }>;
+    // resume: 이어갈 SDK 세션 id(코드 세션 멀티턴). onDelta 로 본문/도구 사용을 스트리밍.
+    opts?: { onDelta?: (text: string) => void; resume?: string },
+  ) => Promise<{ text?: string; error?: string; sessionId?: string }>;
 };
 
 function getApi(): LocalAgentApi | undefined {

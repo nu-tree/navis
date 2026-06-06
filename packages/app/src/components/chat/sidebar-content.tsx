@@ -23,16 +23,21 @@ function TabBar() {
   const switchTab = (tab: ChatTab) => {
     if (tab === chatTab) return;
     setChatTab(tab);
-    const { conversations, activeId, selectConversation } = useChatStore.getState();
+    const { conversations, activeId, selectConversation, newCodeSession } =
+      useChatStore.getState();
     const active = conversations.find((c) => c.id === activeId);
     if (active?.kind === tab) return;
     const first = conversations.find((c) => c.kind === tab && !c.hidden);
     if (first) selectConversation(first.id);
+    // 코드 탭에 세션이 하나도 없으면 빈 세션을 만들어 바로 시작할 수 있게.
+    else if (tab === 'code') newCodeSession();
   };
 
   const tabs: { key: ChatTab; label: string; badge?: number }[] = [
     { key: 'chat', label: '채팅' },
     { key: 'report', label: '보고서', badge: reportUnread },
+    // 코드 탭은 데스크톱(로컬 에이전트 가용)에서만 노출.
+    ...(hasLocalAgent ? [{ key: 'code' as ChatTab, label: '코드' }] : []),
   ];
 
   return (

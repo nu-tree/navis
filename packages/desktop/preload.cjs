@@ -24,7 +24,7 @@ contextBridge.exposeInMainWorld('navisLocal', {
     };
     ipcRenderer.on(deltaCh, listener);
     return ipcRenderer
-      .invoke('navis-local:run', { id, prompt })
+      .invoke('navis-local:run', { id, prompt, resume: opts && opts.resume })
       .finally(() => ipcRenderer.removeListener(deltaCh, listener));
   },
 });

@@ -12,13 +12,15 @@ type SendVars = {
   attachments?: Attachment[];
   // 데스크톱 로컬 에이전트로 보낼지 (내 맥 파일/터미널). 채팅 호출 시점에 결정.
   local?: boolean;
+  // 코드 세션 멀티턴 — 이어갈 SDK 세션 id(로컬 에이전트 전용).
+  resume?: string;
 };
 
 // 메시지 전송 = TanStack Query mutation. 대화방(conversationId) 단위로 동작해
 // 각 방이 독립 세션·typing 상태를 가진다. 응답은 토큰 스트리밍으로 받아 점진 표시한다.
 export function useSendMessage() {
   const mutation = useMutation({
-    mutationFn: async ({ text, conversationId, attachments, local }: SendVars) => {
+    mutationFn: async ({ text, conversationId, attachments, local, resume }: SendVars) => {
       const {
         conversations,
         addMessage,
@@ -43,9 +45,10 @@ export function useSendMessage() {
         });
       };
 
-      // 로컬 모드: 데스크톱 로컬 에이전트(내 맥 파일/터미널)로 실행. 서버 navis 안 거침.
+      // 로컬 모드/코드 세션: 데스크톱 로컬 에이전트(내 맥 파일/터미널)로 실행. 서버 navis 안 거침.
       if (local && localAgent) {
         const res = await localAgent.run(text, {
+          resume,
           onDelta: (delta) => {
             ensureBubble();
             appendMessageText(conversationId, assistantId, delta);
@@ -62,9 +65,12 @@ export function useSendMessage() {
         } else {
           setMessageText(conversationId, assistantId, replyText);
         }
+        // 코드 세션만 SDK 세션 id 를 저장해 다음 턴에 이어간다(멀티턴).
+        // 일반 'chat' 의 localMode 는 서버 세션 네임스페이스와 섞이지 않게 저장 안 함.
+        const isCode = conv?.kind === 'code';
         return {
           reply: { text: replyText, createdAt: new Date().toISOString() },
-          sessionId: undefined,
+          sessionId: isCode ? res.sessionId : undefined,
           contextFull: false,
           saved: false,
         };
@@ -152,11 +158,15 @@ export function useSendMessage() {
     },
   });
 
-  // 현재 활성 대화방으로 전송. 로컬 모드 ON + 데스크톱 로컬 에이전트 가용 시 로컬 실행.
+  // 현재 활성 대화방으로 전송. 코드 세션은 항상 로컬 에이전트로(+세션 이어가기),
+  // 일반 대화는 로컬 모드 ON + 데스크톱일 때만 로컬 실행.
   const send = (text: string, attachments?: Attachment[]) => {
-    const { activeId } = useChatStore.getState();
-    const local = hasLocalAgent && useUiStore.getState().localMode;
-    mutation.mutate({ text, conversationId: activeId, attachments, local });
+    const { activeId, conversations } = useChatStore.getState();
+    const active = conversations.find((c) => c.id === activeId);
+    const isCode = active?.kind === 'code';
+    const local = hasLocalAgent && (isCode || useUiStore.getState().localMode);
+    const resume = isCode ? active?.sessionId : undefined;
+    mutation.mutate({ text, conversationId: activeId, attachments, local, resume });
   };
 
   return { send };

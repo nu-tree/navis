@@ -4,7 +4,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { makeId } from '../lib/id';
 import type { ChatMessage } from '../types';
 
-export type ConversationKind = 'chat' | 'report';
+// 'code' = 데스크톱 로컬 에이전트(클로드 코드) 세션. 서버 동기화 대상이 아니라
+// 이 기기에만 남는다(use-conversation-sync 는 'chat' 만 올림).
+export type ConversationKind = 'chat' | 'report' | 'code';
 
 export type Conversation = {
   id: string;
@@ -50,6 +52,8 @@ type ChatStore = {
   activeId: string;
   typingIds: string[]; // 응답 생성 중인 대화방 id 목록 (방별 독립)
   newConversation: () => string;
+  // 코드(로컬 에이전트) 세션 새로 만들기 — 빈 코드 세션이 이미 있으면 그걸로.
+  newCodeSession: () => string;
   selectConversation: (id: string) => void;
   deleteConversation: (id: string) => void;
   addMessage: (conversationId: string, message: ChatMessage) => void;
@@ -138,6 +142,27 @@ export const useChatStore = create<ChatStore>()(
       return existing.id;
     }
     const conv = emptyConversation();
+    set((s) => ({ conversations: [conv, ...s.conversations], activeId: conv.id }));
+    return conv.id;
+  },
+
+  newCodeSession: () => {
+    const existing = get().conversations.find(
+      (c) => c.kind === 'code' && !c.hidden && c.messages.length === 0,
+    );
+    if (existing) {
+      set({ activeId: existing.id });
+      return existing.id;
+    }
+    const ts = now();
+    const conv: Conversation = {
+      id: makeId('code'),
+      title: '새 코드 세션',
+      kind: 'code',
+      messages: [],
+      createdAt: ts,
+      updatedAt: ts,
+    };
     set((s) => ({ conversations: [conv, ...s.conversations], activeId: conv.id }));
     return conv.id;
   },

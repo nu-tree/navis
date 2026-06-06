@@ -277,7 +277,22 @@ ipcMain.handle('navis-local:config:set', (_e, patch) => {
   return { ok: true };
 });
 
-ipcMain.handle('navis-local:run', async (event, { id, prompt }) => {
+// 도구 사용을 클로드 코드처럼 한 줄로 요약 — 코드 세션 본문에 인라인 스트리밍한다.
+function formatToolUse(name, input) {
+  const i = input || {};
+  const icon =
+    { Read: '📖', Edit: '✏️', Write: '📝', Bash: '⌘', Grep: '🔎', Glob: '🔎', LS: '📂' }[name] ||
+    '🔧';
+  let arg = '';
+  if (name === 'Bash') arg = i.command || '';
+  else if (name === 'Grep' || name === 'Glob') arg = i.pattern || i.path || '';
+  else arg = i.file_path || i.path || i.notebook_path || '';
+  arg = String(arg).replace(/\s+/g, ' ').trim();
+  if (arg.length > 80) arg = arg.slice(0, 80) + '…';
+  return `\n${icon} ${name}${arg ? ` · ${arg}` : ''}\n`;
+}
+
+ipcMain.handle('navis-local:run', async (event, { id, prompt, resume }) => {
   const cfg = loadLocalConfig();
   const token = cfg.token || process.env.CLAUDE_CODE_OAUTH_TOKEN;
   if (!cfg.enabled) return { error: '로컬 에이전트가 꺼져 있어요(설정에서 켜기).' };
@@ -291,7 +306,12 @@ ipcMain.handle('navis-local:run', async (event, { id, prompt }) => {
     const readonly = ['Read', 'Grep', 'Glob', 'LS'];
     const writeTools = ['Edit', 'Write', 'Bash'];
     const allowedTools = cfg.allowWrite ? [...readonly, ...writeTools] : readonly;
-    let text = '';
+    const send = (s) => event.sender.send(`navis-local:delta:${id}`, s);
+    // 스트리밍한 본문(도구 사용 줄 포함)을 그대로 모아 최종 text 로 돌려준다 —
+    // 렌더러가 마지막에 권위 텍스트로 덮어써도 도구 사용 내역이 사라지지 않게.
+    let streamed = '';
+    let finalText = '';
+    let sessionId = resume || undefined;
     for await (const m of query({
       prompt,
       options: {
@@ -301,8 +321,13 @@ ipcMain.handle('navis-local:run', async (event, { id, prompt }) => {
         settingSources: [],
         includePartialMessages: true,
         permissionMode: cfg.allowWrite ? 'acceptEdits' : 'default',
+        // resume 가 있으면 이전 코드 세션을 이어간다(멀티턴).
+        ...(resume ? { resume } : {}),
       },
     })) {
+      // SDK 세션 id 포착 — 다음 턴 resume 용.
+      if (m.session_id) sessionId = m.session_id;
+
       if (
         m.type === 'stream_event' &&
         m.event &&
@@ -310,11 +335,24 @@ ipcMain.handle('navis-local:run', async (event, { id, prompt }) => {
         m.event.delta &&
         m.event.delta.type === 'text_delta'
       ) {
-        event.sender.send(`navis-local:delta:${id}`, m.event.delta.text);
+        streamed += m.event.delta.text;
+        send(m.event.delta.text);
       }
-      if (m.type === 'result' && m.subtype === 'success') text = m.result;
+      // 도구 사용(파일 읽기/수정/터미널 등)을 한 줄로 인라인 표시 — "클로드 코드" 느낌.
+      if (m.type === 'assistant' && m.message && Array.isArray(m.message.content)) {
+        for (const block of m.message.content) {
+          if (block && block.type === 'tool_use') {
+            const line = formatToolUse(block.name, block.input);
+            streamed += line;
+            send(line);
+          }
+        }
+      }
+      if (m.type === 'result' && m.subtype === 'success') finalText = m.result;
     }
-    return { text: text || '(빈 응답)' };
+    // 도구 줄을 흘렸으면 그 전체 트랜스크립트를, 아니면 최종 답변만.
+    const text = streamed.trim() ? streamed : finalText || '(빈 응답)';
+    return { text, sessionId };
   } catch (err) {
     console.error('[local-agent] 실행 실패:', err);
     return { error: err && err.message ? err.message : String(err) };
