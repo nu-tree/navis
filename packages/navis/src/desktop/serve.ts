@@ -13,9 +13,9 @@
 import { createReadStream, createWriteStream } from "node:fs";
 import { mkdir, readdir, stat, unlink } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
-import { timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { config } from "../config.js";
+import { authed, parseVersion, compareVersion, safePath } from "../dist/serve-utils.js";
 
 const DIR = resolve(config.desktopDir);
 
@@ -28,48 +28,6 @@ const MIME: Record<string, string> = {
   ".yml": "text/yaml; charset=utf-8",
   ".blockmap": "application/octet-stream",
 };
-
-// 토큰을 상수시간 비교. 헤더(Bearer) 우선, 없으면 쿼리(?token=).
-function authed(req: IncomingMessage, url: URL): boolean {
-  const token = config.appApiToken;
-  if (!token) return false;
-  const header = req.headers["authorization"];
-  let given: string | undefined;
-  if (typeof header === "string") {
-    const m = header.match(/^Bearer\s+(.+)$/i);
-    if (m) given = m[1];
-  }
-  if (!given) given = url.searchParams.get("token") ?? undefined;
-  if (!given) return false;
-  const a = Buffer.from(given);
-  const b = Buffer.from(token);
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(a, b);
-}
-
-// 파일명에서 시맨틱 버전(X.Y.Z) 추출. 없으면 undefined(=버전 무관 파일, 예: latest*.yml).
-function parseVersion(name: string): string | undefined {
-  return name.match(/\d+\.\d+\.\d+/)?.[0];
-}
-
-function compareVersion(a: string, b: string): number {
-  const pa = a.split(".").map(Number);
-  const pb = b.split(".").map(Number);
-  for (let i = 0; i < 3; i++) {
-    const d = (pa[i] ?? 0) - (pb[i] ?? 0);
-    if (d) return d;
-  }
-  return 0;
-}
-
-// 경로 탈출 방지: basename 만 취하고 DIR 안으로 resolve 되는지 재확인.
-function safePath(name: string): string | undefined {
-  const base = basename(name);
-  if (!base || base === "." || base === "..") return undefined;
-  const full = resolve(DIR, base);
-  if (full !== join(DIR, base)) return undefined;
-  return full;
-}
 
 // PUT/POST /api/desktop/upload?name=<파일> — Actions 가 빌드 산출물을 올린다.
 export async function handleDesktopUpload(
@@ -88,7 +46,7 @@ export async function handleDesktopUpload(
     return;
   }
   const name = url.searchParams.get("name");
-  const dest = name ? safePath(name) : undefined;
+  const dest = name ? safePath(DIR, name) : undefined;
   if (!dest) {
     res.writeHead(400, { "content-type": "application/json" });
     res.end(JSON.stringify({ error: "bad or missing ?name" }));
@@ -236,7 +194,7 @@ export async function handleDesktopPrune(
       );
       for (const n of arr) {
         if (n === latest) continue;
-        const p = safePath(n);
+        const p = safePath(DIR, n);
         if (!p) continue;
         try {
           await unlink(p);
@@ -270,7 +228,7 @@ export async function handleDesktopFile(
     return;
   }
   const name = decodeURIComponent(url.pathname.replace(/^\/api\/desktop\/file\//, ""));
-  const full = safePath(name);
+  const full = safePath(DIR, name);
   if (!full) {
     res.writeHead(400);
     res.end("bad name");

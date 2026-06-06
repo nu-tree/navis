@@ -19,9 +19,9 @@
 import { createReadStream, createWriteStream } from "node:fs";
 import { mkdir, readdir, stat, unlink } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
-import { timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { config } from "../config.js";
+import { authed, parseVersion, compareVersion, safePath } from "../dist/serve-utils.js";
 
 const DIR = resolve(config.iosDir);
 const BUNDLE_ID = "com.knu9910.navis";
@@ -32,48 +32,6 @@ const MIME: Record<string, string> = {
   ".jpg": "image/jpeg",
   ".json": "application/json; charset=utf-8",
 };
-
-// 토큰 상수시간 비교. 헤더(Bearer) 우선, 없으면 쿼리(?token=).
-function authed(req: IncomingMessage, url: URL): boolean {
-  const token = config.appApiToken;
-  if (!token) return false;
-  const header = req.headers["authorization"];
-  let given: string | undefined;
-  if (typeof header === "string") {
-    const m = header.match(/^Bearer\s+(.+)$/i);
-    if (m) given = m[1];
-  }
-  if (!given) given = url.searchParams.get("token") ?? undefined;
-  if (!given) return false;
-  const a = Buffer.from(given);
-  const b = Buffer.from(token);
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(a, b);
-}
-
-// 파일명에서 시맨틱 버전(X.Y.Z) 추출. 없으면 undefined.
-function parseVersion(name: string): string | undefined {
-  return name.match(/\d+\.\d+\.\d+/)?.[0];
-}
-
-function compareVersion(a: string, b: string): number {
-  const pa = a.split(".").map(Number);
-  const pb = b.split(".").map(Number);
-  for (let i = 0; i < 3; i++) {
-    const d = (pa[i] ?? 0) - (pb[i] ?? 0);
-    if (d) return d;
-  }
-  return 0;
-}
-
-// 경로 탈출 방지: basename 만 취하고 DIR 안으로 resolve 되는지 재확인.
-function safePath(name: string): string | undefined {
-  const base = basename(name);
-  if (!base || base === "." || base === "..") return undefined;
-  const full = resolve(DIR, base);
-  if (full !== join(DIR, base)) return undefined;
-  return full;
-}
 
 // 요청에서 자기 공개 origin 을 추론(피드 안 downloadURL 절대경로 만들 때 사용).
 // Railway 는 x-forwarded-proto/host 를 세팅한다. 로컬(localhost)만 http 로 떨어진다.
@@ -121,7 +79,7 @@ export async function handleIosUpload(
     return;
   }
   const name = url.searchParams.get("name");
-  const dest = name ? safePath(name) : undefined;
+  const dest = name ? safePath(DIR, name) : undefined;
   if (!dest) {
     res.writeHead(400, { "content-type": "application/json" });
     res.end(JSON.stringify({ error: "bad or missing ?name" }));
@@ -263,7 +221,7 @@ export async function handleIosPrune(
     const deleted: string[] = [];
     for (const n of ipas) {
       if (n === latest) continue;
-      const p = safePath(n);
+      const p = safePath(DIR, n);
       if (!p) continue;
       try {
         await unlink(p);
@@ -294,7 +252,7 @@ export async function handleIosFile(
     return;
   }
   const name = decodeURIComponent(url.pathname.replace(/^\/api\/ios\/file\//, ""));
-  const full = safePath(name);
+  const full = safePath(DIR, name);
   if (!full) {
     res.writeHead(400);
     res.end("bad name");

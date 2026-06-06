@@ -1,5 +1,7 @@
 node_modules/
 dist/
+# navis dist 배포 서버(ios/desktop)가 공유하는 소스 모듈 — 빌드 산출물 아님.
+!packages/navis/src/dist/
 .env
 *.log
 .desktop-dist/
