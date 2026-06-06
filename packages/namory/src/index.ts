@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import type { FastifyReply } from "fastify";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { buildMcpServer } from "./mcp.js";
 import { listCrons, createCron, deleteCron, updateCron } from "./tools/cron.js";
@@ -13,6 +14,20 @@ import { getSetting, setSetting } from "./tools/settings.js";
 import { update } from "./tools/update.js";
 import { remove } from "./tools/remove.js";
 import { CATEGORIES, type Category } from "./db/schema.js";
+
+// REST 핸들러 공통 에러 매핑: 도메인 에러 메시지를 HTTP 코드로.
+// "해당 id의 ... 없습니다" → 404, "수정할 필드가 없습니다" → 400, 그 외 → 500.
+function replyCrudError(reply: FastifyReply, err: unknown, logTag: string) {
+  if (err instanceof Error && err.message.startsWith("해당 id의")) {
+    // 기존 동작 유지: id 접미사(": <id>")를 떼고 메시지만 반환.
+    return reply.code(404).send({ error: err.message.replace(/:.*$/, "") });
+  }
+  if (err instanceof Error && err.message.startsWith("수정할 필드가 없습니다")) {
+    return reply.code(400).send({ error: err.message });
+  }
+  console.error(`${logTag} 오류:`, err);
+  return reply.code(500).send({ error: "서버 오류" });
+}
 
 const app = Fastify({
   logger: {
@@ -40,7 +55,8 @@ app.get("/health", async () => ({ ok: true }));
 //  2) ?token=<토큰> 쿼리 파라미터    — Claude 커스텀 커넥터 UI엔 헤더/토큰 입력란이
 //     없어 URL에 실어야 함. 토큰은 위 로거에서 마스킹됨.
 app.addHook("onRequest", async (req, reply) => {
-  // /mcp(도구)·/crons(스케줄)·/memories(기억 CRUD) 토큰 보호. 그 외(/health)는 공개.
+  // /mcp(도구)·/crons(스케줄)·/memories(기억 CRUD)·/projects·/conversations·/settings 토큰 보호.
+  // 그 외(/health)는 공개.
   if (
     !req.url.startsWith("/mcp") &&
     !req.url.startsWith("/crons") &&
@@ -158,11 +174,7 @@ app.delete<{ Params: { id: string } }>("/crons/:id", async (req, reply) => {
   try {
     return await deleteCron({ id: req.params.id });
   } catch (err) {
-    if (err instanceof Error && err.message.startsWith("해당 id의 크론이 없습니다")) {
-      return reply.code(404).send({ error: "해당 id의 크론이 없습니다" });
-    }
-    console.error("[crons] unexpected error:", err);
-    return reply.code(500).send({ error: "서버 오류" });
+    return replyCrudError(reply, err, "[crons]");
   }
 });
 
@@ -177,11 +189,7 @@ app.patch<{ Params: { id: string } }>("/crons/:id", async (req, reply) => {
   try {
     return await updateCron({ id: req.params.id, ...patches });
   } catch (err) {
-    if (err instanceof Error && err.message.startsWith("해당 id의 크론이 없습니다")) {
-      return reply.code(404).send({ error: "해당 id의 크론이 없습니다" });
-    }
-    console.error("[crons] unexpected error:", err);
-    return reply.code(500).send({ error: "서버 오류" });
+    return replyCrudError(reply, err, "[crons]");
   }
 });
 
@@ -214,14 +222,7 @@ app.patch<{ Params: { id: string } }>("/memories/:id", async (req, reply) => {
   try {
     return await update(patch);
   } catch (err) {
-    if (err instanceof Error && err.message.startsWith("해당 id의 기억이 없습니다")) {
-      return reply.code(404).send({ error: "해당 id의 기억이 없습니다" });
-    }
-    if (err instanceof Error && err.message.startsWith("수정할 필드가 없습니다")) {
-      return reply.code(400).send({ error: err.message });
-    }
-    console.error("[memories] update 오류:", err);
-    return reply.code(500).send({ error: "서버 오류" });
+    return replyCrudError(reply, err, "[memories]");
   }
 });
 
@@ -229,11 +230,7 @@ app.delete<{ Params: { id: string } }>("/memories/:id", async (req, reply) => {
   try {
     return await remove({ id: req.params.id });
   } catch (err) {
-    if (err instanceof Error && err.message.startsWith("해당 id의 기억이 없습니다")) {
-      return reply.code(404).send({ error: "해당 id의 기억이 없습니다" });
-    }
-    console.error("[memories] delete 오류:", err);
-    return reply.code(500).send({ error: "서버 오류" });
+    return replyCrudError(reply, err, "[memories]");
   }
 });
 
