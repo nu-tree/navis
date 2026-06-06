@@ -156,6 +156,9 @@ export async function handleIosUpload(
   } catch (err) {
     const e = err as NodeJS.ErrnoException;
     console.error(`[ios] 쓰기 실패 dest=${dest}:`, e);
+    // 부분 기록된 파일을 정리 — 그대로 두면 latestIpa() 가 손상된 .ipa 를 "최신"으로
+    // 골라 SideStore 피드에 노출, 폰 설치가 깨진다. 파일이 없거나 삭제 실패해도 무시.
+    await unlink(dest).catch(() => {});
     res.writeHead(500, { "content-type": "application/json" });
     res.end(JSON.stringify({ error: "write failed", code: e.code, message: e.message }));
   }

@@ -124,6 +124,9 @@ export async function handleDesktopUpload(
   } catch (err) {
     const e = err as NodeJS.ErrnoException;
     console.error(`[desktop] 쓰기 실패 dest=${dest}:`, e);
+    // 부분 기록된 파일을 정리 — 손상된 설치파일/yml 이 그대로 서빙되면
+    // electron-updater 가 잘못된 파일을 받아 설치 실패. 파일이 없거나 삭제 실패해도 무시.
+    await unlink(dest).catch(() => {});
     res.writeHead(500, { "content-type": "application/json" });
     res.end(JSON.stringify({ error: "write failed", dest, code: e.code, message: e.message }));
   }
