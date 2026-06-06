@@ -149,6 +149,11 @@ export const config = {
   // 반드시 볼륨이어야 한다. 미설정이면 인스턴스 임시 디스크(.desktop-dist) — 재배포 시 사라짐.
   desktopDir: optional("DESKTOP_DIR") ?? ".desktop-dist",
 
+  // iOS 사이드로드 배포(.ipa + 아이콘)를 보관/서빙할 디렉터리.
+  // SideStore 가 source 피드(/api/ios/source.json)와 .ipa 를 폴링해 자동 재서명·업데이트한다.
+  // 데스크톱과 동일하게 Railway 볼륨 경로를 권장(미설정이면 재배포 시 사라지는 임시 디스크).
+  iosDir: optional("IOS_DIR") ?? ".ios-dist",
+
   // HTTP 포트 — 앱 API(/api/*) + 헬스체크(/health) + webhook + 데스크톱 배포.
   port: Number(process.env.PORT) || 3000,
 } as const;

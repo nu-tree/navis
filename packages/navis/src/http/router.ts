@@ -19,6 +19,7 @@ import {
 } from "./conversations.js";
 import { handleGetSystemPrompt, handlePutSystemPrompt } from "./settings.js";
 import { handleGithubWebhook } from "./webhook.js";
+import { handleIosUpload, handleIosSource, handleIosFile } from "../ios/serve.js";
 
 // HTTP 요청 1건을 적절한 핸들러로 라우팅한다. createServer 콜백에서 호출.
 export function route(req: IncomingMessage, res: ServerResponse): void {
@@ -113,6 +114,20 @@ export function route(req: IncomingMessage, res: ServerResponse): void {
     }
     if (durl.pathname.startsWith("/api/desktop/file/") && req.method === "GET") {
       return void handleDesktopFile(req, res, durl);
+    }
+  }
+
+  // iOS 사이드로드 배포(SideStore source 피드 + .ipa). 토큰은 Bearer 또는 ?token= 쿼리.
+  if (req.url?.startsWith("/api/ios/")) {
+    const iurl = new URL(req.url, "http://localhost");
+    if (iurl.pathname === "/api/ios/source.json" && req.method === "GET") {
+      return void handleIosSource(req, res, iurl);
+    }
+    if (iurl.pathname === "/api/ios/upload" && (req.method === "PUT" || req.method === "POST")) {
+      return void handleIosUpload(req, res, iurl);
+    }
+    if (iurl.pathname.startsWith("/api/ios/file/") && req.method === "GET") {
+      return void handleIosFile(req, res, iurl);
     }
   }
 
