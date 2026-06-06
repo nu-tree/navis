@@ -53,6 +53,15 @@ GitHub Actions(맥/윈도우 빌드) ──업로드──▶ navis (Railway, �
    - `EXPO_PUBLIC_NAVIS_URL`   — navis 베이스 URL (예: `https://navis.up.railway.app`)
    - `EXPO_PUBLIC_NAVIS_TOKEN` — navis `APP_API_TOKEN` 과 같은 값
    → fine-grained PAT / public 레포는 **더 이상 필요 없음**(`RELEASES_TOKEN` 삭제 가능).
+3. **macOS 자가서명 인증서**(자동 업데이트 필수, 무료): macOS 자동설치(Squirrel.Mac)는
+   "설치된 앱 == 새 버전"의 코드서명 신원이 일치해야만 교체한다. 미서명/ad-hoc 은 빌드마다
+   신원이 달라 거부 → 수동 다운로드로 폴백. 유료 Developer 인증서 없이 **자가서명 인증서**로
+   해결한다(최초 설치 시 우클릭→열기 1회만, 이후 업데이트는 완전 자동).
+   ```bash
+   bash packages/desktop/scripts/make-selfsigned-cert.sh
+   ```
+   → 출력 안내대로 레포 Secret 2개 등록: `MAC_CSC_LINK`(p12 base64), `MAC_CSC_KEY_PASSWORD`.
+   (Secret 이 없으면 mac 은 미서명으로 빌드돼 자동설치가 안 됨. Windows 는 미서명도 자동설치 OK.)
 
 ### 릴리스 (이후 매번)
 ```bash

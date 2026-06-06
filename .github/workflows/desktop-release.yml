@@ -70,8 +70,13 @@ jobs:
       - name: Build desktop (no publish)
         working-directory: packages/desktop
         env:
-          # mac 코드서명 건너뜀(개인 배포 — 미서명 dmg)
-          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          # mac 자가서명: 안정적 신원이 있어야 Squirrel.Mac 자동설치가 동작한다(유료 인증서 불필요).
+          # 자가서명 .p12(base64) 를 secret 으로 주입 → electron-builder 가 임시 키체인에 넣고 서명.
+          # secret 미설정 시 빈 값 → CSC_IDENTITY_AUTO_DISCOVERY=false 로 미서명 폴백(자동설치 불가).
+          #   인증서 만들기: bash packages/desktop/scripts/make-selfsigned-cert.sh
+          CSC_LINK: ${{ matrix.os == 'macos-latest' && secrets.MAC_CSC_LINK || '' }}
+          CSC_KEY_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.MAC_CSC_KEY_PASSWORD || '' }}
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ matrix.os == 'macos-latest' && secrets.MAC_CSC_LINK != '' }}
           # 백엔드 주소를 웹 빌드에 인라인 (미설정이면 앱이 목업 폴백)
           EXPO_PUBLIC_NAVIS_URL: ${{ secrets.EXPO_PUBLIC_NAVIS_URL }}
           EXPO_PUBLIC_NAVIS_TOKEN: ${{ secrets.EXPO_PUBLIC_NAVIS_TOKEN }}

@@ -40,7 +40,10 @@
         "zip"
       ],
       "category": "public.app-category.productivity",
-      "icon": "../app/assets/navis-logo-mac.png"
+      "icon": "../app/assets/navis-logo-mac.png",
+      "identity": "navis self-signed",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
     },
     "win": {
       "target": "nsis",

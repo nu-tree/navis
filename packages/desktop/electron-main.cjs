@@ -152,11 +152,12 @@ async function createWindow() {
 // 빌드 시 워크플로가 updater-config.json({url, token})을 구워 넣으면, 그 URL 의
 // latest*.yml 을 토큰 헤더로 폴링한다. 파일이 없으면 조용히 비활성.
 //
-// macOS(Apple Silicon)는 electron-builder 가 인증서 없이도 ad-hoc 서명을 자동으로 붙여서
-// Squirrel.Mac 자동 다운로드 → 재시작 시 설치가 보통 동작한다(유료 Developer 인증서 불필요).
-// Windows(nsis)도 동일. 그래서 기본은 자동 업데이트를 쓰고, 다운로드 완료/실패 시 한국어
-// 알림을 직접 띄운다(electron-updater 기본 알림은 영어라 안 씀). 자동이 실패하는 환경에선
-// 실패 알림이 다운로드 페이지로 안내한다.
+// macOS: Squirrel.Mac 은 "설치된 앱 == 새 버전"의 코드서명 신원이 일치해야만 교체한다.
+// 미서명/ad-hoc 은 빌드마다 신원이 달라 거부되므로 → CI 가 자가서명(self-signed) 인증서로
+// 서명한다(유료 Developer 인증서 불필요. scripts/make-selfsigned-cert.sh 로 한 번 생성).
+// Windows(nsis)는 미서명이어도 자동업데이트가 된다. 기본은 자동 업데이트를 쓰고, 다운로드
+// 완료/실패 시 한국어 알림을 직접 띄운다(electron-updater 기본 알림은 영어라 안 씀). 인증서가
+// 없어 미서명으로 빌드된 환경에선 자동설치가 실패 → 실패 알림이 다운로드 페이지로 안내한다.
 // 업데이터 ↔ 렌더러(인앱 배너) 공유 상태.
 let updaterReady = false; // updater-config 가 있어 피드가 설정됐는지
 let updaterDownloadPage = null; // adhoc 설치 실패 시 폴백할 수동 다운로드 페이지
