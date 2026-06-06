@@ -19,6 +19,10 @@ export function useReports() {
     queryKey: ['reports'],
     enabled: IS_BACKEND_CONFIGURED,
     refetchInterval: 30_000,
+    // 창을 접어둬도(가려져도) 계속 폴링해야 백그라운드에서 알림이 제때 뜬다.
+    // 기본값(false)이면 document.hidden 일 때 폴링이 멈춰, 다시 펼칠 때까지
+    // 보고가 안 와 알림이 한꺼번에 늦게 뜬다.
+    refetchIntervalInBackground: true,
     queryFn: async () => {
       const reports = await fetchReports();
       const store = useChatStore.getState();

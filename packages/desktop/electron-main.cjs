@@ -84,6 +84,10 @@ async function createWindow() {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
+      // 창을 접어둬도(가려져도) 렌더러 타이머를 죽이지 않는다. 기본값(true)이면
+      // Electron 이 숨긴 창의 타이머를 throttle/정지시켜, 보고 폴링이 멈추고
+      // 다시 펼칠 때 알림이 한꺼번에 늦게 뜬다(백그라운드 알림의 의미가 없어짐).
+      backgroundThrottling: false,
     },
   });
 
