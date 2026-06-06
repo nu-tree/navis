@@ -80,6 +80,18 @@ async function createWindow() {
     icon: path.join(__dirname, '../app/assets/navis-logo.png'),
     backgroundColor: '#0b0b0f',
     autoHideMenuBar: true,
+    // 클로드 데스크톱처럼 네이티브(회색) 타이틀바를 없애고 콘텐츠를 끝까지 채운다.
+    // macOS: hiddenInset — 제목 막대는 사라지고 트래픽 라이트(빨강·노랑·초록)만
+    // 콘텐츠 위에 뜬다. 창 이동은 렌더러 상단의 드래그 스트립(app-region:drag)이 담당.
+    // Windows: 타이틀바를 숨기고 오버레이로 창 컨트롤만 그린다.
+    ...(process.platform === 'darwin'
+      ? { titleBarStyle: 'hiddenInset' }
+      : process.platform === 'win32'
+        ? {
+            titleBarStyle: 'hidden',
+            titleBarOverlay: { color: '#0b0b0f', symbolColor: '#e5e7eb', height: 36 },
+          }
+        : {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
