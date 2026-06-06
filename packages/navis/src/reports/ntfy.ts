@@ -15,7 +15,10 @@ export function publishToNtfy(title: string, message: string): void {
   void fetch(ntfy.url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ topic: ntfy.topic, title, message }),
+    // click: 알림 탭 시 navis 앱을 연다(app.json 의 scheme="navis" 딥링크).
+    // 무료 방식이라 ntfy 앱을 한 번 거친 뒤 navis 로 전환됨(알림 소유자가 ntfy 라 불가피).
+    // 직접 navis 가 열리려면 APNs(유료 Apple 계정)가 필요 — 의도된 트레이드오프.
+    body: JSON.stringify({ topic: ntfy.topic, title, message, click: "navis://" }),
   }).catch((err) => {
     console.warn(
       "[ntfy] 발행 실패(무시):",
