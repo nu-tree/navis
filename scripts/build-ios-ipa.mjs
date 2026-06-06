@@ -151,6 +151,15 @@ try {
   // 아이콘은 SideStore 목록 표시용(선택). 한 번만 있으면 됨.
   const icon = join(APP_DIR, "assets/navis-logo.png");
   if (existsSync(icon)) await upload("icon.png", readFileSync(icon), "image/png");
+  // 옛 버전 .ipa(+디버깅 probe) 정리 — 최신 한 개만 남긴다.
+  const pres = await fetch(`${navisURL}/api/ios/prune`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (pres.ok) {
+    const j = await pres.json().catch(() => ({}));
+    if (j.deleted?.length) console.log(`[ipa] 정리 ✓ 옛 버전 ${j.deleted.length}개 삭제 (${j.deleted.join(", ")})`);
+  }
 } catch (err) {
   console.error(`[ipa] ${err.message}`);
   process.exit(1);

@@ -19,7 +19,7 @@ import {
 } from "./conversations.js";
 import { handleGetSystemPrompt, handlePutSystemPrompt } from "./settings.js";
 import { handleGithubWebhook } from "./webhook.js";
-import { handleIosUpload, handleIosSource, handleIosFile } from "../ios/serve.js";
+import { handleIosUpload, handleIosSource, handleIosFile, handleIosPrune } from "../ios/serve.js";
 
 // HTTP 요청 1건을 적절한 핸들러로 라우팅한다. createServer 콜백에서 호출.
 export function route(req: IncomingMessage, res: ServerResponse): void {
@@ -125,6 +125,9 @@ export function route(req: IncomingMessage, res: ServerResponse): void {
     }
     if (iurl.pathname === "/api/ios/upload" && (req.method === "PUT" || req.method === "POST")) {
       return void handleIosUpload(req, res, iurl);
+    }
+    if (iurl.pathname === "/api/ios/prune" && req.method === "POST") {
+      return void handleIosPrune(req, res, iurl);
     }
     if (iurl.pathname.startsWith("/api/ios/file/") && req.method === "GET") {
       return void handleIosFile(req, res, iurl);

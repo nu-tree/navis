@@ -17,7 +17,7 @@
 // SideStore 는 커스텀 헤더를 못 보내므로 source/파일 URL 에 ?token= 쿼리로 토큰을 박는다
 // (피드 JSON 안의 downloadURL 도 같은 토큰을 포함해 발급).
 import { createReadStream, createWriteStream } from "node:fs";
-import { mkdir, readdir, stat } from "node:fs/promises";
+import { mkdir, readdir, stat, unlink } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import { timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -231,6 +231,52 @@ export async function handleIosSource(
   };
   res.writeHead(200, headers);
   res.end(JSON.stringify(feed, null, 2));
+}
+
+// POST /api/ios/prune — 최신 버전 .ipa 한 개만 남기고 옛 버전(+디버깅 probe 등)을 지운다.
+// 앱은 하나(com.knu9910.navis)뿐이라 그룹핑 없이 단순히 최고 버전만 보존. icon.png 같은
+// 비-.ipa 파일은 손대지 않는다. 업로드 직후 ipa:build 가 호출해 디렉터리를 깔끔히 유지.
+export async function handleIosPrune(
+  req: IncomingMessage,
+  res: ServerResponse,
+  url: URL,
+): Promise<void> {
+  if (!authed(req, url)) {
+    res.writeHead(401, { "content-type": "application/json" });
+    res.end(JSON.stringify({ error: "unauthorized" }));
+    return;
+  }
+  try {
+    const names = await readdir(DIR).catch(() => [] as string[]);
+    const ipas = names.filter((n) => n.toLowerCase().endsWith(".ipa") && parseVersion(n));
+    if (ipas.length < 2) {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ deleted: [] }));
+      return;
+    }
+    const latest = ipas.reduce((a, b) =>
+      compareVersion(parseVersion(a) ?? "0.0.0", parseVersion(b) ?? "0.0.0") >= 0 ? a : b,
+    );
+    const deleted: string[] = [];
+    for (const n of ipas) {
+      if (n === latest) continue;
+      const p = safePath(n);
+      if (!p) continue;
+      try {
+        await unlink(p);
+        deleted.push(n);
+      } catch (err) {
+        console.error(`[ios] prune 삭제 실패 ${n}:`, err);
+      }
+    }
+    if (deleted.length) console.log(`[ios] prune: ${deleted.length}개 삭제 — ${deleted.join(", ")}`);
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ deleted }));
+  } catch (err) {
+    console.error("[ios] prune 실패:", err);
+    res.writeHead(500, { "content-type": "application/json" });
+    res.end(JSON.stringify({ error: "prune failed" }));
+  }
 }
 
 // GET /api/ios/file/<name> — .ipa / 아이콘 서빙. SideStore(?token=) 와 브라우저 둘 다 사용.
