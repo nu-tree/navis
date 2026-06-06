@@ -145,6 +145,16 @@ async function createWindow() {
 // Windows(nsis)도 동일. 그래서 기본은 자동 업데이트를 쓰고, 다운로드 완료/실패 시 한국어
 // 알림을 직접 띄운다(electron-updater 기본 알림은 영어라 안 씀). 자동이 실패하는 환경에선
 // 실패 알림이 다운로드 페이지로 안내한다.
+// 업데이터 ↔ 렌더러(인앱 배너) 공유 상태.
+let updaterReady = false; // updater-config 가 있어 피드가 설정됐는지
+let updaterDownloadPage = null; // adhoc 설치 실패 시 폴백할 수동 다운로드 페이지
+
+// 렌더러(앱)에 업데이트 상태를 보낸다 → 인앱 배너가 구독. 창이 아직 없으면 조용히 무시.
+function sendUpdateStatus(status) {
+  const w = BrowserWindow.getAllWindows()[0];
+  if (w && !w.isDestroyed()) w.webContents.send('navis-update:status', status);
+}
+
 function configureUpdater() {
   try {
     const cfgPath = path.join(__dirname, 'updater-config.json');
@@ -156,6 +166,8 @@ function configureUpdater() {
 
     // 수동 설치용 다운로드 페이지 = 피드 베이스(.../api/desktop/file)에서 유도.
     const downloadPage = url.replace(/\/api\/desktop\/file\/?$/, '/download');
+    updaterReady = true;
+    updaterDownloadPage = downloadPage;
 
     const showNotification = (title, body, onClick) => {
       try {
@@ -167,8 +179,10 @@ function configureUpdater() {
       }
     };
 
-    // 새 버전 다운로드 완료 → 한국어 알림. 클릭하면 지금 재시작해 설치(아니면 다음 실행 때 적용).
+    // 새 버전 다운로드 완료 → ① 인앱 배너(주 채널) ② 백업용 OS 알림.
+    //   배너 화살표/알림 클릭 모두 quitAndInstall 로 이어진다(=클로드코드처럼 "다시 시작").
     autoUpdater.on('update-downloaded', (info) => {
+      sendUpdateStatus({ state: 'downloaded', version: info.version });
       showNotification(
         '나비스 업데이트 준비 완료',
         `v${info.version} 받았어요. 클릭하면 지금 재시작해서 설치할게요(아니면 다음에 켤 때 적용).`,
@@ -176,9 +190,10 @@ function configureUpdater() {
       );
     });
 
-    // 자동 업데이트가 실패하는 환경(미서명 등)에선 그때만 수동 안내.
+    // 자동 설치가 실패하는 환경(adhoc 미서명 등) → 배너가 "직접 받기"로 전환되도록 신호.
     autoUpdater.on('error', (err) => {
       console.error('[updater] 오류:', err);
+      sendUpdateStatus({ state: 'error', downloadPage });
       showNotification(
         '나비스 자동 업데이트 실패',
         '클릭하면 다운로드 페이지에서 직접 받을 수 있어요.',
@@ -278,6 +293,38 @@ ipcMain.handle('navis-local:run', async (event, { id, prompt }) => {
     console.error('[local-agent] 실행 실패:', err);
     return { error: err && err.message ? err.message : String(err) };
   }
+});
+
+// ── 자동 업데이트 인앱 제어 (렌더러 배너용) ────────────────────────────────
+// 현재 설치된 앱 버전 — 렌더러가 서버 최신버전과 비교해 "새 버전 있음"을 판단.
+ipcMain.on('navis-update:version', (e) => {
+  e.returnValue = app.getVersion();
+});
+// 렌더러가 "서버에 더 높은 버전 있다"를 감지하면 호출 → 즉시 업데이트 확인/다운로드 트리거.
+// (앱이 어차피 navis 를 30초마다 폴링하므로, 재시작 없이 릴리스 직후 잡힌다.)
+ipcMain.handle('navis-update:check', () => {
+  if (!updaterReady) return null; // updater-config 없음(개발/미설정) → 무시.
+  return autoUpdater.checkForUpdates().catch((err) => {
+    console.error('[updater] check 실패:', err);
+    return null;
+  });
+});
+// 배너 화살표 → 재시작해서 설치. adhoc 서명이면 실제 실패는 'error' 이벤트로 올라와
+// 배너가 "직접 받기"로 전환된다(아래 open-download).
+ipcMain.handle('navis-update:install', () => {
+  try {
+    autoUpdater.quitAndInstall();
+    return { ok: true };
+  } catch (err) {
+    console.error('[updater] quitAndInstall 실패:', err);
+    if (updaterDownloadPage) void shell.openExternal(updaterDownloadPage);
+    return { ok: false };
+  }
+});
+// 자동 설치 불가 환경(adhoc) → 다운로드 페이지를 기본 브라우저로 연다.
+ipcMain.handle('navis-update:open-download', () => {
+  if (updaterDownloadPage) void shell.openExternal(updaterDownloadPage);
+  return { ok: true };
 });
 
 app.whenReady().then(() => {

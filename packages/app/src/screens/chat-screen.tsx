@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChatDrawer, ChatHeader, ChatInput, MessageList } from '../components/chat';
+import { ChatDrawer, ChatHeader, ChatInput, MessageList, UpdateBanner } from '../components/chat';
 import { SidebarContent } from '../components/chat/sidebar-content';
 import { Text } from '../components/ui/text';
 import { useActiveConversation, useTotalUnread } from '../store/chat-store';
@@ -69,6 +69,8 @@ export function ChatScreen() {
           {/* 넓은 화면에선 본문을 가운데 정렬하고 폭을 제한 */}
           <View className="w-full flex-1 self-center" style={{ maxWidth: CHAT_MAX_WIDTH }}>
             <MessageList />
+            {/* 데스크톱 업데이트 알림(클로드코드 스타일). 데스크톱 외 환경에선 자동 숨김. */}
+            <UpdateBanner />
             {isReport ? (
               <View
                 className="border-t border-border bg-background px-4 py-3"

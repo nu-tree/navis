@@ -161,6 +161,40 @@ export async function handleDesktopList(
   }
 }
 
+// GET /api/desktop/latest — 보관 중 설치파일 중 가장 높은 시맨틱 버전을 반환.
+//   설치된 앱이 폴링해서 자기 버전보다 높으면 업데이트를 트리거(인앱 배너)하는 용도.
+//   가벼운 JSON 한 줄이라 30초 폴링에도 부담 없음. 크로스오리진(데스크톱 렌더러)이라 CORS 허용.
+export async function handleDesktopLatest(
+  req: IncomingMessage,
+  res: ServerResponse,
+  url: URL,
+): Promise<void> {
+  const headers = {
+    "content-type": "application/json",
+    "access-control-allow-origin": "*",
+    "access-control-allow-headers": "authorization, content-type",
+  };
+  if (!authed(req, url)) {
+    res.writeHead(401, headers);
+    res.end(JSON.stringify({ error: "unauthorized" }));
+    return;
+  }
+  try {
+    const names = await readdir(DIR).catch(() => [] as string[]);
+    let latest: string | undefined;
+    for (const n of names) {
+      const v = parseVersion(n);
+      if (v && (!latest || compareVersion(v, latest) > 0)) latest = v;
+    }
+    res.writeHead(200, headers);
+    res.end(JSON.stringify({ version: latest ?? null }));
+  } catch (err) {
+    console.error("[desktop] latest 조회 실패:", err);
+    res.writeHead(500, headers);
+    res.end(JSON.stringify({ error: "latest failed" }));
+  }
+}
+
 // POST /api/desktop/prune — 플랫폼별 최신 버전만 남기고 옛 버전 설치파일(+blockmap)을 지운다.
 // 릴리스 후 upload.mjs 가 모든 업로드를 마친 뒤 한 번 호출. 같은 아티팩트의 옛 버전이
 // 쌓여 다운로드 페이지에 중복으로 보이거나 디스크를 먹는 걸 막는다.
