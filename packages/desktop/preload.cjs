@@ -28,3 +28,20 @@ contextBridge.exposeInMainWorld('navisLocal', {
       .finally(() => ipcRenderer.removeListener(deltaCh, listener));
   },
 });
+
+// 자동 업데이트 ↔ 인앱 배너 브리지. 렌더러는 onStatus 로 상태를 구독하고, 새 버전을
+// 감지하면 check() 로 다운로드를 트리거, 화살표를 누르면 install() 로 재시작·설치한다.
+contextBridge.exposeInMainWorld('navisUpdate', {
+  isDesktop: true,
+  // 현재 설치된 앱 버전(렌더러가 서버 최신과 비교) — preload 시점에 동기 조회.
+  currentVersion: ipcRenderer.sendSync('navis-update:version'),
+  check: () => ipcRenderer.invoke('navis-update:check'),
+  install: () => ipcRenderer.invoke('navis-update:install'),
+  openDownload: () => ipcRenderer.invoke('navis-update:open-download'),
+  // 업데이트 상태 구독. 반환값으로 해제 함수 제공.
+  onStatus: (cb) => {
+    const listener = (_e, status) => cb(status);
+    ipcRenderer.on('navis-update:status', listener);
+    return () => ipcRenderer.removeListener('navis-update:status', listener);
+  },
+});
