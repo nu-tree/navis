@@ -1,7 +1,7 @@
 // navis 데스크톱 셸 (Electron).
 // 우리 RN 컴포넌트를 react-native-web 으로 빌드한 web-build 를 로컬 HTTP 서버로
 // 띄워 BrowserWindow 에 로드한다. (Expo 웹 빌드는 자산 경로가 절대경로라 file:// 불가)
-const { app, BrowserWindow, shell, Notification, ipcMain } = require('electron');
+const { app, BrowserWindow, shell, Notification, ipcMain, screen } = require('electron');
 const path = require('node:path');
 const http = require('node:http');
 const fs = require('node:fs');
@@ -24,6 +24,18 @@ function loadWindowState() {
   } catch {
     return {};
   }
+}
+
+// 저장된 창 위치가 현재 연결된 디스플레이 중 하나에라도 걸쳐 있는지 검사.
+// 외장 모니터를 빼면 옛 좌표가 화면 밖이 돼 창이 "사라진" 것처럼 보이는 걸 막는다.
+function isOnSomeDisplay(b) {
+  if (b.x == null || b.y == null) return true; // 저장된 위치 없음 → 기본 센터링
+  const w = b.width ?? 1180;
+  const h = b.height ?? 800;
+  return screen.getAllDisplays().some((d) => {
+    const wa = d.workArea;
+    return b.x < wa.x + wa.width && b.x + w > wa.x && b.y < wa.y + wa.height && b.y + h > wa.y;
+  });
 }
 
 function saveWindowState(win) {
@@ -63,13 +75,14 @@ function startStaticServer() {
 
 async function createWindow() {
   const saved = loadWindowState();
+  const onScreen = isOnSomeDisplay(saved);
   const win = new BrowserWindow({
     // 데스크톱답게 넓게. 앱 레이아웃이 넓은 화면에선 사이드바+채팅으로 반응형 전환된다.
     // 저장된 크기·위치가 있으면 복원(없으면 기본값).
     width: saved.width ?? 1180,
     height: saved.height ?? 800,
-    x: saved.x,
-    y: saved.y,
+    x: onScreen ? saved.x : undefined,
+    y: onScreen ? saved.y : undefined,
     minWidth: 720,
     minHeight: 560,
     // 마우스 드래그 리사이즈·최대화·전체화면 모두 명시적으로 허용(클로드 데스크톱처럼).
