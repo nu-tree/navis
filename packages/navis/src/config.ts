@@ -80,6 +80,17 @@ function optionalGoogleAuth():
   return { clientId, clientSecret, refreshToken };
 }
 
+// ntfy 푸시(모바일 알림 대체). NTFY_TOPIC 이 있을 때만 활성 — 무료 Apple 계정이라 APNs
+// 자체 푸시가 안 되는 navis-app 대신, ntfy 앱이 푸시를 받아준다(데스크톱은 영향 없음).
+// URL 은 미설정 시 공개 인스턴스(https://ntfy.sh). 토픽명은 추측 불가한 랜덤 문자열을 쓸 것
+// (공개 인스턴스는 토픽명을 아는 사람이 구독 가능 → 랜덤명이 사실상의 접근 제어).
+function optionalNtfy(): { url: string; topic: string } | undefined {
+  const topic = optional("NTFY_TOPIC");
+  if (!topic) return undefined;
+  const url = optional("NTFY_URL") ?? "https://ntfy.sh";
+  return { url: url.replace(/\/+$/, ""), topic };
+}
+
 export const config = {
   // Claude Code 구독 OAuth 토큰. SDK가 process.env에서 자동으로 읽으므로
   // 여기선 존재 여부만 검증한다 (없으면 인증 실패로 모든 호출이 깨짐).
@@ -143,6 +154,9 @@ export const config = {
   // 모바일/데스크톱 앱(navis-app)이 /api/chat 을 호출할 때 쓰는 인증 토큰.
   // 미설정이면 /api/chat 라우트가 비활성(503). 앱의 EXPO_PUBLIC_NAVIS_TOKEN 과 동일 값.
   appApiToken: optional("APP_API_TOKEN"),
+
+  // ntfy 푸시 대상(모바일 알림). NTFY_TOPIC 설정 시 모든 선제 보고를 폰 ntfy 앱으로 푸시.
+  ntfy: optionalNtfy(),
 
   // 데스크톱 설치파일(.dmg/.exe + latest*.yml)을 보관/서빙할 디렉터리.
   // Railway 볼륨을 마운트한 경로를 넣는다(예: /data/desktop). 재배포에도 유지되려면
