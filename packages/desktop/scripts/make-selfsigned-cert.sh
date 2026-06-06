@@ -44,19 +44,34 @@ echo "▶ 자가서명 코드서명 인증서 생성 (CN=$CN)…"
 "$OPENSSL" pkcs12 -export -legacy -out "$P12" -inkey "$KEY" -in "$CRT" \
   -name "$CN" -passout "pass:$PW" >/dev/null 2>&1
 
+LOGIN_KC="$HOME/Library/Keychains/login.keychain-db"
 echo "▶ 로컬 login 키체인에 등록 (로컬 dist:mac 빌드용)…"
 # 기존 동명 인증서가 있으면 정리(중복 신원 방지). 실패해도 무시.
-security delete-certificate -c "$CN" "$HOME/Library/Keychains/login.keychain-db" >/dev/null 2>&1 || true
-security import "$P12" -k "$HOME/Library/Keychains/login.keychain-db" -P "$PW" \
+security delete-certificate -c "$CN" "$LOGIN_KC" >/dev/null 2>&1 || true
+security import "$P12" -k "$LOGIN_KC" -P "$PW" \
   -T /usr/bin/codesign -T /usr/bin/security >/dev/null 2>&1
 # codesign 이 프롬프트 없이 키를 쓰도록 ACL 허용(있으면).
 security set-key-partition-list -S apple-tool:,apple:,codesign: \
-  -k "" "$HOME/Library/Keychains/login.keychain-db" >/dev/null 2>&1 || true
+  -k "" "$LOGIN_KC" >/dev/null 2>&1 || true
+
+# 자가서명은 "코드서명용으로 trust" 돼야 codesign 이 신원으로 인정한다(안 그러면 no identity found).
+# system 키체인에 신뢰 루트로 등록 → 관리자 암호 1회 입력 프롬프트가 뜬다.
+#   (되돌리려면: 키체인 접근.app 에서 'navis self-signed' 삭제, 또는
+#    sudo security remove-trusted-cert -d "<cert.pem>")
+echo "▶ 코드서명 신뢰 등록 (system 키체인) — 관리자 암호를 물어볼 수 있음…"
+security find-certificate -c "$CN" -p "$LOGIN_KC" > "$WORKDIR/trust.pem"
+if sudo security add-trusted-cert -d -r trustRoot -p codeSign \
+     -k /Library/Keychains/System.keychain "$WORKDIR/trust.pem"; then
+  echo "  ✓ 신뢰 등록 완료"
+else
+  echo "  ⚠ 신뢰 등록을 건너뜀 → 로컬 dist:mac 서명은 안 될 수 있음(CI 빌드엔 영향 없음)."
+fi
 
 P12_B64="$(base64 < "$P12" | tr -d '\n')"
 
 echo ""
-echo "✅ 완료. 로컬 키체인 등록됨 → 이제 'pnpm --filter navis-desktop dist:mac' 가 서명된 앱을 만든다."
+echo "✅ 완료. 로컬 키체인+신뢰 등록됨 → 이제 'pnpm --filter navis-desktop dist:mac' 가 서명된 앱을 만든다."
+echo "   (확인: security find-identity -v -p codesigning 에 'navis self-signed' 가 보이면 정상)"
 echo ""
 echo "── 다음: GitHub 레포 Secret 2개만 등록하면 CI 도 서명된다 ──"
 echo ""
