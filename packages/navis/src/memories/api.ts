@@ -27,7 +27,7 @@ export async function fetchMemories(limit?: number, project?: string): Promise<M
   if (limit) params.set("limit", String(limit));
   if (project) params.set("project", project);
   const qs = params.toString();
-  const res = await fetch(`${BASE}/memories${qs ? `?${qs}` : ""}`, { headers: auth });
+  const res = await fetch(`${BASE}/memories${qs ? `?${qs}` : ""}`, { headers: auth, signal: AbortSignal.timeout(10_000) });
   if (!res.ok) throw new Error(`기억 조회 실패: ${res.status}`);
   const data = (await res.json()) as { memories?: Memory[] };
   return data.memories ?? [];
@@ -38,11 +38,12 @@ export async function patchMemory(id: string, patch: MemoryPatch): Promise<{ ok:
     method: "PATCH",
     headers: { ...auth, "content-type": "application/json" },
     body: JSON.stringify(patch),
+    signal: AbortSignal.timeout(10_000),
   });
   return { ok: res.ok, status: res.status };
 }
 
 export async function deleteMemory(id: string): Promise<{ ok: boolean; status: number }> {
-  const res = await fetch(`${BASE}/memories/${id}`, { method: "DELETE", headers: auth });
+  const res = await fetch(`${BASE}/memories/${id}`, { method: "DELETE", headers: auth, signal: AbortSignal.timeout(10_000) });
   return { ok: res.ok, status: res.status };
 }

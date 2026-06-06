@@ -1,5 +1,5 @@
 import { IS_BACKEND_CONFIGURED } from '../lib/config';
-import { apiUrl, authHeaders, jsonHeaders, getJson } from './client';
+import { apiUrl, authHeaders, jsonHeaders, getJson, withTimeout } from './client';
 
 export type Memory = {
   id: string;
@@ -24,18 +24,18 @@ export async function fetchMemories(): Promise<Memory[]> {
 }
 
 export async function patchMemory(id: string, patch: MemoryPatch): Promise<void> {
-  const res = await fetch(apiUrl(`/api/memories/${id}`), {
+  const res = await fetch(apiUrl(`/api/memories/${id}`), withTimeout({
     method: 'PATCH',
     headers: jsonHeaders(),
     body: JSON.stringify(patch),
-  });
+  }));
   if (!res.ok) throw new Error(`기억 수정 오류: ${res.status}`);
 }
 
 export async function deleteMemory(id: string): Promise<void> {
-  const res = await fetch(apiUrl(`/api/memories/${id}`), {
+  const res = await fetch(apiUrl(`/api/memories/${id}`), withTimeout({
     method: 'DELETE',
     headers: authHeaders(),
-  });
+  }));
   if (!res.ok) throw new Error(`기억 삭제 오류: ${res.status}`);
 }
