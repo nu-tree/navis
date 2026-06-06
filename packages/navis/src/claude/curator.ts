@@ -8,7 +8,7 @@ import { projectGuidance } from "../projects.js";
 //
 // 설계
 // - 백그라운드(fire-and-forget): 사용자 답변 지연 없음
-// - 저렴한 모델(Haiku): 턴당 ~$0.001 수준
+// - 비용 억제: 메인 턴보다 작은 입력/짧은 출력으로 단가 영향 최소화
 // - 권한 최소화: save + recall만 허용. profile_update·delete는 절대 미허용
 // - 중복 방지: 저장 전 recall로 유사 기억이 이미 있는지 점검(임계값 이상이면 스킵)
 // - 출처 표기: source="navis-curator" 로 수동 저장과 구분 가능
