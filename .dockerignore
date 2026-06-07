@@ -1,5 +1,7 @@
 **/node_modules
 **/dist
+!packages/navis/src/dist
+!packages/navis/src/dist/**
 .git
 .gitignore
 **/.env
