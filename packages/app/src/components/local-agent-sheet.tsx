@@ -83,8 +83,12 @@ export function LocalAgentSheet({ open, onClose }: { open: boolean; onClose: () 
           <Toggle
             on={allowWrite}
             onPress={() => setAllowWrite((v) => !v)}
-            label="⚠️ 쓰기·터미널 허용 (Edit/Write/Bash)"
+            label="⚠️ 전체 제어 허용"
           />
+          <Text variant="caption" className="text-muted-foreground">
+            켜면 클로드 코드처럼 확인 없이 파일 수정·터미널 명령·설치(brew/xcodebuild/simctl
+            등)까지 내 맥 전체를 조작해요. 끄면 읽기 전용(안전). 신뢰할 때만 켜세요.
+          </Text>
 
           <View className="mt-1 flex-row gap-2">
             <Button label="취소" variant="secondary" className="flex-1" onPress={onClose} />

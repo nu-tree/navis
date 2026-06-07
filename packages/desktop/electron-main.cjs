@@ -499,7 +499,10 @@ ipcMain.handle('navis-local:run', async (event, { id, prompt, resume, workdir, n
         // 그라운딩한다(빈 배열이면 CLAUDE.md 가 안 읽혀 맥락이 빈약해짐).
         settingSources: ['user', 'project', 'local'],
         includePartialMessages: true,
-        permissionMode: cfg.allowWrite ? 'acceptEdits' : 'default',
+        // 전체 제어 모드(allowWrite): bypassPermissions — 확인 없이 모든 도구/명령을
+        // 실행한다(클로드 코드처럼 시뮬레이터 설치·xcodebuild·brew 등 내 맥 전체 조작).
+        // 끄면 기본(읽기 전용 안전모드). 토글이 곧 "전체 제어" 스위치.
+        permissionMode: cfg.allowWrite ? 'bypassPermissions' : 'default',
         // resume 가 있으면 이전 코드 세션을 이어간다(멀티턴).
         ...(resume ? { resume } : {}),
       },
