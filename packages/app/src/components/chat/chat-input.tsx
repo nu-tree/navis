@@ -53,7 +53,10 @@ const INPUT_PAD_H = 16;
 export function ChatInput({ placeholder = '메시지 입력…', className }: ChatInputProps) {
   const [text, setText] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [inputHeight, setInputHeight] = useState(MIN_INPUT_H);
+  // 측정 전용 — style.height 로 다시 박지 않는다(iOS 에서 onContentSizeChange 가
+  // 고정 높이를 되돌려주는 피드백 루프로 44px 에 잠기던 버그를 회피). 오로지
+  // MAX 도달 시 내부 스크롤 전환(scrollEnabled) 판정에만 사용.
+  const [measuredHeight, setMeasuredHeight] = useState(0);
   const { send } = useSendMessage();
   const typing = useIsActiveTyping();
 
@@ -112,7 +115,7 @@ export function ChatInput({ placeholder = '메시지 입력…', className }: Ch
     send(trimmed, attachments.length > 0 ? attachments : undefined);
     setText('');
     setAttachments([]);
-    setInputHeight(MIN_INPUT_H);
+    setMeasuredHeight(0);
   };
 
   // 데스크톱/웹: Enter 전송, Shift+Enter 줄바꿈. 네이티브 모바일은 기본(줄바꿈) 유지.
@@ -124,8 +127,6 @@ export function ChatInput({ placeholder = '메시지 입력…', className }: Ch
       if (canSend) submit();
     }
   };
-
-  const clampedHeight = Math.min(Math.max(MIN_INPUT_H, inputHeight), MAX_INPUT_H);
 
   // react-native-web 은 TextInput 에 넘긴 onPaste 를 그대로 textarea DOM 으로 전달한다.
   // RN 타입엔 onPaste 가 없어 Partial<TextInputProps> 로 캐스팅해 끼워 넣는다.
@@ -173,8 +174,9 @@ export function ChatInput({ placeholder = '메시지 입력…', className }: Ch
         </Button>
         {/* Input 래퍼(min-h-11 + py-2.5) 를 거치지 않고 TextInput 을 직접 사용.
             iOS 에서 wrapper className 의 minHeight/padding 이 인라인 style.height 와 충돌해
-            44px 에 갇히던 버그를 회피한다. height/padding 을 인라인으로 한 번에 지정하고
-            textAlignVertical='top' 으로 멀티라인 렌더링을 안정화. */}
+            44px 에 갇히던 버그를 회피한다. 자동 성장은 minHeight/maxHeight 로만 경계를 잡고
+            height 는 인라인으로 박지 않는다(박으면 iOS contentSize 가 그 값을 되돌려보내
+            MIN_INPUT_H 에 다시 잠긴다). textAlignVertical='top' 으로 멀티라인 렌더링 안정화. */}
         <TextInput
           {...webOnlyProps}
           value={text}
@@ -184,12 +186,13 @@ export function ChatInput({ placeholder = '메시지 입력…', className }: Ch
           multiline
           textAlignVertical="top"
           onKeyPress={handleKeyPress}
-          onContentSizeChange={(e) => setInputHeight(e.nativeEvent.contentSize.height)}
-          // MAX 도달 전엔 내부 스크롤 끄고(그냥 성장), 도달하면 그때부터 스크롤.
-          scrollEnabled={inputHeight >= MAX_INPUT_H}
+          onContentSizeChange={(e) => setMeasuredHeight(e.nativeEvent.contentSize.height)}
+          // MAX 도달 전엔 내부 스크롤 끄고(maxHeight 안에서 자유 성장), 도달하면 그때부터 스크롤.
+          scrollEnabled={measuredHeight >= MAX_INPUT_H}
           style={{
             flex: 1,
-            height: clampedHeight,
+            minHeight: MIN_INPUT_H,
+            maxHeight: MAX_INPUT_H,
             paddingHorizontal: INPUT_PAD_H,
             paddingTop: INPUT_PAD_V,
             paddingBottom: INPUT_PAD_V,
