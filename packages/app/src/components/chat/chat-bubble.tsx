@@ -7,6 +7,7 @@ import { Text } from '../ui/text';
 import { useChatStore } from '../../store/chat-store';
 import { ReactionPicker } from './reaction-picker';
 import { MessageReactions } from './message-reactions';
+import { MarkdownText } from './markdown-text';
 import type { ChatMessage } from '../../types';
 
 export type ChatBubbleProps = {
@@ -53,15 +54,14 @@ export function ChatBubble({ message, className }: ChatBubbleProps) {
             />
           ))}
           {hasText ? (
-            <Text
-              selectable
-              className={cn(
-                'text-[15px] leading-5',
-                isUser ? 'text-primary-foreground' : 'text-card-foreground',
-              )}
-            >
-              {message.text}
-            </Text>
+            isUser ? (
+              <Text selectable className="text-[15px] leading-5 text-primary-foreground">
+                {message.text}
+              </Text>
+            ) : (
+              // 어시스턴트(보고/응답)는 마크다운으로 렌더링 — #·**·- 등이 서식으로 보인다.
+              <MarkdownText text={message.text} className="text-card-foreground" />
+            )
           ) : null}
         </View>
       </Pressable>
