@@ -1,8 +1,9 @@
 import { useMutation } from '@tanstack/react-query';
 import { sendMessageStream, type Attachment } from '../api/navis';
+import { fetchNamoryMcp } from '../api/agent';
 import { useChatStore } from '../store/chat-store';
 import { useUiStore } from '../store/ui-store';
-import { localAgent, hasLocalAgent } from '../lib/local-agent';
+import { localAgent, hasLocalAgent, type NamoryMcp } from '../lib/local-agent';
 import { makeId } from '../lib/id';
 import { notify, isWindowHidden } from '../lib/notify';
 
@@ -14,13 +15,15 @@ type SendVars = {
   local?: boolean;
   // 코드 세션 멀티턴 — 이어갈 SDK 세션 id(로컬 에이전트 전용).
   resume?: string;
+  // 코드 세션 기억 연결 — namory MCP 좌표(있으면 recall/save 도구 연결).
+  namory?: NamoryMcp | null;
 };
 
 // 메시지 전송 = TanStack Query mutation. 대화방(conversationId) 단위로 동작해
 // 각 방이 독립 세션·typing 상태를 가진다. 응답은 토큰 스트리밍으로 받아 점진 표시한다.
 export function useSendMessage() {
   const mutation = useMutation({
-    mutationFn: async ({ text, conversationId, attachments, local, resume }: SendVars) => {
+    mutationFn: async ({ text, conversationId, attachments, local, resume, namory }: SendVars) => {
       const {
         conversations,
         addMessage,
@@ -49,6 +52,7 @@ export function useSendMessage() {
       if (local && localAgent) {
         const res = await localAgent.run(text, {
           resume,
+          namory: namory ?? undefined,
           onDelta: (delta) => {
             ensureBubble();
             appendMessageText(conversationId, assistantId, delta);
@@ -158,15 +162,23 @@ export function useSendMessage() {
     },
   });
 
-  // 현재 활성 대화방으로 전송. 코드 세션은 항상 로컬 에이전트로(+세션 이어가기),
-  // 일반 대화는 로컬 모드 ON + 데스크톱일 때만 로컬 실행.
+  // 현재 활성 대화방으로 전송. 코드 세션은 항상 로컬 에이전트로(+세션 이어가기 +프로젝트
+  // 기억 연결), 일반 대화는 로컬 모드 ON + 데스크톱일 때만 로컬 실행.
   const send = (text: string, attachments?: Attachment[]) => {
     const { activeId, conversations } = useChatStore.getState();
     const active = conversations.find((c) => c.id === activeId);
     const isCode = active?.kind === 'code';
     const local = hasLocalAgent && (isCode || useUiStore.getState().localMode);
     const resume = isCode ? active?.sessionId : undefined;
-    mutation.mutate({ text, conversationId: activeId, attachments, local, resume });
+    const conversationId = activeId;
+    if (isCode) {
+      // 코드 세션: namory 좌표를 먼저 받아 기억을 물린 뒤 전송(실패해도 순정으로 진행).
+      void fetchNamoryMcp().then((namory) =>
+        mutation.mutate({ text, conversationId, attachments, local, resume, namory }),
+      );
+      return;
+    }
+    mutation.mutate({ text, conversationId, attachments, local, resume });
   };
 
   return { send };

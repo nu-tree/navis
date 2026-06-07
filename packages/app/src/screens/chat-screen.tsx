@@ -12,15 +12,20 @@ import { useCrons } from '../hooks/use-crons';
 import { useConversationSync } from '../hooks/use-conversation-sync';
 import { ensureNotifyPermission } from '../lib/notify';
 import { localAgent, type LocalAgentConfig } from '../lib/local-agent';
+import { fetchNamoryMcp } from '../api/agent';
 
-// 코드 세션 상단 컨텍스트 바 — 작업 폴더·읽기/쓰기 모드 + 설정 열기. 설정이 덜 됐으면
-// 무엇이 빠졌는지 안내한다. cfgKey 가 바뀌면(설정 시트 닫힘) 설정을 다시 읽는다.
+// 코드 세션 상단 컨텍스트 바 — 감지된 프로젝트·작업 폴더·읽기/쓰기 모드 + 기억 연결
+// 여부 + 설정 열기. 설정이 덜 됐으면 무엇이 빠졌는지 안내한다. cfgKey 가 바뀌면(설정
+// 시트 닫힘) 설정을 다시 읽는다.
 function CodeContextBar({ onOpenSettings, cfgKey }: { onOpenSettings: () => void; cfgKey: number }) {
   const [cfg, setCfg] = useState<LocalAgentConfig | null>(null);
+  const [memoryLinked, setMemoryLinked] = useState(false);
   useEffect(() => {
     if (!localAgent) return;
     let alive = true;
     localAgent.getConfig().then((c) => alive && setCfg(c));
+    // 기억(namory) 좌표를 받을 수 있으면 코드 세션에 기억이 물린다 → 배지 표시.
+    fetchNamoryMcp().then((m) => alive && setMemoryLinked(!!m));
     return () => {
       alive = false;
     };
@@ -28,17 +33,17 @@ function CodeContextBar({ onOpenSettings, cfgKey }: { onOpenSettings: () => void
 
   const ready = !!cfg && cfg.enabled && !!cfg.workdir && cfg.hasToken;
   const folder = cfg?.workdir ? cfg.workdir.split('/').filter(Boolean).pop() : null;
-  const status = !cfg
+  const project = cfg?.project;
+  const mode = cfg?.allowWrite ? '쓰기·터미널 허용' : '읽기 전용';
+  const setupMsg = !cfg
     ? '확인 중…'
     : !cfg.enabled
       ? '로컬 에이전트 꺼짐 — 설정에서 켜기'
       : !cfg.workdir
-        ? '작업 폴더 미설정'
+        ? '작업 폴더 미설정 — 탭해서 설정'
         : !cfg.hasToken
-          ? '토큰 미설정'
-          : cfg.allowWrite
-            ? '쓰기·터미널 허용'
-            : '읽기 전용';
+          ? '토큰 미설정 — 탭해서 설정'
+          : null;
 
   return (
     <Pressable
@@ -48,12 +53,20 @@ function CodeContextBar({ onOpenSettings, cfgKey }: { onOpenSettings: () => void
       <Text className="text-sm">{ready ? '📁' : '⚠️'}</Text>
       <View className="flex-1">
         <Text numberOfLines={1} className="text-sm font-medium text-foreground">
-          {folder ? folder : '코드 세션'}
-          {ready ? <Text className="text-muted-foreground">{`  ·  ${status}`}</Text> : null}
+          {project ? project : folder ? folder : '코드 세션'}
+          {ready ? <Text className="text-muted-foreground">{`  ·  ${mode}`}</Text> : null}
         </Text>
-        {!ready ? (
+        {setupMsg ? (
           <Text variant="caption" className="text-muted-foreground">
-            {status}
+            {setupMsg}
+          </Text>
+        ) : ready && memoryLinked ? (
+          <Text variant="caption" className="text-muted-foreground">
+            🧠 이 프로젝트 기억 연결됨 · 폴더 {folder}
+          </Text>
+        ) : ready ? (
+          <Text variant="caption" className="text-muted-foreground">
+            폴더 {folder}
           </Text>
         ) : null}
       </View>

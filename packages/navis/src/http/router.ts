@@ -12,6 +12,7 @@ import { handleChat, handleChatStream } from "./chat.js";
 import { handleReports, handlePostReport } from "./reports.js";
 import { handleCrons, handleDeleteCron } from "./crons.js";
 import { handleMemories } from "./memories.js";
+import { handleAgentNamory } from "./agent.js";
 import {
   handleGetConversations,
   handlePutConversation,
@@ -68,6 +69,12 @@ export function route(req: IncomingMessage, res: ServerResponse): void {
   if (req.url?.startsWith("/api/memories")) {
     if (req.method === "OPTIONS") return handlePreflight(res);
     return void handleMemories(req, res);
+  }
+
+  // 코드 탭(데스크톱 로컬 에이전트)이 namory 를 직접 MCP 로 붙이게 좌표를 내려줌.
+  if (req.url?.startsWith("/api/agent/namory")) {
+    if (req.method === "OPTIONS") return handlePreflight(res);
+    if (req.method === "GET") return handleAgentNamory(req, res);
   }
 
   // 설정 — 시스템 프롬프트 조회/저장(앱 설정 화면)

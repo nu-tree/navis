@@ -253,14 +253,45 @@ function saveLocalConfig(cfg) {
   fs.writeFileSync(localConfigFile(), JSON.stringify(cfg));
 }
 
+// 작업 폴더에서 위로 올라가며 namory 프로젝트명을 감지한다(navis CLI 의 detectProject 와
+// 동일 규칙). 우선순위: ① .navis 파일(한 줄 오버라이드) ② package.json 의 name.
+// 못 찾으면 폴더 이름으로 폴백 — 코드 세션은 늘 어떤 폴더에서 도니까.
+function detectProjectFromDir(startDir) {
+  if (!startDir) return undefined;
+  let dir = path.resolve(startDir);
+  for (;;) {
+    try {
+      const navisFile = path.join(dir, '.navis');
+      if (fs.existsSync(navisFile)) {
+        const name = fs.readFileSync(navisFile, 'utf8').trim().split('\n')[0]?.trim();
+        if (name) return name;
+      }
+      const pkg = path.join(dir, 'package.json');
+      if (fs.existsSync(pkg)) {
+        const parsed = JSON.parse(fs.readFileSync(pkg, 'utf8'));
+        if (typeof parsed.name === 'string' && parsed.name.trim()) {
+          return parsed.name.includes('/') ? path.basename(parsed.name) : parsed.name;
+        }
+      }
+    } catch {
+      // 읽기/파싱 실패는 무시하고 위로.
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return path.basename(path.resolve(startDir)) || undefined;
+}
+
 ipcMain.handle('navis-local:config:get', () => {
   const c = loadLocalConfig();
-  // 토큰 원문은 노출하지 않음 — 존재 여부만.
+  // 토큰 원문은 노출하지 않음 — 존재 여부만. project 는 작업 폴더에서 감지해 코드 바에 표시.
   return {
     enabled: !!c.enabled,
     workdir: c.workdir || '',
     allowWrite: !!c.allowWrite,
     hasToken: !!(c.token || process.env.CLAUDE_CODE_OAUTH_TOKEN),
+    project: c.workdir ? detectProjectFromDir(c.workdir) : undefined,
   };
 });
 
@@ -280,6 +311,16 @@ ipcMain.handle('navis-local:config:set', (_e, patch) => {
 // 도구 사용을 클로드 코드처럼 한 줄로 요약 — 코드 세션 본문에 인라인 스트리밍한다.
 function formatToolUse(name, input) {
   const i = input || {};
+  // namory 기억 도구는 따로 라벨링(🧠 떠올림 / 💾 저장).
+  if (name && name.startsWith('mcp__namory__')) {
+    const op = name.slice('mcp__namory__'.length);
+    const label =
+      { recall: '🧠 기억 떠올림', recent: '🧠 최근 기억', save: '💾 기억 저장', pattern: '🧠 패턴', todos: '🧠 할 일' }[
+        op
+      ] || `🧠 ${op}`;
+    const hint = String(i.query || i.content || '').replace(/\s+/g, ' ').trim();
+    return `\n${label}${hint ? ` · ${hint.slice(0, 60)}` : ''}\n`;
+  }
   const icon =
     { Read: '📖', Edit: '✏️', Write: '📝', Bash: '⌘', Grep: '🔎', Glob: '🔎', LS: '📂' }[name] ||
     '🔧';
@@ -292,7 +333,7 @@ function formatToolUse(name, input) {
   return `\n${icon} ${name}${arg ? ` · ${arg}` : ''}\n`;
 }
 
-ipcMain.handle('navis-local:run', async (event, { id, prompt, resume }) => {
+ipcMain.handle('navis-local:run', async (event, { id, prompt, resume, namory }) => {
   const cfg = loadLocalConfig();
   const token = cfg.token || process.env.CLAUDE_CODE_OAUTH_TOKEN;
   if (!cfg.enabled) return { error: '로컬 에이전트가 꺼져 있어요(설정에서 켜기).' };
@@ -305,7 +346,47 @@ ipcMain.handle('navis-local:run', async (event, { id, prompt, resume }) => {
     // 읽기 전용 기본. allowWrite 일 때만 쓰기/터미널 도구 추가.
     const readonly = ['Read', 'Grep', 'Glob', 'LS'];
     const writeTools = ['Edit', 'Write', 'Bash'];
-    const allowedTools = cfg.allowWrite ? [...readonly, ...writeTools] : readonly;
+    const fileTools = cfg.allowWrite ? [...readonly, ...writeTools] : readonly;
+
+    // 이 폴더가 어떤 namory 프로젝트인지 — 기억 recall/save 를 이 프로젝트로 태깅.
+    const project = detectProjectFromDir(cfg.workdir);
+
+    // namory 좌표(url/token)가 오면 HTTP MCP 로 붙여 기억 recall/save 를 쥐여준다
+    // (서버 채팅 ask.ts 와 동일 배선). 없으면 순정 코드 에이전트로 동작.
+    const NAMORY_TOOLS = [
+      'mcp__namory__recall',
+      'mcp__namory__recent',
+      'mcp__namory__save',
+      'mcp__namory__pattern',
+      'mcp__namory__todos',
+    ];
+    const useNamory = !!(namory && namory.url && namory.token);
+    const mcpServers = useNamory
+      ? {
+          namory: {
+            type: 'http',
+            url: namory.url,
+            headers: { Authorization: `Bearer ${namory.token}` },
+            alwaysLoad: true,
+          },
+        }
+      : undefined;
+    const allowedTools = useNamory ? [...fileTools, ...NAMORY_TOOLS] : fileTools;
+
+    // 클로드 코드 기본 시스템 프롬프트(코딩 실력의 핵심)를 켜고, 프로젝트 기억 사용
+    // 지침을 덧붙인다. preset 을 명시 안 하면 SDK 는 빈 프롬프트로 돌아 코딩이 약해진다.
+    let append = '';
+    if (project) {
+      append += `\n\n[프로젝트] 현재 작업 중인 프로젝트는 "${project}" 다.`;
+      if (useNamory) {
+        append +=
+          ` 코드를 건드리기 전에 mcp__namory__recall 로 이 프로젝트(project: "${project}")의` +
+          ` 과거 결정·관례·함정을 먼저 떠올려라. 새로 알게 된 결정이나 함정은` +
+          ` mcp__namory__save 로 반드시 project: "${project}" 태그를 달아 저장해 다음 세션이 이어받게 하라.`;
+      }
+    }
+    const systemPrompt = { type: 'preset', preset: 'claude_code', ...(append ? { append } : {}) };
+
     const send = (s) => event.sender.send(`navis-local:delta:${id}`, s);
     // 스트리밍한 본문(도구 사용 줄 포함)을 그대로 모아 최종 text 로 돌려준다 —
     // 렌더러가 마지막에 권위 텍스트로 덮어써도 도구 사용 내역이 사라지지 않게.
@@ -317,7 +398,9 @@ ipcMain.handle('navis-local:run', async (event, { id, prompt, resume }) => {
       options: {
         cwd: cfg.workdir,
         model: 'claude-opus-4-8',
+        systemPrompt,
         allowedTools,
+        ...(mcpServers ? { mcpServers } : {}),
         settingSources: [],
         includePartialMessages: true,
         permissionMode: cfg.allowWrite ? 'acceptEdits' : 'default',

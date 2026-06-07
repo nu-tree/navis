@@ -6,7 +6,12 @@ export type LocalAgentConfig = {
   workdir: string;
   allowWrite: boolean;
   hasToken: boolean;
+  // 작업 폴더에서 감지한 namory 프로젝트명(코드 바 표시 + 기억 태깅).
+  project?: string;
 };
+
+// namory MCP 좌표 — 코드 세션이 기억 recall/save 를 직접 붙일 때 전달.
+export type NamoryMcp = { url: string; token: string };
 
 export type LocalAgentConfigPatch = Partial<{
   enabled: boolean;
@@ -21,8 +26,9 @@ type LocalAgentApi = {
   setConfig: (patch: LocalAgentConfigPatch) => Promise<{ ok: boolean }>;
   run: (
     prompt: string,
-    // resume: 이어갈 SDK 세션 id(코드 세션 멀티턴). onDelta 로 본문/도구 사용을 스트리밍.
-    opts?: { onDelta?: (text: string) => void; resume?: string },
+    // resume: 이어갈 SDK 세션 id(코드 세션 멀티턴). namory: 기억 MCP 좌표(있으면 연결).
+    // onDelta 로 본문/도구 사용을 스트리밍.
+    opts?: { onDelta?: (text: string) => void; resume?: string; namory?: NamoryMcp },
   ) => Promise<{ text?: string; error?: string; sessionId?: string }>;
 };
 

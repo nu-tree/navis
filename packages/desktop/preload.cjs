@@ -24,7 +24,13 @@ contextBridge.exposeInMainWorld('navisLocal', {
     };
     ipcRenderer.on(deltaCh, listener);
     return ipcRenderer
-      .invoke('navis-local:run', { id, prompt, resume: opts && opts.resume })
+      .invoke('navis-local:run', {
+        id,
+        prompt,
+        resume: opts && opts.resume,
+        // namory 좌표(코드 세션 기억 연결). 없으면 순정 코드 에이전트.
+        namory: opts && opts.namory,
+      })
       .finally(() => ipcRenderer.removeListener(deltaCh, listener));
   },
 });
