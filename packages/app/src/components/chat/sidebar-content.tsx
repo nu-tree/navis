@@ -2,6 +2,7 @@ import { Pressable, View } from 'react-native';
 import { cn } from '../../lib/cn';
 import { Text } from '../ui/text';
 import { ConversationList } from './conversation-list';
+import { UpdateBanner } from './update-banner';
 import { useUiStore, type ChatTab } from '../../store/ui-store';
 import { useChatStore, useTotalReportUnread } from '../../store/chat-store';
 import { hasLocalAgent } from '../../lib/local-agent';
@@ -97,6 +98,10 @@ export function SidebarContent({ onAfterSelect, onCollapse }: SidebarContentProp
       </View>
       <TabBar />
       <ConversationList onAfterSelect={onAfterSelect} />
+
+      {/* 데스크톱 업데이트 알림 — 사이드바 하단(설정 위). 누르면 껐다 켜지며 설치.
+          데스크톱 외 환경/업데이트 없을 땐 자동 숨김. */}
+      <UpdateBanner />
 
       <View className="border-t border-border pt-1">
         {/* '내 기억'·'프로젝트별 정리' 는 설정 화면 안으로 옮겼다(사이드바 간소화). */}

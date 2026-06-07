@@ -70,8 +70,10 @@ export function useDesktopUpdate(): DesktopUpdate {
 
   const install = () => {
     if (!desktopUpdate) return;
-    if (mode === 'download') void desktopUpdate.openDownload();
-    else void desktopUpdate.install();
+    // 항상 재시작하며 그 자리에서 설치(껐다 켜지면서 업데이트). 다운로드 페이지로
+    // 보내지 않는다 — 자동설치가 정말 막힌 환경에서만 메인 프로세스(navis-update:install
+    // 내부)가 알아서 다운로드 페이지로 폴백한다.
+    void desktopUpdate.install();
   };
 
   return { version, mode, install };

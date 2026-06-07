@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChatDrawer, ChatHeader, ChatInput, MessageList, UpdateBanner } from '../components/chat';
+import { ChatDrawer, ChatHeader, ChatInput, MessageList } from '../components/chat';
 import { SidebarContent } from '../components/chat/sidebar-content';
 import { LocalAgentSheet } from '../components/local-agent-sheet';
 import { Text } from '../components/ui/text';
@@ -188,8 +188,6 @@ export function ChatScreen() {
               />
             ) : null}
             <MessageList />
-            {/* 데스크톱 업데이트 알림(클로드코드 스타일). 데스크톱 외 환경에선 자동 숨김. */}
-            <UpdateBanner />
             {isReport ? (
               <View
                 className="border-t border-border bg-background px-4 py-3"
