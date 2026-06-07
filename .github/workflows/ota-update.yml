@@ -54,8 +54,14 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
 
       # 커밋 메시지는 env 로 전달(셸 인젝션 방지). 멀티라인이어도 안전.
+      # EXPO_PUBLIC_* 는 eas update 의 Metro 번들링 때 process.env 에서 읽혀 번들에
+      # 인라인된다. 이게 없으면 IS_BACKEND_CONFIGURED=false → 앱이 목업 모드로 동작
+      # (폰이 "백엔드 설정하면 진짜 navis가 답할게" 식 목업으로 답하던 원인).
+      # 데스크톱 빌드(desktop-release.yml)가 쓰는 것과 동일한 repo secret 을 참조한다.
       - name: eas update (preview 브랜치)
         working-directory: packages/app
         env:
           MSG: ${{ github.event.head_commit.message }}
+          EXPO_PUBLIC_NAVIS_URL: ${{ secrets.EXPO_PUBLIC_NAVIS_URL }}
+          EXPO_PUBLIC_NAVIS_TOKEN: ${{ secrets.EXPO_PUBLIC_NAVIS_TOKEN }}
         run: eas update --branch preview --message "$MSG" --non-interactive
