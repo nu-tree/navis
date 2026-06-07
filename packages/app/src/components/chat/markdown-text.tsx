@@ -13,7 +13,9 @@ import { Text } from '../ui/text';
 function renderInline(text: string, keyPrefix: string): ReactNode[] {
   const nodes: ReactNode[] = [];
   // 순서 주의: **굵게** 를 *기울임* 보다 먼저 매칭.
-  const re = /(\*\*([^*\n]+)\*\*|`([^`\n]+)`|\*([^*\n]+)\*|_([^_\n]+)_|\[([^\]\n]+)\]\(([^)\s]+)\))/g;
+  // 밑줄(_) 기울임은 일부러 빼둔다 — CLAUDE_CODE_OAUTH_TOKEN 같은 snake_case 식별자의
+  // 밑줄이 기울임으로 오인돼 글자가 깨지기 때문. 기울임은 *별표*만 지원한다.
+  const re = /(\*\*([^*\n]+)\*\*|`([^`\n]+)`|\*([^*\n]+)\*|\[([^\]\n]+)\]\(([^)\s]+)\))/g;
   let last = 0;
   let m: RegExpExecArray | null;
   let i = 0;
@@ -27,17 +29,17 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
           {m[3]}
         </Text>,
       );
-    } else if (m[4] != null || m[5] != null) {
-      nodes.push(<Text key={`${keyPrefix}i${i}`} className="italic">{m[4] ?? m[5]}</Text>);
-    } else if (m[6] != null) {
-      const url = m[7];
+    } else if (m[4] != null) {
+      nodes.push(<Text key={`${keyPrefix}i${i}`} className="italic">{m[4]}</Text>);
+    } else if (m[5] != null) {
+      const url = m[6];
       nodes.push(
         <Text
           key={`${keyPrefix}l${i}`}
           className="text-primary underline"
           onPress={() => void Linking.openURL(url).catch(() => {})}
         >
-          {m[6]}
+          {m[5]}
         </Text>,
       );
     }
