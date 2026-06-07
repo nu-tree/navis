@@ -1,7 +1,7 @@
 // navis 데스크톱 셸 (Electron).
 // 우리 RN 컴포넌트를 react-native-web 으로 빌드한 web-build 를 로컬 HTTP 서버로
 // 띄워 BrowserWindow 에 로드한다. (Expo 웹 빌드는 자산 경로가 절대경로라 file:// 불가)
-const { app, BrowserWindow, shell, Notification, ipcMain, screen } = require('electron');
+const { app, BrowserWindow, shell, Notification, ipcMain, screen, dialog } = require('electron');
 const path = require('node:path');
 const http = require('node:http');
 const fs = require('node:fs');
@@ -311,6 +311,19 @@ ipcMain.handle('navis-local:config:set', (_e, patch) => {
   return { ok: true };
 });
 
+// 코드 세션 작업 폴더 선택 — 네이티브 폴더 다이얼로그. 선택 경로 + 그 폴더의 namory
+// 프로젝트명(폴더명 폴백)을 돌려준다. 취소하면 null. 세션이 이 결과로 폴더를 박는다.
+ipcMain.handle('navis-local:pick-folder', async () => {
+  const win = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0];
+  const res = await dialog.showOpenDialog(win, {
+    title: '코드 세션 작업 폴더 선택',
+    properties: ['openDirectory'],
+  });
+  if (res.canceled || !res.filePaths || !res.filePaths[0]) return null;
+  const workdir = res.filePaths[0];
+  return { workdir, project: detectProjectFromDir(workdir) };
+});
+
 // 도구 사용을 클로드 코드처럼 한 줄로 요약 — 코드 세션 본문에 인라인 스트리밍한다.
 function formatToolUse(name, input) {
   const i = input || {};
@@ -355,12 +368,14 @@ function formatToolUse(name, input) {
   return `\n${icon} ${name}${arg ? ` · ${arg}` : ''}\n`;
 }
 
-ipcMain.handle('navis-local:run', async (event, { id, prompt, resume, namory }) => {
+ipcMain.handle('navis-local:run', async (event, { id, prompt, resume, workdir, namory }) => {
   const cfg = loadLocalConfig();
   const token = cfg.token || process.env.CLAUDE_CODE_OAUTH_TOKEN;
-  if (!cfg.enabled) return { error: '로컬 에이전트가 꺼져 있어요(설정에서 켜기).' };
+  // 코드 탭은 항상 로컬 — 별도 '로컬 모드' 토글 없음. 세션이 고른 폴더(workdir)를
+  // 우선 쓰고, 없으면 전역 설정으로 폴백한다.
+  const dir = workdir || cfg.workdir;
   if (!token) return { error: 'CLAUDE_CODE_OAUTH_TOKEN 이 없어요(설정에서 토큰 입력).' };
-  if (!cfg.workdir) return { error: '작업 폴더가 설정되지 않았어요.' };
+  if (!dir) return { error: '작업 폴더를 먼저 선택해주세요(+폴더).' };
   // catch/finally 에서도 접근하도록 try 밖에 선언(중단 시 부분 결과 반환용).
   let streamed = '';
   let finalText = '';
@@ -376,7 +391,8 @@ ipcMain.handle('navis-local:run', async (event, { id, prompt, resume, namory }) 
     const fileTools = cfg.allowWrite ? [...readonly, ...writeTools] : readonly;
 
     // 이 폴더가 어떤 namory 프로젝트인지 — 기억 recall/save 를 이 프로젝트로 태깅.
-    const project = detectProjectFromDir(cfg.workdir);
+    // (폴더명 폴백이라, 기억이 없던 폴더는 이 태그로 첫 저장 시 프로젝트가 자동 생성됨.)
+    const project = detectProjectFromDir(dir);
 
     // namory 좌표(url/token)가 오면 HTTP MCP 로 붙여 기억 recall/save 를 쥐여준다
     // (서버 채팅 ask.ts 와 동일 배선). 없으면 순정 코드 에이전트로 동작.
@@ -472,7 +488,7 @@ ipcMain.handle('navis-local:run', async (event, { id, prompt, resume, namory }) 
     for await (const m of query({
       prompt,
       options: {
-        cwd: cfg.workdir,
+        cwd: dir,
         model: 'claude-opus-4-8',
         systemPrompt,
         allowedTools,

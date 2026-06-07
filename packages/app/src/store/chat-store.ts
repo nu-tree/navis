@@ -21,6 +21,10 @@ export type Conversation = {
   unread?: number;
   // 보고방 숨김 — 목록에서 가리되 데이터/크론은 유지(언제든 다시 보이게).
   hidden?: boolean;
+  // 코드 세션(kind==='code') 전용: 이 세션의 작업 폴더(세션별) + 그 폴더의 namory
+  // 프로젝트명(폴더명 폴백). 폴더를 고르면 그 레포의 기억이 연결되고 없으면 자동 생성된다.
+  workdir?: string;
+  project?: string;
 };
 
 // 서버 동기화로 내려오는 대화방 행(머지 입력). deletedAt 있으면 삭제 전파.
@@ -62,6 +66,9 @@ type ChatStore = {
   // 스트리밍 종료 시 권위 있는 최종 텍스트로 보정
   setMessageText: (conversationId: string, messageId: string, text: string) => void;
   setSessionId: (conversationId: string, sessionId?: string) => void;
+  // 코드 세션의 작업 폴더 설정(+폴더 선택 시). 폴더가 바뀌면 namory 세션(sessionId)도
+  // 끊어 새 폴더 맥락으로 다시 시작한다. 제목도 폴더/프로젝트명으로 갱신.
+  setCodeFolder: (conversationId: string, workdir: string, project?: string) => void;
   setTyping: (conversationId: string, typing: boolean) => void;
   // 메시지 이모지 리액션 토글 (있으면 제거, 없으면 추가)
   toggleReaction: (conversationId: string, messageId: string, emoji: string) => void;
@@ -232,6 +239,25 @@ export const useChatStore = create<ChatStore>()(
     set((s) => ({
       conversations: s.conversations.map((c) =>
         c.id === conversationId ? { ...c, sessionId } : c,
+      ),
+    })),
+
+  setCodeFolder: (conversationId, workdir, project) =>
+    set((s) => ({
+      conversations: s.conversations.map((c) =>
+        c.id === conversationId
+          ? {
+              ...c,
+              workdir,
+              project,
+              // 폴더가 바뀌면 이전 SDK 세션 맥락을 끊는다(새 폴더로 깨끗이 시작).
+              sessionId: undefined,
+              // 아직 빈 코드 세션이면 제목을 폴더/프로젝트명으로.
+              title:
+                c.messages.length === 0 ? (project || workdir.split('/').filter(Boolean).pop() || c.title) : c.title,
+              updatedAt: now(),
+            }
+          : c,
       ),
     })),
 

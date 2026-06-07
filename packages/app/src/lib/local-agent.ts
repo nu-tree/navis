@@ -27,9 +27,16 @@ type LocalAgentApi = {
   run: (
     prompt: string,
     // resume: 이어갈 SDK 세션 id(코드 세션 멀티턴). namory: 기억 MCP 좌표(있으면 연결).
-    // onDelta 로 본문/도구 사용을 스트리밍.
-    opts?: { onDelta?: (text: string) => void; resume?: string; namory?: NamoryMcp },
+    // workdir: 이 세션의 작업 폴더(세션별). onDelta 로 본문/도구 사용을 스트리밍.
+    opts?: {
+      onDelta?: (text: string) => void;
+      resume?: string;
+      workdir?: string;
+      namory?: NamoryMcp;
+    },
   ) => Promise<{ text?: string; error?: string; sessionId?: string }>;
+  // 코드 세션 작업 폴더 선택(네이티브 다이얼로그). 취소하면 null.
+  pickFolder: () => Promise<{ workdir: string; project?: string } | null>;
   // 생성 중단(정지 버튼). 진행 중인 모든 run 을 끊는다.
   stop: () => void;
 };

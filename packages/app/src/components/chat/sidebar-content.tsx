@@ -74,8 +74,6 @@ function TabBar() {
 // 대화 목록 + "내 기억"·"설정" 진입. 모바일 드로어와 데스크톱 고정 사이드바가 함께 쓴다.
 export function SidebarContent({ onAfterSelect, onCollapse }: SidebarContentProps) {
   const setScreen = useUiStore((s) => s.setScreen);
-  const localMode = useUiStore((s) => s.localMode);
-  const setLocalMode = useUiStore((s) => s.setLocalMode);
 
   const go = (screen: 'memories' | 'projects' | 'settings') => () => {
     setScreen(screen);
@@ -104,19 +102,8 @@ export function SidebarContent({ onAfterSelect, onCollapse }: SidebarContentProp
       <UpdateBanner />
 
       <View className="border-t border-border pt-1">
-        {/* '내 기억'·'프로젝트별 정리' 는 설정 화면 안으로 옮겼다(사이드바 간소화). */}
-        {hasLocalAgent ? (
-          <Pressable
-            onPress={() => setLocalMode(!localMode)}
-            className="mx-2 flex-row items-center justify-between rounded-xl px-3 py-2.5 cursor-pointer transition-colors active:bg-secondary hover:bg-secondary"
-          >
-            <Text className="font-medium">로컬 모드</Text>
-            <Text variant="caption" className={localMode ? 'text-primary' : 'text-muted-foreground'}>
-              {localMode ? '내 맥에서 실행' : '서버 navis'}
-            </Text>
-          </Pressable>
-        ) : null}
-
+        {/* '내 기억'·'프로젝트별 정리' 는 설정 화면 안으로 옮겼다(사이드바 간소화).
+            '로컬 모드' 토글도 제거 — 코드 탭은 항상 로컬, 일반 채팅은 항상 서버. */}
         <Pressable
           onPress={go('settings')}
           className="mx-2 mb-1 flex-row items-center rounded-xl px-3 py-2.5 cursor-pointer transition-colors active:bg-secondary hover:bg-secondary"

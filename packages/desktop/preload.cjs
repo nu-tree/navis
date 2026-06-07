@@ -16,6 +16,10 @@ contextBridge.exposeInMainWorld('navisLocal', {
   getConfig: () => ipcRenderer.invoke('navis-local:config:get'),
   setConfig: (cfg) => ipcRenderer.invoke('navis-local:config:set', cfg),
 
+  // 폴더 선택 다이얼로그 — 코드 세션의 작업 폴더를 고른다. 선택한 경로와 그 폴더의
+  // namory 프로젝트명(폴더명 폴백)을 돌려준다. 취소하면 null.
+  pickFolder: () => ipcRenderer.invoke('navis-local:pick-folder'),
+
   // prompt 를 로컬 에이전트로 실행. onDelta 로 토큰 스트리밍, 반환은 {text} 또는 {error}.
   run: (prompt, opts) => {
     const id = `run-${nextId++}`;
@@ -31,6 +35,8 @@ contextBridge.exposeInMainWorld('navisLocal', {
         id,
         prompt,
         resume: opts && opts.resume,
+        // 이 코드 세션의 작업 폴더(세션별). 없으면 메인이 전역 설정으로 폴백.
+        workdir: opts && opts.workdir,
         // namory 좌표(코드 세션 기억 연결). 없으면 순정 코드 에이전트.
         namory: opts && opts.namory,
       })

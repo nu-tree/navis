@@ -15,6 +15,8 @@ type SendVars = {
   local?: boolean;
   // 코드 세션 멀티턴 — 이어갈 SDK 세션 id(로컬 에이전트 전용).
   resume?: string;
+  // 코드 세션의 작업 폴더(세션별) — 로컬 에이전트가 이 폴더에서 돈다.
+  workdir?: string;
   // 코드 세션 기억 연결 — namory MCP 좌표(있으면 recall/save 도구 연결).
   namory?: NamoryMcp | null;
 };
@@ -23,7 +25,7 @@ type SendVars = {
 // 각 방이 독립 세션·typing 상태를 가진다. 응답은 토큰 스트리밍으로 받아 점진 표시한다.
 export function useSendMessage() {
   const mutation = useMutation({
-    mutationFn: async ({ text, conversationId, attachments, local, resume, namory }: SendVars) => {
+    mutationFn: async ({ text, conversationId, attachments, local, resume, workdir, namory }: SendVars) => {
       const {
         conversations,
         addMessage,
@@ -52,6 +54,7 @@ export function useSendMessage() {
       if (local && localAgent) {
         const res = await localAgent.run(text, {
           resume,
+          workdir,
           namory: namory ?? undefined,
           onDelta: (delta) => {
             ensureBubble();
@@ -162,19 +165,21 @@ export function useSendMessage() {
     },
   });
 
-  // 현재 활성 대화방으로 전송. 코드 세션은 항상 로컬 에이전트로(+세션 이어가기 +프로젝트
-  // 기억 연결), 일반 대화는 로컬 모드 ON + 데스크톱일 때만 로컬 실행.
+  // 현재 활성 대화방으로 전송. 코드 세션(kind==='code')만 데스크톱 로컬 에이전트로
+  // 실행(내 맥 폴더 — 세션별 작업 폴더 + 세션 이어가기 + 프로젝트 기억 연결). 일반
+  // 채팅은 항상 서버 navis 로 보낸다(별도 '로컬 모드' 토글 없음).
   const send = (text: string, attachments?: Attachment[]) => {
     const { activeId, conversations } = useChatStore.getState();
     const active = conversations.find((c) => c.id === activeId);
     const isCode = active?.kind === 'code';
-    const local = hasLocalAgent && (isCode || useUiStore.getState().localMode);
+    const local = hasLocalAgent && isCode;
     const resume = isCode ? active?.sessionId : undefined;
+    const workdir = isCode ? active?.workdir : undefined;
     const conversationId = activeId;
     if (isCode) {
       // 코드 세션: namory 좌표를 먼저 받아 기억을 물린 뒤 전송(실패해도 순정으로 진행).
       void fetchNamoryMcp().then((namory) =>
-        mutation.mutate({ text, conversationId, attachments, local, resume, namory }),
+        mutation.mutate({ text, conversationId, attachments, local, resume, workdir, namory }),
       );
       return;
     }

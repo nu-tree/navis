@@ -5,18 +5,23 @@ import { ChatDrawer, ChatHeader, ChatInput, MessageList } from '../components/ch
 import { SidebarContent } from '../components/chat/sidebar-content';
 import { LocalAgentSheet } from '../components/local-agent-sheet';
 import { Text } from '../components/ui/text';
-import { useActiveConversation, useIsActiveTyping, useTotalUnread } from '../store/chat-store';
+import {
+  useActiveConversation,
+  useIsActiveTyping,
+  useTotalUnread,
+  useChatStore,
+} from '../store/chat-store';
 import { useUiStore } from '../store/ui-store';
 import { useReports } from '../hooks/use-reports';
 import { useCrons } from '../hooks/use-crons';
 import { useConversationSync } from '../hooks/use-conversation-sync';
 import { ensureNotifyPermission } from '../lib/notify';
-import { localAgent, type LocalAgentConfig } from '../lib/local-agent';
-import { fetchNamoryMcp } from '../api/agent';
+import { localAgent } from '../lib/local-agent';
 
-// 코드 세션 상단 컨텍스트 바 — 감지된 프로젝트·작업 폴더·읽기/쓰기 모드 + 기억 연결
-// 여부 + 설정 열기. 설정이 덜 됐으면 무엇이 빠졌는지 안내한다. cfgKey 가 바뀌면(설정
-// 시트 닫힘) 설정을 다시 읽는다.
+// 코드 세션 폴더 칩 바 — 클로드 데스크톱 코드 느낌. [🖥 로컬] · [📁 폴더(=namory 프로젝트)]
+// · [＋폴더] · (토큰 경고 / 정지 / ⚙️). 입력창 바로 위에 둔다. 폴더는 "세션별"이라
+// active 대화의 workdir/project 를 쓰고, ＋폴더로 네이티브 다이얼로그를 열어 바꾼다.
+// 폴더를 고르면 그 레포의 namory 프로젝트 기억이 연결되고(없으면 자동 생성) cwd 도 바뀐다.
 function CodeContextBar({
   onOpenSettings,
   cfgKey,
@@ -28,74 +33,90 @@ function CodeContextBar({
   generating: boolean;
   onStop: () => void;
 }) {
-  const [cfg, setCfg] = useState<LocalAgentConfig | null>(null);
-  const [memoryLinked, setMemoryLinked] = useState(false);
+  const active = useActiveConversation();
+  const setCodeFolder = useChatStore((s) => s.setCodeFolder);
+  const [hasToken, setHasToken] = useState(true);
+  const [allowWrite, setAllowWrite] = useState(false);
   useEffect(() => {
     if (!localAgent) return;
     let alive = true;
-    localAgent.getConfig().then((c) => alive && setCfg(c));
-    // 기억(namory) 좌표를 받을 수 있으면 코드 세션에 기억이 물린다 → 배지 표시.
-    fetchNamoryMcp().then((m) => alive && setMemoryLinked(!!m));
+    localAgent.getConfig().then((c) => {
+      if (!alive) return;
+      setHasToken(c.hasToken);
+      setAllowWrite(c.allowWrite);
+    });
     return () => {
       alive = false;
     };
   }, [cfgKey]);
 
-  const ready = !!cfg && cfg.enabled && !!cfg.workdir && cfg.hasToken;
-  const folder = cfg?.workdir ? cfg.workdir.split('/').filter(Boolean).pop() : null;
-  const project = cfg?.project;
-  const mode = cfg?.allowWrite ? '쓰기·터미널 허용' : '읽기 전용';
-  const setupMsg = !cfg
-    ? '확인 중…'
-    : !cfg.enabled
-      ? '로컬 에이전트 꺼짐 — 설정에서 켜기'
-      : !cfg.workdir
-        ? '작업 폴더 미설정 — 탭해서 설정'
-        : !cfg.hasToken
-          ? '토큰 미설정 — 탭해서 설정'
-          : null;
+  const folderName =
+    active?.project || active?.workdir?.split('/').filter(Boolean).pop() || null;
+
+  const pickFolder = async () => {
+    if (!localAgent || !active) return;
+    const r = await localAgent.pickFolder();
+    if (r) setCodeFolder(active.id, r.workdir, r.project);
+  };
 
   return (
-    <Pressable
-      onPress={onOpenSettings}
-      className="flex-row items-center gap-2 border-b border-border bg-surface px-4 py-2 cursor-pointer active:opacity-80 hover:bg-secondary"
-    >
-      <Text className="text-sm">{ready ? '📁' : '⚠️'}</Text>
-      <View className="flex-1">
-        <Text numberOfLines={1} className="text-sm font-medium text-foreground">
-          {project ? project : folder ? folder : '코드 세션'}
-          {ready ? <Text className="text-muted-foreground">{`  ·  ${mode}`}</Text> : null}
-        </Text>
-        {setupMsg ? (
-          <Text variant="caption" className="text-muted-foreground">
-            {setupMsg}
-          </Text>
-        ) : ready && memoryLinked ? (
-          <Text variant="caption" className="text-muted-foreground">
-            🧠 이 프로젝트 기억 연결됨 · 폴더 {folder}
-          </Text>
-        ) : ready ? (
-          <Text variant="caption" className="text-muted-foreground">
-            폴더 {folder}
-          </Text>
-        ) : null}
+    <View className="flex-row items-center gap-2 px-3 pb-2 pt-1">
+      {/* 항상 로컬 — 코드는 내 맥에서 돈다(별도 토글 없음). */}
+      <View className="flex-row items-center gap-1 rounded-lg border border-border bg-secondary px-2.5 py-1.5">
+        <Text className="text-xs">🖥</Text>
+        <Text className="text-xs font-medium text-foreground">로컬</Text>
       </View>
-      {/* 생성 중이면 정지 버튼(클로드 코드의 Esc), 아니면 설정 진입. */}
-      {generating ? (
+      {/* 폴더(=namory 프로젝트) 칩 — 누르면 폴더 선택. 기억은 이 폴더로 자동 연결/생성. */}
+      <Pressable
+        onPress={pickFolder}
+        className="flex-row items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 cursor-pointer active:opacity-70 hover:bg-secondary"
+      >
+        <Text className="text-xs">📁</Text>
+        <Text numberOfLines={1} className="max-w-[180px] text-xs font-medium text-foreground">
+          {folderName ?? '폴더 선택'}
+        </Text>
+        {folderName && allowWrite ? (
+          <Text className="text-[10px] text-muted-foreground">· 쓰기</Text>
+        ) : null}
+      </Pressable>
+      {/* 폴더 바꾸기 */}
+      <Pressable
+        onPress={pickFolder}
+        hitSlop={6}
+        className="rounded-lg border border-border px-2 py-1.5 cursor-pointer active:opacity-70 hover:bg-secondary"
+      >
+        <Text className="text-xs text-muted-foreground">＋폴더</Text>
+      </Pressable>
+
+      <View className="flex-1" />
+
+      {/* 토큰 없으면 경고(설정), 생성 중이면 정지, 아니면 ⚙️ 설정. */}
+      {!hasToken ? (
         <Pressable
-          onPress={(e) => {
-            e.stopPropagation();
-            onStop();
-          }}
-          hitSlop={8}
-          className="flex-row items-center gap-1 rounded-lg border border-border px-2 py-1 cursor-pointer active:opacity-70 hover:bg-secondary"
+          onPress={onOpenSettings}
+          hitSlop={6}
+          className="rounded-lg border border-border px-2 py-1.5 cursor-pointer active:opacity-70 hover:bg-secondary"
+        >
+          <Text className="text-xs text-muted-foreground">⚠️ 토큰</Text>
+        </Pressable>
+      ) : generating ? (
+        <Pressable
+          onPress={onStop}
+          hitSlop={6}
+          className="rounded-lg border border-border px-2 py-1.5 cursor-pointer active:opacity-70 hover:bg-secondary"
         >
           <Text className="text-xs font-semibold text-foreground">⏹ 정지</Text>
         </Pressable>
       ) : (
-        <Text className="text-muted-foreground">⚙️</Text>
+        <Pressable
+          onPress={onOpenSettings}
+          hitSlop={6}
+          className="rounded-lg px-1.5 py-1.5 cursor-pointer active:opacity-70 hover:bg-secondary"
+        >
+          <Text className="text-sm text-muted-foreground">⚙️</Text>
+        </Pressable>
       )}
-    </Pressable>
+    </View>
   );
 }
 
@@ -178,15 +199,6 @@ export function ChatScreen() {
         >
           {/* 넓은 화면에선 본문을 가운데 정렬하고 폭을 제한 */}
           <View className="w-full flex-1 self-center" style={{ maxWidth: CHAT_MAX_WIDTH }}>
-            {/* 코드 세션: 작업 폴더·모드 컨텍스트 바 (클로드 데스크톱 코드 느낌) */}
-            {isCode ? (
-              <CodeContextBar
-                onOpenSettings={() => setCodeSheet(true)}
-                cfgKey={cfgKey}
-                generating={isActiveTyping}
-                onStop={() => localAgent?.stop()}
-              />
-            ) : null}
             <MessageList />
             {isReport ? (
               <View
@@ -199,7 +211,16 @@ export function ChatScreen() {
               </View>
             ) : (
               <View style={{ paddingBottom: insets.bottom }}>
-                <ChatInput />
+                {/* 코드 세션: 폴더 칩 바(클로드 데스크톱 코드 느낌)를 입력창 바로 위에. */}
+                {isCode ? (
+                  <CodeContextBar
+                    onOpenSettings={() => setCodeSheet(true)}
+                    cfgKey={cfgKey}
+                    generating={isActiveTyping}
+                    onStop={() => localAgent?.stop()}
+                  />
+                ) : null}
+                <ChatInput placeholder={isCode ? '작업을 설명하거나 질문하세요' : undefined} />
               </View>
             )}
           </View>
