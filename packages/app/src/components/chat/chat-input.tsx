@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   Image,
   Platform,
@@ -8,6 +8,7 @@ import {
   View,
   type NativeSyntheticEvent,
   type TextInputKeyPressEventData,
+  type TextInputProps,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { cn } from '../../lib/cn';
@@ -16,6 +17,27 @@ import { Text } from '../ui/text';
 import { useSendMessage } from '../../hooks/use-send-message';
 import { useIsActiveTyping } from '../../store/chat-store';
 import type { Attachment } from '../../api/navis';
+
+// 첨부 최대 개수 — pickImage(selectionLimit), 붙여넣기, 합산 모두 이 한도에 맞춘다.
+const MAX_ATTACHMENTS = 4;
+
+// 브라우저 File → Attachment(base64). 데이터 URL 의 ',' 뒤가 base64 본문.
+const fileToAttachment = (file: File): Promise<Attachment> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error ?? new Error('FileReader 실패'));
+    reader.onload = () => {
+      const result = typeof reader.result === 'string' ? reader.result : '';
+      const comma = result.indexOf(',');
+      const base64 = comma >= 0 ? result.slice(comma + 1) : '';
+      resolve({
+        uri: result,
+        base64,
+        mimeType: file.type || 'image/png',
+      });
+    };
+    reader.readAsDataURL(file);
+  });
 
 export type ChatInputProps = {
   placeholder?: string;
@@ -43,7 +65,7 @@ export function ChatInput({ placeholder = '메시지 입력…', className }: Ch
       base64: true,
       quality: 0.7,
       allowsMultipleSelection: true,
-      selectionLimit: 4,
+      selectionLimit: MAX_ATTACHMENTS,
     });
     if (result.canceled) return;
     const picked: Attachment[] = result.assets
@@ -53,11 +75,36 @@ export function ChatInput({ placeholder = '메시지 입력…', className }: Ch
         base64: a.base64 as string,
         mimeType: a.mimeType ?? 'image/jpeg',
       }));
-    setAttachments((prev) => [...prev, ...picked].slice(0, 4));
+    setAttachments((prev) => [...prev, ...picked].slice(0, MAX_ATTACHMENTS));
   };
 
   const removeAttachment = (uri: string) =>
     setAttachments((prev) => prev.filter((a) => a.uri !== uri));
+
+  // 클립보드 이미지 붙여넣기(웹/데스크톱 전용). RN 모바일 텍스트 입력에선 paste 이벤트가
+  // 노출되지 않아 무시한다. text 만 있는 paste 는 그대로 흘려보내 텍스트 붙여넣기 동작 유지.
+  const handlePaste = useCallback((e: React.ClipboardEvent<HTMLElement>) => {
+    if (Platform.OS !== 'web') return;
+    const items = e.clipboardData?.items;
+    if (!items || items.length === 0) return;
+    const files: File[] = [];
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      if (it.kind === 'file' && it.type.startsWith('image/')) {
+        const f = it.getAsFile();
+        if (f) files.push(f);
+      }
+    }
+    if (files.length === 0) return;
+    e.preventDefault();
+    void Promise.all(files.map(fileToAttachment))
+      .then((picked) => {
+        setAttachments((prev) => [...prev, ...picked].slice(0, MAX_ATTACHMENTS));
+      })
+      .catch(() => {
+        /* 읽기 실패는 조용히 무시 — 사용자가 다시 시도 가능 */
+      });
+  }, []);
 
   const submit = () => {
     const trimmed = text.trim();
@@ -79,6 +126,13 @@ export function ChatInput({ placeholder = '메시지 입력…', className }: Ch
   };
 
   const clampedHeight = Math.min(Math.max(MIN_INPUT_H, inputHeight), MAX_INPUT_H);
+
+  // react-native-web 은 TextInput 에 넘긴 onPaste 를 그대로 textarea DOM 으로 전달한다.
+  // RN 타입엔 onPaste 가 없어 Partial<TextInputProps> 로 캐스팅해 끼워 넣는다.
+  const webOnlyProps: Partial<TextInputProps> =
+    Platform.OS === 'web'
+      ? ({ onPaste: handlePaste } as unknown as Partial<TextInputProps>)
+      : {};
 
   return (
     <View className={cn('border-t border-border bg-background', className)}>
@@ -122,6 +176,7 @@ export function ChatInput({ placeholder = '메시지 입력…', className }: Ch
             44px 에 갇히던 버그를 회피한다. height/padding 을 인라인으로 한 번에 지정하고
             textAlignVertical='top' 으로 멀티라인 렌더링을 안정화. */}
         <TextInput
+          {...webOnlyProps}
           value={text}
           onChangeText={setText}
           placeholder={placeholder}
