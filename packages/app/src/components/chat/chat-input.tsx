@@ -4,13 +4,13 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  TextInput,
   View,
   type NativeSyntheticEvent,
   type TextInputKeyPressEventData,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { cn } from '../../lib/cn';
-import { Input } from '../ui/input';
 import { Button } from '../ui/button';
 import { Text } from '../ui/text';
 import { useSendMessage } from '../../hooks/use-send-message';
@@ -25,6 +25,8 @@ export type ChatInputProps = {
 // 입력창 자동 성장 범위 — 내용에 맞춰 커지다 MAX 를 넘으면 그때 내부 스크롤.
 const MIN_INPUT_H = 44;
 const MAX_INPUT_H = 200;
+const INPUT_PAD_V = 10;
+const INPUT_PAD_H = 16;
 
 export function ChatInput({ placeholder = '메시지 입력…', className }: ChatInputProps) {
   const [text, setText] = useState('');
@@ -76,6 +78,8 @@ export function ChatInput({ placeholder = '메시지 입력…', className }: Ch
     }
   };
 
+  const clampedHeight = Math.min(Math.max(MIN_INPUT_H, inputHeight), MAX_INPUT_H);
+
   return (
     <View className={cn('border-t border-border bg-background', className)}>
       {attachments.length > 0 ? (
@@ -113,17 +117,30 @@ export function ChatInput({ placeholder = '메시지 입력…', className }: Ch
         >
           <Text className="text-xl text-foreground">＋</Text>
         </Button>
-        <Input
+        {/* Input 래퍼(min-h-11 + py-2.5) 를 거치지 않고 TextInput 을 직접 사용.
+            iOS 에서 wrapper className 의 minHeight/padding 이 인라인 style.height 와 충돌해
+            44px 에 갇히던 버그를 회피한다. height/padding 을 인라인으로 한 번에 지정하고
+            textAlignVertical='top' 으로 멀티라인 렌더링을 안정화. */}
+        <TextInput
           value={text}
           onChangeText={setText}
           placeholder={placeholder}
+          placeholderTextColor="#6b7280"
           multiline
+          textAlignVertical="top"
           onKeyPress={handleKeyPress}
           onContentSizeChange={(e) => setInputHeight(e.nativeEvent.contentSize.height)}
           // MAX 도달 전엔 내부 스크롤 끄고(그냥 성장), 도달하면 그때부터 스크롤.
           scrollEnabled={inputHeight >= MAX_INPUT_H}
-          style={{ height: Math.min(Math.max(MIN_INPUT_H, inputHeight), MAX_INPUT_H) }}
-          className="flex-1"
+          style={{
+            flex: 1,
+            height: clampedHeight,
+            paddingHorizontal: INPUT_PAD_H,
+            paddingTop: INPUT_PAD_V,
+            paddingBottom: INPUT_PAD_V,
+            fontSize: 15,
+          }}
+          className="rounded-xl bg-input text-foreground"
         />
         <Button size="icon" className="rounded-full" disabled={!canSend} onPress={submit}>
           <Text className="text-lg text-primary-foreground">↑</Text>
