@@ -87,7 +87,11 @@ export function ChatInput({ placeholder = '메시지 입력…', className }: Ch
         >
           {attachments.map((a) => (
             <View key={a.uri} className="relative">
-              <Image source={{ uri: a.uri }} className="h-20 w-20 rounded-xl bg-secondary" />
+              <Image
+                source={{ uri: a.uri }}
+                className="rounded-xl bg-secondary"
+                style={{ width: 80, height: 80 }}
+              />
               <Pressable
                 onPress={() => removeAttachment(a.uri)}
                 className="absolute -right-1.5 -top-1.5 h-6 w-6 items-center justify-center rounded-full bg-foreground"
