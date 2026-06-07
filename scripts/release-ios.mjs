@@ -70,6 +70,18 @@ console.log(`[release:ios] 버전 = ${version} (app.json + Info.plist + Expo.pli
 //    빌드 실패로 옛 .app 을 잘못 올리는 사고를 막으려고 산출물 신선도(mtime)를 검증한다.
 const startedAt = Date.now();
 console.log("[release:ios] xcodebuild Release 빌드 시작 (서명 없이 · 기기 불필요)…");
+// Hermes 컴파일러(hermesc) 경로 강제 주입 — pnpm 모노레포에서 Pods 의 HERMES_CLI_PATH
+// 가 옆 프로젝트(namory)의 없는 경로로 잘못 해석돼, JS 번들(Hermes) 단계가 실패하고
+// 번들 없는 깡통 .app 이 나와 앱이 실행 즉시 크래시하던 적이 있다(0.1.3). navis 트리의
+// hermesc 를 직접 찾아 xcodebuild 빌드 설정으로 덮어쓴다.
+const HERMESC = [
+  join(ROOT, "node_modules/hermes-compiler/hermesc/osx-bin/hermesc"),
+  join(APP_DIR, "node_modules/hermes-compiler/hermesc/osx-bin/hermesc"),
+].find((p) => existsSync(p));
+if (HERMESC) console.log(`[release:ios] HERMES_CLI_PATH = ${HERMESC}`);
+else console.warn("[release:ios] ⚠ navis 트리에서 hermesc 를 못 찾음 — 기본 경로로 진행");
+const hermesArg = HERMESC ? [`HERMES_CLI_PATH=${HERMESC}`] : [];
+
 try {
   execFileSync(
     "xcodebuild",
@@ -83,6 +95,7 @@ try {
       "-destination",
       "generic/platform=iOS",
       "CODE_SIGNING_ALLOWED=NO",
+      ...hermesArg,
       "build",
     ],
     { cwd: APP_DIR, stdio: "inherit" },
@@ -121,6 +134,18 @@ if (!built || built.mtime < startedAt - 5000) {
   process.exit(1);
 }
 console.log(`[release:ios] 빌드 산출물 확인 ✓ ${built.path}`);
+
+// JS 번들이 실제로 .app 에 박혔는지 검증 — hermesc 실패 등으로 번들이 빠지면 .app 은
+// 생겨도(신선도 통과) 앱이 실행 즉시 크래시한다. 깡통 .ipa 업로드를 여기서 막는다.
+const jsbundle = join(built.path, "main.jsbundle");
+if (!existsSync(jsbundle) || statSync(jsbundle).size < 100_000) {
+  console.error(
+    "[release:ios] ✗ main.jsbundle 이 .app 에 없음/비정상 — JS 번들(Hermes) 단계 실패.\n" +
+      "  업로드 중단. 위 빌드 로그의 'Bundle React Native code and images' 단계 에러를 확인해줘.",
+  );
+  process.exit(1);
+}
+console.log(`[release:ios] JS 번들 확인 ✓ ${(statSync(jsbundle).size / 1e6).toFixed(1)}MB`);
 
 // 3) 패키징 + 업로드 + prune (기존 스크립트 재사용)
 execFileSync("node", [join(ROOT, "scripts/build-ios-ipa.mjs")], { stdio: "inherit" });
