@@ -314,13 +314,23 @@ ipcMain.handle('navis-local:config:set', (_e, patch) => {
 // 도구 사용을 클로드 코드처럼 한 줄로 요약 — 코드 세션 본문에 인라인 스트리밍한다.
 function formatToolUse(name, input) {
   const i = input || {};
+  // 서브에이전트 호출(Task) — 코드 리뷰어 등 독립 검토.
+  if (name === 'Task') {
+    const what = String(i.description || i.subagent_type || '서브에이전트').replace(/\s+/g, ' ').trim();
+    return `\n🔎 서브에이전트 · ${what.slice(0, 60)}\n`;
+  }
   // namory 기억 도구는 따로 라벨링(🧠 떠올림 / 💾 저장).
   if (name && name.startsWith('mcp__namory__')) {
     const op = name.slice('mcp__namory__'.length);
     const label =
-      { recall: '🧠 기억 떠올림', recent: '🧠 최근 기억', save: '💾 기억 저장', pattern: '🧠 패턴', todos: '🧠 할 일' }[
-        op
-      ] || `🧠 ${op}`;
+      {
+        recall: '🧠 기억 떠올림',
+        recent: '🧠 최근 기억',
+        save: '💾 기억 저장',
+        pattern: '🧠 패턴',
+        todos: '🧠 할 일',
+        graphify: '🕸 기억 그래프',
+      }[op] || `🧠 ${op}`;
     const hint = String(i.query || i.content || '').replace(/\s+/g, ' ').trim();
     return `\n${label}${hint ? ` · ${hint.slice(0, 60)}` : ''}\n`;
   }
@@ -376,6 +386,8 @@ ipcMain.handle('navis-local:run', async (event, { id, prompt, resume, namory }) 
       'mcp__namory__save',
       'mcp__namory__pattern',
       'mcp__namory__todos',
+      // 프로젝트 기억 그래프 — 누적 지식의 전체 그림(구조 지도 보강용).
+      'mcp__namory__graphify',
     ];
     const useNamory = !!(namory && namory.url && namory.token);
     const mcpServers = useNamory
@@ -388,7 +400,32 @@ ipcMain.handle('navis-local:run', async (event, { id, prompt, resume, namory }) 
           },
         }
       : undefined;
-    const allowedTools = useNamory ? [...fileTools, ...NAMORY_TOOLS] : fileTools;
+
+    // 쓰기 모드에선 독립 코드 리뷰어 서브에이전트를 등록한다 — 메인 에이전트가 수정 후
+    // Task 로 호출해 자기 변경을 비판적으로 재검토받는다(단일 패스보다 버그를 더 잡음).
+    const agents = cfg.allowWrite
+      ? {
+          'code-reviewer': {
+            description:
+              '코드 변경(diff)을 비판적으로 검토해 버그·회귀·엣지케이스 누락·타입/보안 문제를 찾는 독립 리뷰어. 파일을 수정한 뒤 마무리 전에 호출.',
+            tools: ['Read', 'Grep', 'Glob', 'LS', 'Bash', 'BashOutput'],
+            model: 'inherit',
+            // 검토는 짧게 — 무한 탐색 방지.
+            maxTurns: 15,
+            prompt:
+              '너는 깐깐하고 회의적인 시니어 코드 리뷰어다. `git diff`(필요시 주변 파일 Read)로 이번 변경만 본다. ' +
+              '명백한 버그·회귀·엣지케이스 누락·타입 오류·리소스 누수·보안 문제를 코드 근거와 함께 구체적으로 지적하라. ' +
+              '추측·스타일 트집은 금지. 실제 문제만, 심각도와 위치(파일:라인)를 붙여 간결히. ' +
+              '문제가 없으면 정확히 "이상 없음"이라고만 답하라. 너는 지적만 하고 코드를 직접 고치지 않는다.',
+          },
+        }
+      : undefined;
+
+    const allowedTools = [
+      ...fileTools,
+      ...(useNamory ? NAMORY_TOOLS : []),
+      ...(agents ? ['Task'] : []),
+    ];
 
     // 클로드 코드 기본 시스템 프롬프트(코딩 실력의 핵심)를 켜고, navis 만의 강점인
     // "누적 프로젝트 기억(플라이휠)"과 자기검증 지침을 덧붙인다. preset 미명시 시
@@ -408,14 +445,20 @@ ipcMain.handle('navis-local:run', async (event, { id, prompt, resume, namory }) 
         `너는 이 프로젝트를 이전에도 다뤘고 그 기억이 namory 에 쌓여 있다. 백지에서 시작하지 마라.\n` +
         `- 작업 시작 시: 본격적으로 코드를 건드리기 전에 mcp__namory__recall 을 query 를 바꿔가며 1~2회 호출해 ` +
         `이 프로젝트(project: "${project}")의 과거 결정·관례·함정·구조를 먼저 떠올려라.\n` +
+        `- 구조 지도: 본격 탐색 전에 "[구조 지도]" 로 시작하는 기억을 recall 해 이 프로젝트의 ` +
+        `아키텍처·핵심 파일/디렉터리·관례·빌드/테스트 명령을 먼저 떠올려 불필요한 재탐색을 건너뛰어라. ` +
+        `없거나 낡았으면 빠르게 파악한 뒤 "[구조 지도]" 로 시작하는 내용으로 save(project: "${project}") 해 다음 세션이 재사용하게 하라. ` +
+        `전체 지식 그림이 필요하면 mcp__namory__graphify 로 기억 그래프를 본다.\n` +
         `- 작업 종료 시: 이번에 내린 설계 결정, 부딪힌 함정, 알아낸 파일 구조/관례 중 ` +
         `"다음 세션의 나에게 유용할 것"을 mcp__namory__save 로 저장하되 반드시 project: "${project}" 태그를 달아라. ` +
         `사소한 건 말고 재사용 가치가 있는 것만 간결하게.`;
     }
     if (cfg.allowWrite) {
       append +=
-        `\n\n[자기검증] 파일을 수정한 뒤에는 끝내기 전에 git diff(또는 변경 파일을 Read)로 ` +
-        `네 변경을 다시 검토해 명백한 버그·누락·문법오류를 직접 잡아라. 단일 패스로 끝내지 말 것.`;
+        `\n\n[자기검증 — 단일 패스로 끝내지 말 것] 파일을 수정한 뒤 마무리 전에:\n` +
+        `1) git diff 로 네 변경을 직접 재검토해 명백한 버그·누락·문법오류를 잡고,\n` +
+        `2) 변경이 사소하지 않으면 Task 로 code-reviewer 서브에이전트를 호출해 독립 검토를 받아라.\n` +
+        `리뷰어가 지적한 실제 문제는 고친 뒤 마무리하라.`;
     }
     const systemPrompt = { type: 'preset', preset: 'claude_code', ...(append ? { append } : {}) };
 
@@ -434,6 +477,7 @@ ipcMain.handle('navis-local:run', async (event, { id, prompt, resume, namory }) 
         systemPrompt,
         allowedTools,
         abortController,
+        ...(agents ? { agents } : {}),
         ...(mcpServers ? { mcpServers } : {}),
         // CLAUDE.md + 레포/유저 .claude 설정을 로드해 클로드 코드와 동일하게 프로젝트에
         // 그라운딩한다(빈 배열이면 CLAUDE.md 가 안 읽혀 맥락이 빈약해짐).
