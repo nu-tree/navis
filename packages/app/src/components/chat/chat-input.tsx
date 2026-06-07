@@ -127,6 +127,15 @@ export function ChatInput({ placeholder = '메시지 입력…', className }: Ch
 
   const clampedHeight = Math.min(Math.max(MIN_INPUT_H, inputHeight), MAX_INPUT_H);
 
+  // 모바일(iOS/Android) 의 multiline TextInput 은 인라인 고정 height 를 주면
+  // 레이아웃이 그 높이에 갇혀 onContentSizeChange 의 contentSize.height 가 자라지 않는
+  // 알려진 RN 버그가 있다. 모바일에선 minHeight/maxHeight 만 주고 자연 성장에 맡기고,
+  // 웹(react-native-web → <textarea>) 은 직접 height 를 갱신해야 늘어나므로 그대로 둔다.
+  const heightStyle =
+    Platform.OS === 'web'
+      ? { height: clampedHeight }
+      : { minHeight: MIN_INPUT_H, maxHeight: MAX_INPUT_H };
+
   // react-native-web 은 TextInput 에 넘긴 onPaste 를 그대로 textarea DOM 으로 전달한다.
   // RN 타입엔 onPaste 가 없어 Partial<TextInputProps> 로 캐스팅해 끼워 넣는다.
   const webOnlyProps: Partial<TextInputProps> =
@@ -186,10 +195,12 @@ export function ChatInput({ placeholder = '메시지 입력…', className }: Ch
           onKeyPress={handleKeyPress}
           onContentSizeChange={(e) => setInputHeight(e.nativeEvent.contentSize.height)}
           // MAX 도달 전엔 내부 스크롤 끄고(그냥 성장), 도달하면 그때부터 스크롤.
+          // Android 의 contentSize.height 는 padding 을 포함해서 보고하지만, 약간 빨리
+          // 스크롤로 전환되는 정도라 기능상 문제 없음.
           scrollEnabled={inputHeight >= MAX_INPUT_H}
           style={{
             flex: 1,
-            height: clampedHeight,
+            ...heightStyle,
             paddingHorizontal: INPUT_PAD_H,
             paddingTop: INPUT_PAD_V,
             paddingBottom: INPUT_PAD_V,
