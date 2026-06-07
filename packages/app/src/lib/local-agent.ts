@@ -30,6 +30,8 @@ type LocalAgentApi = {
     // onDelta 로 본문/도구 사용을 스트리밍.
     opts?: { onDelta?: (text: string) => void; resume?: string; namory?: NamoryMcp },
   ) => Promise<{ text?: string; error?: string; sessionId?: string }>;
+  // 생성 중단(정지 버튼). 진행 중인 모든 run 을 끊는다.
+  stop: () => void;
 };
 
 function getApi(): LocalAgentApi | undefined {

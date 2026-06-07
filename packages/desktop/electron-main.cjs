@@ -253,6 +253,9 @@ function saveLocalConfig(cfg) {
   fs.writeFileSync(localConfigFile(), JSON.stringify(cfg));
 }
 
+// 진행 중인 코드 세션 run id → AbortController. "정지" 버튼이 이걸로 생성을 끊는다.
+const runAborts = new Map();
+
 // 작업 폴더에서 위로 올라가며 namory 프로젝트명을 감지한다(navis CLI 의 detectProject 와
 // 동일 규칙). 우선순위: ① .navis 파일(한 줄 오버라이드) ② package.json 의 name.
 // 못 찾으면 폴더 이름으로 폴백 — 코드 세션은 늘 어떤 폴더에서 도니까.
@@ -321,9 +324,18 @@ function formatToolUse(name, input) {
     const hint = String(i.query || i.content || '').replace(/\s+/g, ' ').trim();
     return `\n${label}${hint ? ` · ${hint.slice(0, 60)}` : ''}\n`;
   }
+  // TodoWrite: 멀티스텝 계획을 체크리스트로 펼쳐 보여준다(클로드 코드 느낌).
+  if (name === 'TodoWrite' && Array.isArray(i.todos)) {
+    const mark = { completed: '✓', in_progress: '🔄', pending: '☐' };
+    const lines = i.todos
+      .map((t) => `  ${mark[t && t.status] || '☐'} ${(t && (t.content || t.activeForm)) || ''}`)
+      .join('\n');
+    return `\n📋 할 일\n${lines}\n`;
+  }
   const icon =
-    { Read: '📖', Edit: '✏️', Write: '📝', Bash: '⌘', Grep: '🔎', Glob: '🔎', LS: '📂' }[name] ||
-    '🔧';
+    { Read: '📖', Edit: '✏️', Write: '📝', Bash: '⌘', Grep: '🔎', Glob: '🔎', LS: '📂', WebSearch: '🌐', WebFetch: '🌐' }[
+      name
+    ] || '🔧';
   let arg = '';
   if (name === 'Bash') arg = i.command || '';
   else if (name === 'Grep' || name === 'Glob') arg = i.pattern || i.path || '';
@@ -339,13 +351,18 @@ ipcMain.handle('navis-local:run', async (event, { id, prompt, resume, namory }) 
   if (!cfg.enabled) return { error: '로컬 에이전트가 꺼져 있어요(설정에서 켜기).' };
   if (!token) return { error: 'CLAUDE_CODE_OAUTH_TOKEN 이 없어요(설정에서 토큰 입력).' };
   if (!cfg.workdir) return { error: '작업 폴더가 설정되지 않았어요.' };
+  // catch/finally 에서도 접근하도록 try 밖에 선언(중단 시 부분 결과 반환용).
+  let streamed = '';
+  let finalText = '';
+  let sessionId = resume || undefined;
   try {
     process.env.CLAUDE_CODE_OAUTH_TOKEN = token;
     // 에이전트 SDK 는 ESM → CJS 메인에서 동적 import.
     const { query } = await import('@anthropic-ai/claude-agent-sdk');
-    // 읽기 전용 기본. allowWrite 일 때만 쓰기/터미널 도구 추가.
-    const readonly = ['Read', 'Grep', 'Glob', 'LS'];
-    const writeTools = ['Edit', 'Write', 'Bash'];
+    // 읽기 전용 기본 + 웹 검색/문서·멀티스텝 계획(TodoWrite) 도구는 안전하니 항상 포함
+    // (클로드 코드 기본기). allowWrite 일 때만 쓰기/터미널/긴명령 관리 도구 추가.
+    const readonly = ['Read', 'Grep', 'Glob', 'LS', 'WebSearch', 'WebFetch', 'TodoWrite'];
+    const writeTools = ['Edit', 'Write', 'NotebookEdit', 'Bash', 'BashOutput', 'KillShell'];
     const fileTools = cfg.allowWrite ? [...readonly, ...writeTools] : readonly;
 
     // 이 폴더가 어떤 namory 프로젝트인지 — 기억 recall/save 를 이 프로젝트로 태깅.
@@ -373,26 +390,42 @@ ipcMain.handle('navis-local:run', async (event, { id, prompt, resume, namory }) 
       : undefined;
     const allowedTools = useNamory ? [...fileTools, ...NAMORY_TOOLS] : fileTools;
 
-    // 클로드 코드 기본 시스템 프롬프트(코딩 실력의 핵심)를 켜고, 프로젝트 기억 사용
-    // 지침을 덧붙인다. preset 을 명시 안 하면 SDK 는 빈 프롬프트로 돌아 코딩이 약해진다.
+    // 클로드 코드 기본 시스템 프롬프트(코딩 실력의 핵심)를 켜고, navis 만의 강점인
+    // "누적 프로젝트 기억(플라이휠)"과 자기검증 지침을 덧붙인다. preset 미명시 시
+    // SDK 는 빈 프롬프트로 돌아 코딩이 약해진다. settingSources 로 CLAUDE.md 도 로드.
+    //
+    // 클로드 코드를 넘어서는 지점은 모델이 아니라 "맥락"이다:
+    //  ① 세션 시작 시 이 프로젝트의 과거 결정/관례/함정을 강제로 recall → 콜드스타트 제거
+    //  ② 턴이 끝나면 새 결정/함정/구조를 save → 다음 세션이 더 똑똑해짐(복리)
+    //  ③ 코드 수정 후 자기 diff 를 재검증 → 단일 패스보다 버그를 더 잡음
     let append = '';
     if (project) {
-      append += `\n\n[프로젝트] 현재 작업 중인 프로젝트는 "${project}" 다.`;
-      if (useNamory) {
-        append +=
-          ` 코드를 건드리기 전에 mcp__namory__recall 로 이 프로젝트(project: "${project}")의` +
-          ` 과거 결정·관례·함정을 먼저 떠올려라. 새로 알게 된 결정이나 함정은` +
-          ` mcp__namory__save 로 반드시 project: "${project}" 태그를 달아 저장해 다음 세션이 이어받게 하라.`;
-      }
+      append += `\n\n[프로젝트] 현재 작업 중인 프로젝트는 "${project}" 다. 레포의 CLAUDE.md 가 있으면 그 지침을 우선 따른다.`;
+    }
+    if (useNamory && project) {
+      append +=
+        `\n\n[프로젝트 기억 — navis 의 핵심 강점, 반드시 활용]\n` +
+        `너는 이 프로젝트를 이전에도 다뤘고 그 기억이 namory 에 쌓여 있다. 백지에서 시작하지 마라.\n` +
+        `- 작업 시작 시: 본격적으로 코드를 건드리기 전에 mcp__namory__recall 을 query 를 바꿔가며 1~2회 호출해 ` +
+        `이 프로젝트(project: "${project}")의 과거 결정·관례·함정·구조를 먼저 떠올려라.\n` +
+        `- 작업 종료 시: 이번에 내린 설계 결정, 부딪힌 함정, 알아낸 파일 구조/관례 중 ` +
+        `"다음 세션의 나에게 유용할 것"을 mcp__namory__save 로 저장하되 반드시 project: "${project}" 태그를 달아라. ` +
+        `사소한 건 말고 재사용 가치가 있는 것만 간결하게.`;
+    }
+    if (cfg.allowWrite) {
+      append +=
+        `\n\n[자기검증] 파일을 수정한 뒤에는 끝내기 전에 git diff(또는 변경 파일을 Read)로 ` +
+        `네 변경을 다시 검토해 명백한 버그·누락·문법오류를 직접 잡아라. 단일 패스로 끝내지 말 것.`;
     }
     const systemPrompt = { type: 'preset', preset: 'claude_code', ...(append ? { append } : {}) };
 
     const send = (s) => event.sender.send(`navis-local:delta:${id}`, s);
+    // 사용자가 "정지"를 누르면 이 컨트롤러로 생성을 중단한다(클로드 코드의 Esc).
+    const abortController = new AbortController();
+    runAborts.set(id, abortController);
+    // streamed/finalText/sessionId 는 try 밖에서 선언됨(중단 시 부분 결과 반환).
     // 스트리밍한 본문(도구 사용 줄 포함)을 그대로 모아 최종 text 로 돌려준다 —
     // 렌더러가 마지막에 권위 텍스트로 덮어써도 도구 사용 내역이 사라지지 않게.
-    let streamed = '';
-    let finalText = '';
-    let sessionId = resume || undefined;
     for await (const m of query({
       prompt,
       options: {
@@ -400,8 +433,11 @@ ipcMain.handle('navis-local:run', async (event, { id, prompt, resume, namory }) 
         model: 'claude-opus-4-8',
         systemPrompt,
         allowedTools,
+        abortController,
         ...(mcpServers ? { mcpServers } : {}),
-        settingSources: [],
+        // CLAUDE.md + 레포/유저 .claude 설정을 로드해 클로드 코드와 동일하게 프로젝트에
+        // 그라운딩한다(빈 배열이면 CLAUDE.md 가 안 읽혀 맥락이 빈약해짐).
+        settingSources: ['user', 'project', 'local'],
         includePartialMessages: true,
         permissionMode: cfg.allowWrite ? 'acceptEdits' : 'default',
         // resume 가 있으면 이전 코드 세션을 이어간다(멀티턴).
@@ -437,9 +473,26 @@ ipcMain.handle('navis-local:run', async (event, { id, prompt, resume, namory }) 
     const text = streamed.trim() ? streamed : finalText || '(빈 응답)';
     return { text, sessionId };
   } catch (err) {
+    // 사용자가 정지를 눌러 중단된 경우: 지금까지 받은 내용 + 표식으로 부드럽게 마무리.
+    const aborted =
+      runAborts.get(id)?.signal.aborted ||
+      (err && (err.name === 'AbortError' || /abort/i.test(String(err.message || err))));
+    if (aborted) {
+      const partial = (streamed || '').trim();
+      return { text: partial ? `${partial}\n\n⏹ 중단했어.` : '⏹ 중단했어.', sessionId };
+    }
     console.error('[local-agent] 실행 실패:', err);
     return { error: err && err.message ? err.message : String(err) };
+  } finally {
+    runAborts.delete(id);
   }
+});
+
+// 생성 중인 코드 세션을 중단(정지 버튼). 해당 run 의 AbortController 를 발동시킨다.
+ipcMain.handle('navis-local:stop', (_e, { id }) => {
+  const ac = runAborts.get(id);
+  if (ac) ac.abort();
+  return { ok: !!ac };
 });
 
 // ── 자동 업데이트 인앱 제어 (렌더러 배너용) ────────────────────────────────

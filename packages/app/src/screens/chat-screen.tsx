@@ -5,7 +5,7 @@ import { ChatDrawer, ChatHeader, ChatInput, MessageList, UpdateBanner } from '..
 import { SidebarContent } from '../components/chat/sidebar-content';
 import { LocalAgentSheet } from '../components/local-agent-sheet';
 import { Text } from '../components/ui/text';
-import { useActiveConversation, useTotalUnread } from '../store/chat-store';
+import { useActiveConversation, useIsActiveTyping, useTotalUnread } from '../store/chat-store';
 import { useUiStore } from '../store/ui-store';
 import { useReports } from '../hooks/use-reports';
 import { useCrons } from '../hooks/use-crons';
@@ -17,7 +17,17 @@ import { fetchNamoryMcp } from '../api/agent';
 // 코드 세션 상단 컨텍스트 바 — 감지된 프로젝트·작업 폴더·읽기/쓰기 모드 + 기억 연결
 // 여부 + 설정 열기. 설정이 덜 됐으면 무엇이 빠졌는지 안내한다. cfgKey 가 바뀌면(설정
 // 시트 닫힘) 설정을 다시 읽는다.
-function CodeContextBar({ onOpenSettings, cfgKey }: { onOpenSettings: () => void; cfgKey: number }) {
+function CodeContextBar({
+  onOpenSettings,
+  cfgKey,
+  generating,
+  onStop,
+}: {
+  onOpenSettings: () => void;
+  cfgKey: number;
+  generating: boolean;
+  onStop: () => void;
+}) {
   const [cfg, setCfg] = useState<LocalAgentConfig | null>(null);
   const [memoryLinked, setMemoryLinked] = useState(false);
   useEffect(() => {
@@ -70,7 +80,21 @@ function CodeContextBar({ onOpenSettings, cfgKey }: { onOpenSettings: () => void
           </Text>
         ) : null}
       </View>
-      <Text className="text-muted-foreground">⚙️</Text>
+      {/* 생성 중이면 정지 버튼(클로드 코드의 Esc), 아니면 설정 진입. */}
+      {generating ? (
+        <Pressable
+          onPress={(e) => {
+            e.stopPropagation();
+            onStop();
+          }}
+          hitSlop={8}
+          className="flex-row items-center gap-1 rounded-lg border border-border px-2 py-1 cursor-pointer active:opacity-70 hover:bg-secondary"
+        >
+          <Text className="text-xs font-semibold text-foreground">⏹ 정지</Text>
+        </Pressable>
+      ) : (
+        <Text className="text-muted-foreground">⚙️</Text>
+      )}
     </Pressable>
   );
 }
@@ -91,6 +115,8 @@ export function ChatScreen() {
   const [cfgKey, setCfgKey] = useState(0);
   const active = useActiveConversation();
   const totalUnread = useTotalUnread();
+  // 활성 방이 생성(응답) 중인지 — 코드 바의 정지 버튼 노출용.
+  const isActiveTyping = useIsActiveTyping();
   const sidebarCollapsed = useUiStore((s) => s.sidebarCollapsed);
   const setSidebarCollapsed = useUiStore((s) => s.setSidebarCollapsed);
 
@@ -154,7 +180,12 @@ export function ChatScreen() {
           <View className="w-full flex-1 self-center" style={{ maxWidth: CHAT_MAX_WIDTH }}>
             {/* 코드 세션: 작업 폴더·모드 컨텍스트 바 (클로드 데스크톱 코드 느낌) */}
             {isCode ? (
-              <CodeContextBar onOpenSettings={() => setCodeSheet(true)} cfgKey={cfgKey} />
+              <CodeContextBar
+                onOpenSettings={() => setCodeSheet(true)}
+                cfgKey={cfgKey}
+                generating={isActiveTyping}
+                onStop={() => localAgent?.stop()}
+              />
             ) : null}
             <MessageList />
             {/* 데스크톱 업데이트 알림(클로드코드 스타일). 데스크톱 외 환경에선 자동 숨김. */}

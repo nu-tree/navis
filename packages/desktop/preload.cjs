@@ -5,6 +5,8 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 let nextId = 1;
+// 진행 중인 run id 들 — stop() 이 이걸 끊는다(보통 동시에 1개).
+const activeRuns = new Set();
 
 contextBridge.exposeInMainWorld('navisLocal', {
   // 데스크톱(Electron)에서만 주입됨 → 렌더러는 이 존재로 "로컬 에이전트 가용"을 판단.
@@ -23,6 +25,7 @@ contextBridge.exposeInMainWorld('navisLocal', {
       if (onDelta) onDelta(text);
     };
     ipcRenderer.on(deltaCh, listener);
+    activeRuns.add(id);
     return ipcRenderer
       .invoke('navis-local:run', {
         id,
@@ -31,7 +34,15 @@ contextBridge.exposeInMainWorld('navisLocal', {
         // namory 좌표(코드 세션 기억 연결). 없으면 순정 코드 에이전트.
         namory: opts && opts.namory,
       })
-      .finally(() => ipcRenderer.removeListener(deltaCh, listener));
+      .finally(() => {
+        activeRuns.delete(id);
+        ipcRenderer.removeListener(deltaCh, listener);
+      });
+  },
+
+  // 생성 중단(클로드 코드의 Esc). 진행 중인 모든 run 을 끊는다.
+  stop: () => {
+    for (const id of activeRuns) void ipcRenderer.invoke('navis-local:stop', { id });
   },
 });
 
