@@ -14,10 +14,9 @@ export type Attachment = {
 export type SendResult = {
   reply: ChatMessage;
   sessionId: string;
-  // navis 컨텍스트가 한도를 넘음 → 다음 턴부터 세션 리셋 신호
   contextFull: boolean;
-  // 이 턴에 namory 에 기억을 저장했는지 → 💡 리액션 표시
   saved: boolean;
+  toolsUsed: string[];
 };
 
 type ChatResponse = {
@@ -25,6 +24,7 @@ type ChatResponse = {
   sessionId: string;
   contextFull: boolean;
   saved: boolean;
+  toolsUsed?: string[];
 };
 
 function assistantMessage(text: string): ChatMessage {
@@ -63,10 +63,11 @@ export async function sendMessage(
 
   const data = (await res.json()) as ChatResponse;
   return {
-    reply: assistantMessage(data.text),
+    reply: { ...assistantMessage(data.text), toolsUsed: data.toolsUsed },
     sessionId: data.sessionId,
     contextFull: data.contextFull,
     saved: data.saved,
+    toolsUsed: data.toolsUsed ?? [],
   };
 }
 
@@ -102,7 +103,7 @@ export async function sendMessageStream(
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
-  let done: { text: string; sessionId: string; contextFull: boolean; saved: boolean } | undefined;
+  let done: { text: string; sessionId: string; contextFull: boolean; saved: boolean; toolsUsed?: string[] } | undefined;
 
   // SSE 프레임은 빈 줄(\n\n)로 구분. event/data 라인을 파싱한다.
   const handleFrame = (frame: string) => {
@@ -135,10 +136,11 @@ export async function sendMessageStream(
   if (!done) throw new Error('스트림이 비정상 종료됐어');
 
   return {
-    reply: { ...assistantMessage(done.text), text: done.text },
+    reply: { ...assistantMessage(done.text), text: done.text, toolsUsed: done.toolsUsed },
     sessionId: done.sessionId,
     contextFull: done.contextFull,
     saved: done.saved,
+    toolsUsed: done.toolsUsed ?? [],
   };
 }
 
@@ -151,5 +153,6 @@ async function mockReply(text: string): Promise<SendResult> {
     sessionId: '',
     contextFull: false,
     saved: false,
+    toolsUsed: [],
   };
 }

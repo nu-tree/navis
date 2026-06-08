@@ -98,6 +98,7 @@ export function useSendMessage() {
         }
       }
 
+      const tools = result.toolsUsed ?? [];
       // 델타가 한 번도 안 왔으면 지금 생성, 왔으면 권위 텍스트로 보정.
       if (!started) {
         addMessage(conversationId, {
@@ -105,9 +106,14 @@ export function useSendMessage() {
           role: 'assistant',
           text: result.reply.text,
           createdAt: result.reply.createdAt,
+          toolsUsed: tools.length > 0 ? tools : undefined,
         });
       } else {
         setMessageText(conversationId, assistantId, result.reply.text);
+        // 도구 목록은 텍스트와 별도로 붙인다
+        if (tools.length > 0) {
+          useChatStore.getState().setMessageToolsUsed(conversationId, assistantId, tools);
+        }
       }
 
       return result;

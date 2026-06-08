@@ -9,4 +9,6 @@ export type ChatMessage = {
   reactions?: string[];
   // 첨부 이미지 (표시용 로컬/원격 URI). 전송 시엔 base64 로 백엔드에 보낸다.
   images?: string[];
+  // 이 응답 생성 중 사용한 도구 요약 목록 — 말풍선 상단 회색으로 표시.
+  toolsUsed?: string[];
 };

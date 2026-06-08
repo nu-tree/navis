@@ -59,6 +59,7 @@ type ChatStore = {
   appendMessageText: (conversationId: string, messageId: string, delta: string) => void;
   // 스트리밍 종료 시 권위 있는 최종 텍스트로 보정
   setMessageText: (conversationId: string, messageId: string, text: string) => void;
+  setMessageToolsUsed: (conversationId: string, messageId: string, tools: string[]) => void;
   setSessionId: (conversationId: string, sessionId?: string) => void;
   setTyping: (conversationId: string, typing: boolean) => void;
   setTypingStatus: (conversationId: string, tool: string) => void;
@@ -193,6 +194,20 @@ export const useChatStore = create<ChatStore>()(
           ? {
               ...c,
               messages: c.messages.map((m) => (m.id === messageId ? { ...m, text } : m)),
+            }
+          : c,
+      ),
+    })),
+
+  setMessageToolsUsed: (conversationId, messageId, tools) =>
+    set((s) => ({
+      conversations: s.conversations.map((c) =>
+        c.id === conversationId
+          ? {
+              ...c,
+              messages: c.messages.map((m) =>
+                m.id === messageId ? { ...m, toolsUsed: tools } : m,
+              ),
             }
           : c,
       ),

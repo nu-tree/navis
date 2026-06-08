@@ -134,6 +134,7 @@ export async function handleChatStream(
       sessionId: result.sessionId,
       contextFull,
       saved: result.saved,
+      toolsUsed: result.toolsUsed,
     });
     res.end();
 

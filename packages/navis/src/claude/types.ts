@@ -13,4 +13,6 @@ export interface AskResult {
   contextTokens: number;
   // 이번 턴에 namory에 새 기억을 저장했는지. 앱에서 💡 리액션 표시에 쓴다.
   saved: boolean;
+  // 이번 턴에 사용된 도구 요약 목록 (앱 말풍선 표시용)
+  toolsUsed: string[];
 }

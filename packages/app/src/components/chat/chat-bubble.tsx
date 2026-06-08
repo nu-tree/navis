@@ -22,6 +22,7 @@ export function ChatBubble({ message, className }: ChatBubbleProps) {
   const reactions = message.reactions ?? [];
   const images = message.images ?? [];
   const hasText = message.text.trim().length > 0;
+  const toolsUsed = !isUser ? (message.toolsUsed ?? []) : [];
 
   const copyText = async () => {
     if (hasText) await Clipboard.setStringAsync(message.text);
@@ -44,6 +45,19 @@ export function ChatBubble({ message, className }: ChatBubbleProps) {
             isUser ? 'rounded-br-md bg-primary' : 'rounded-bl-md bg-card',
           )}
         >
+          {toolsUsed.length > 0 ? (
+            <View className="mb-2 gap-0.5">
+              {toolsUsed.map((tool) => (
+                <Text
+                  key={tool}
+                  variant="caption"
+                  className="text-muted-foreground"
+                >
+                  ● {tool}
+                </Text>
+              ))}
+            </View>
+          ) : null}
           {images.map((uri) => (
             <Image
               key={uri}
