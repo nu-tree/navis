@@ -363,14 +363,14 @@ export const useChatStore = create<ChatStore>()(
   hideConversation: (id) =>
     set((s) => ({
       conversations: s.conversations.map((c) =>
-        c.id === id ? { ...c, hidden: true } : c,
+        c.id === id ? { ...c, hidden: true, updatedAt: now() } : c,
       ),
     })),
 
   unhideConversation: (id) =>
     set((s) => ({
       conversations: s.conversations.map((c) =>
-        c.id === id ? { ...c, hidden: false } : c,
+        c.id === id ? { ...c, hidden: false, updatedAt: now() } : c,
       ),
     })),
 
