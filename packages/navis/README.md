@@ -112,11 +112,15 @@ claude.ai 스타일 — 외부 HTTP MCP 서버(Notion·Linear 등)를 **코드 �
 4. 제공자가 `GET /api/connectors/oauth/callback?code&state` 로 리다이렉트 → 백엔드가 토큰 교환(+`resource` RFC 8707)
 5. refresh_token + 발견한 좌표를 커넥터 레코드에 저장 → `buildEnabledConnectors`가 사용 직전 만료 임박 시 자동 갱신(`refreshIfNeeded`)
 
-제공자 프리셋(`connectors/providers.ts`)은 `{key,label,mcpUrl}` 한 줄일 뿐 — 엔드포인트·스코프·자격은 전부 자동.
-redirect_uri 는 `NAVIS_PUBLIC_URL`(미설정 시 요청 헤더에서 자동 도출) + `/api/connectors/oauth/callback`. **사전 등록 불필요**(DCR 이 콜백을 동적 등록).
+redirect_uri 는 `NAVIS_PUBLIC_URL`(미설정 시 요청 헤더에서 자동 도출) + `/api/connectors/oauth/callback`.
 
-> 전제: 대상 MCP 서버가 DCR(`registration_endpoint`)을 지원해야 함. Notion(mcp.notion.com)은 지원 확인됨.
-> 미지원 서버는 연결 시 명확한 에러를 돌려준다(이 경우 정적 키 경로 사용).
+**하이브리드 — 연결 시점에 자동 선택:**
+
+- **DCR 지원 서버(Notion)** → `registration_endpoint` 로 client_id 런타임 자동 발급. **사전 설정 0**. 콜백도 동적 등록.
+- **DCR 미지원 서버(Google Calendar)** → Google 은 DCR 을 안 하므로(Claude Desktop 도 Anthropic 이 등록해둔 client 를 씀) navis 가 **자기 client_id 를 미리 등록**해둬야 한다. 구글 캘린더 프리셋은 기존 캘린더용 자격(`config.google` = `GOOGLE_CLIENT_ID/SECRET`)을 그대로 재활용한다. scope 는 `calendar`(읽기+쓰기), `access_type=offline`+`prompt=consent` 로 refresh_token 확보.
+
+> ⚠️ Google Calendar 연결 전 1회 작업: Google Cloud 의 OAuth 클라이언트(기존 캘린더용 그대로)의 **Authorized redirect URIs 에 `<navis>/api/connectors/oauth/callback` 추가**. 안 하면 `redirect_uri_mismatch`.
+> 프리셋: `connectors/providers.ts` — DCR 형은 `{key,label,mcpUrl}`, classic 형은 `scopes`+자격 소스 추가.
 
 ### REST API (`/api/connectors`, `APP_API_TOKEN` Bearer)
 

@@ -6,7 +6,7 @@ import {
   removeConnector,
   isValidConnectorId,
 } from "../connectors/store.js";
-import { listProviders } from "../connectors/providers.js";
+import { listProviders, isProviderAvailable } from "../connectors/providers.js";
 import { startOAuth, completeOAuth } from "../connectors/oauth.js";
 import { config } from "../config.js";
 import type { Connector } from "../connectors/types.js";
@@ -101,7 +101,11 @@ export async function handleGetProviders(
   res: ServerResponse,
 ): Promise<void> {
   if (!requireAppAuth(req, res)) return;
-  const providers = listProviders().map((p) => ({ key: p.key, label: p.label, available: true }));
+  const providers = listProviders().map((p) => ({
+    key: p.key,
+    label: p.label,
+    available: isProviderAvailable(p),
+  }));
   sendJson(res, 200, { providers });
 }
 

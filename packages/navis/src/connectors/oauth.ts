@@ -145,11 +145,23 @@ export async function startOAuth(
   const redirectUri = `${baseUrl.replace(/\/+$/, "")}${callbackPath()}`;
   const disco = await discover(provider.mcpUrl);
 
-  // client_id 자동 발급(DCR 지원 시). 미지원이면 명확한 에러.
-  if (!disco.registrationEndpoint) {
-    throw new Error(`${provider.label} 인가서버가 자동 등록(DCR)을 지원하지 않아요.`);
+  // client 자격 확보 — 하이브리드:
+  //   ① 서버가 DCR 지원 → 런타임 자동 등록(Notion).
+  //   ② 미지원이지만 등록된 client 자격 있음 → 그걸 사용(Google, config.google 재활용).
+  //   ③ 둘 다 없음 → 명확한 에러.
+  let clientId: string;
+  let clientSecret: string | undefined;
+  if (disco.registrationEndpoint) {
+    ({ clientId, clientSecret } = await registerClient(disco.registrationEndpoint, redirectUri));
+  } else if (provider.clientId) {
+    clientId = provider.clientId;
+    clientSecret = provider.clientSecret;
+  } else {
+    throw new Error(
+      `${provider.label}: 인가서버가 DCR(자동 등록)을 지원하지 않고, 등록된 client_id 도 없어요. ` +
+        `Google Cloud 등에서 OAuth 클라이언트를 만들고 redirect_uri 에 ${redirectUri} 를 등록한 뒤 자격을 설정하세요.`,
+    );
   }
-  const { clientId, clientSecret } = await registerClient(disco.registrationEndpoint, redirectUri);
 
   const state = b64url(randomBytes(24));
   const codeVerifier = b64url(randomBytes(48));
@@ -175,6 +187,9 @@ export async function startOAuth(
     // RFC 8707 — 이 토큰이 어느 MCP 서버용인지 명시(MCP 스펙 요구).
     resource: provider.mcpUrl,
   });
+  // classic 제공자: 스코프 + 추가 파라미터(구글 refresh 확보용 access_type=offline 등).
+  if (provider.scopes?.length) params.set("scope", provider.scopes.join(" "));
+  for (const [k, v] of Object.entries(provider.extraAuthParams ?? {})) params.set(k, v);
 
   return { authUrl: `${disco.authorizationEndpoint}?${params.toString()}` };
 }
@@ -194,19 +209,16 @@ async function tokenRequest(
   clientSecret: string | undefined,
   fields: Record<string, string>,
 ): Promise<TokenResponse> {
+  // 자격은 본문에 싣는다(form). 공개 클라이언트(DCR none)는 client_id 만, 기밀
+  // 클라이언트(구글 웹앱)는 client_secret 까지. 구글·표준 OAuth2 토큰 엔드포인트 호환.
   const body: Record<string, string> = { client_id: clientId, ...fields };
-  const headers: Record<string, string> = {
-    "content-type": "application/x-www-form-urlencoded",
-    accept: "application/json",
-  };
-  // 기밀 클라이언트(DCR 이 secret 을 준 경우)면 Basic 으로도 싣는다.
-  if (clientSecret) {
-    headers.Authorization = `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`;
-    body.client_secret = clientSecret;
-  }
+  if (clientSecret) body.client_secret = clientSecret;
   const res = await fetch(tokenEndpoint, {
     method: "POST",
-    headers,
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      accept: "application/json",
+    },
     body: new URLSearchParams(body).toString(),
     signal: AbortSignal.timeout(15_000),
   });
