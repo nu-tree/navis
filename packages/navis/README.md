@@ -97,21 +97,26 @@ claude.ai 스타일 — 외부 HTTP MCP 서버(Notion·Linear 등)를 **코드 �
 - **인증 타입**: `none` / `apikey`(임의 헤더+값) / `oauth`(Authorization: Bearer access token + 자동 갱신).
 - **id**: 소문자/숫자/`_` 슬러그(=MCP 서버명). 내장 키(`namory`/`cron`/`repo`/`self_modify`/`settings`/`google`)는 예약어.
 
-### OAuth 연결 (앱 ↔ 백엔드 분리)
+### OAuth 연결 (MCP-스펙 OAuth — Claude Desktop 방식)
 
-데스크탑이 한 앱에 뭉쳐둔 OAuth 생애주기를 navis 는 **앱(브라우저 동의) + 백엔드(코드 교환·토큰 저장·자동 갱신)**
+데스크탑이 한 앱에 뭉쳐둔 OAuth 생애주기를 navis 는 **앱(브라우저 동의) + 백엔드(발견·등록·교환·저장·갱신)**
 로 나눠 갖는다. 헤드리스 서버는 최초 동의만 못 하므로, 동의는 navis 앱(웹뷰+사람)에서 1회 받고 토큰은 백엔드가 굴린다.
 
-1. 앱이 `POST /api/connectors/oauth/start {provider}` (authed) → 동의 URL 수신 → 브라우저로 엶
-2. 사용자 동의 → 제공자가 `GET /api/connectors/oauth/callback?code&state` 로 리다이렉트 → 백엔드가 토큰 교환
-3. refresh_token 을 커넥터 레코드에 저장 → `buildEnabledConnectors`가 사용 직전 만료 임박 시 자동 갱신(`refreshIfNeeded`)
+**핵심: 사람이 OAuth 앱을 등록하지 않는다.** MCP 인가 스펙의 메타데이터 발견 + **Dynamic Client Registration(DCR)**
+으로 `client_id` 를 런타임에 자동 발급받는다 — Claude Desktop 이 client_id 없이 "연결만 누르면" 되는 그 원리.
 
-제공자 프리셋은 `connectors/providers.ts`(엔드포인트·스코프·MCP URL). client 자격은 env `<KEY>_OAUTH_CLIENT_ID`/`_SECRET`
-에서 읽는다(예: `NOTION_OAUTH_CLIENT_ID`). redirect_uri 는 `NAVIS_PUBLIC_URL` + `/api/connectors/oauth/callback`
-— 제공자에 **정확히 같은 값**으로 등록해야 함.
+1. 앱이 `POST /api/connectors/oauth/start {provider}` (authed)
+2. 백엔드가 MCP 서버 URL 에서 인가서버 메타데이터 발견(`.well-known/oauth-protected-resource` → `oauth-authorization-server`)
+   → `registration_endpoint` 로 **DCR**(client_id 자동 발급) → PKCE authorize URL 반환
+3. 앱이 브라우저로 동의 URL 오픈 → 사용자 로그인/동의
+4. 제공자가 `GET /api/connectors/oauth/callback?code&state` 로 리다이렉트 → 백엔드가 토큰 교환(+`resource` RFC 8707)
+5. refresh_token + 발견한 좌표를 커넥터 레코드에 저장 → `buildEnabledConnectors`가 사용 직전 만료 임박 시 자동 갱신(`refreshIfNeeded`)
 
-> 주의: notion 프리셋은 클래식 공개 OAuth 엔드포인트 기준. hosted MCP(mcp.notion.com)가 MCP-스펙 OAuth(PKCE+DCR)를
-> 요구하면 `providers.ts` 조정이 필요할 수 있다.
+제공자 프리셋(`connectors/providers.ts`)은 `{key,label,mcpUrl}` 한 줄일 뿐 — 엔드포인트·스코프·자격은 전부 자동.
+redirect_uri 는 `NAVIS_PUBLIC_URL`(미설정 시 요청 헤더에서 자동 도출) + `/api/connectors/oauth/callback`. **사전 등록 불필요**(DCR 이 콜백을 동적 등록).
+
+> 전제: 대상 MCP 서버가 DCR(`registration_endpoint`)을 지원해야 함. Notion(mcp.notion.com)은 지원 확인됨.
+> 미지원 서버는 연결 시 명확한 에러를 돌려준다(이 경우 정적 키 경로 사용).
 
 ### REST API (`/api/connectors`, `APP_API_TOKEN` Bearer)
 

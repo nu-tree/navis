@@ -27,6 +27,8 @@ export type ConnectorAuth =
       tokenUrl?: string;
       clientId?: string;
       clientSecret?: string;
+      // RFC 8707 resource — 이 토큰이 가리키는 MCP 서버 URI(refresh 요청에 동봉).
+      resource?: string;
       // 토큰 엔드포인트에 자격을 싣는 방식. basic=Authorization: Basic, body=요청 본문.
       clientAuth?: "basic" | "body";
       // 토큰 엔드포인트 본문 형식. form=x-www-form-urlencoded, json=application/json.

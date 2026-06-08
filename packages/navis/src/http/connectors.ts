@@ -6,8 +6,9 @@ import {
   removeConnector,
   isValidConnectorId,
 } from "../connectors/store.js";
-import { listProviders, isProviderAvailable } from "../connectors/providers.js";
+import { listProviders } from "../connectors/providers.js";
 import { startOAuth, completeOAuth } from "../connectors/oauth.js";
+import { config } from "../config.js";
 import type { Connector } from "../connectors/types.js";
 
 // 앱 설정 화면용 커넥터 CRUD. 동적 MCP 커넥터를 코드 수정 없이 등록/삭제한다.
@@ -93,21 +94,29 @@ export async function handleDeleteConnector(
 
 // ── OAuth 커넥터 ──────────────────────────────────────────────────────
 
-// 앱이 "연결" 화면에 띄울 OAuth 제공자 목록. available=client 자격이 구성됐는지.
+// 앱이 "연결" 화면에 띄울 OAuth 제공자 목록. DCR 로 client_id 를 자동 발급하므로
+// 사전 자격 구성이 필요 없다 → 항상 available.
 export async function handleGetProviders(
   req: IncomingMessage,
   res: ServerResponse,
 ): Promise<void> {
   if (!requireAppAuth(req, res)) return;
-  const providers = listProviders().map((p) => ({
-    key: p.key,
-    label: p.label,
-    available: isProviderAvailable(p),
-  }));
+  const providers = listProviders().map((p) => ({ key: p.key, label: p.label, available: true }));
   sendJson(res, 200, { providers });
 }
 
-// 앱이 authed 로 호출 → 동의 URL 을 받아 브라우저로 연다. 토큰은 URL 에 싣지 않는다
+// navis 공개 base URL — 콜백 redirect_uri 구성용. NAVIS_PUBLIC_URL 우선, 없으면 요청 헤더에서
+// 도출(Railway 프록시는 x-forwarded-proto/host 를 채운다). 둘 다 없으면 빈 문자열.
+function publicBaseUrl(req: IncomingMessage): string {
+  if (config.publicUrl) return config.publicUrl;
+  const fwdProto = req.headers["x-forwarded-proto"];
+  const proto = (typeof fwdProto === "string" ? fwdProto.split(",")[0] : undefined) ?? "https";
+  const fwdHost = req.headers["x-forwarded-host"];
+  const host = (typeof fwdHost === "string" ? fwdHost : undefined) ?? req.headers.host ?? "";
+  return host ? `${proto}://${host}` : "";
+}
+
+// 앱이 authed 로 호출 → (발견+DCR 후) 동의 URL 을 받아 브라우저로 연다. 토큰은 URL 에 싣지 않는다
 // (제공자 도메인으로 가는 표준 OAuth 동의 링크라 navis 인증이 필요 없음 — state 가 CSRF 방어).
 export async function handleOAuthStart(
   req: IncomingMessage,
@@ -118,7 +127,7 @@ export async function handleOAuthStart(
     const body = safeParse(await readBody(req)) ?? {};
     const provider = typeof body.provider === "string" ? body.provider : "";
     if (!provider) return sendJson(res, 400, { error: "provider required" });
-    const { authUrl } = startOAuth(provider);
+    const { authUrl } = await startOAuth(provider, publicBaseUrl(req));
     sendJson(res, 200, { authUrl });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

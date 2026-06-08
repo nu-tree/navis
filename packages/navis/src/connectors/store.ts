@@ -87,6 +87,7 @@ function normalizeAuth(raw: unknown): Connector["auth"] | undefined {
       ...(typeof a.tokenUrl === "string" ? { tokenUrl: a.tokenUrl } : {}),
       ...(typeof a.clientId === "string" ? { clientId: a.clientId } : {}),
       ...(typeof a.clientSecret === "string" ? { clientSecret: a.clientSecret } : {}),
+      ...(typeof a.resource === "string" ? { resource: a.resource } : {}),
       ...(a.clientAuth === "basic" || a.clientAuth === "body" ? { clientAuth: a.clientAuth } : {}),
       ...(a.bodyFormat === "form" || a.bodyFormat === "json" ? { bodyFormat: a.bodyFormat } : {}),
       ...(typeof a.expiresAt === "number" ? { expiresAt: a.expiresAt } : {}),
