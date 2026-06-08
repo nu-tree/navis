@@ -80,6 +80,7 @@ export async function sendMessageStream(
   attachments: Attachment[] | undefined,
   onDelta: (delta: string) => void,
   onStatus?: (tool: string) => void,
+  onTool?: (label: string) => void,
 ): Promise<SendResult> {
   if (!IS_BACKEND_CONFIGURED) {
     const result = await mockReply(text);
@@ -117,6 +118,7 @@ export async function sendMessageStream(
     const payload = JSON.parse(dataLines.join('\n'));
     if (event === 'delta') onDelta(payload.text as string);
     else if (event === 'status') onStatus?.(payload.tool as string);
+    else if (event === 'tool') onTool?.(payload.label as string);
     else if (event === 'done') done = payload;
     else if (event === 'error') throw new Error(payload.error ?? '스트림 오류');
   };

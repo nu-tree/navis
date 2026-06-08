@@ -45,8 +45,10 @@ export async function askClaude(
   // 토큰 단위 스트리밍 콜백(있으면). 주면 includePartialMessages 를 켜고 응답 text_delta 를
   // 그때그때 흘려보낸다(앱 SSE 스트리밍용). 없으면 기존처럼 완성 후 한 번에 반환.
   onTextDelta?: (delta: string) => void,
-  // 도구 호출 시작 시 콜백 — 어떤 작업 중인지 앱에 알려 진행 상태를 표시.
+  // 도구 호출 시작 시 콜백 — typing indicator용 기본 레이블(tool name 수준).
   onStatus?: (toolName: string) => void,
+  // 도구 인풋이 확정된 시점(assistant 메시지) 콜백 — 말풍선에 실시간으로 한 줄 추가.
+  onToolComplete?: (label: string) => void,
 ): Promise<AskResult> {
   let text = "";
   let sessionId = "";
@@ -63,6 +65,7 @@ export async function askClaude(
         cache_creation_input_tokens?: number;
       }
     | undefined;
+  const toolsUsed: string[] = [];
 
   // 키워드 너지(B): 사용자 메시지에 결정/약속/할 일/배움 신호가 보이면 메인 턴에도
   // save 호출을 상기시키는 가벼운 힌트를 앞에 붙인다. 사후 큐레이터(A)가 그물이지만
@@ -197,8 +200,13 @@ export async function askClaude(
         for (const block of content) {
           if (block.type === "tool_use") {
             if (block.name === "mcp__namory__save") saved = true;
-            // 인풋이 채워진 시점에 더 상세한 상태로 업데이트.
-            if (onStatus) onStatus(richToolStatus(block.name, block.input as Record<string, unknown>));
+            const label = richToolStatus(block.name, block.input as Record<string, unknown>);
+            // typing indicator 를 상세 레이블로 갱신
+            if (onStatus) onStatus(label);
+            // 말풍선에 실시간으로 한 줄 추가 (도구 인풋 확정 시점)
+            if (onToolComplete) onToolComplete(label);
+            // 최종 done 이벤트용 누적 (중복 제거)
+            if (!toolsUsed.includes(label)) toolsUsed.push(label);
           }
         }
       }
@@ -226,7 +234,7 @@ export async function askClaude(
     }
   }
 
-  return { text: text.trim() || "(빈 응답)", sessionId, contextTokens, saved };
+  return { text: text.trim() || "(빈 응답)", sessionId, contextTokens, saved, toolsUsed };
 }
 
 // 텍스트(있으면) + 이미지들을 하나의 user 메시지로 묶어 yield 하는 async generator.

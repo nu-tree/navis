@@ -23,6 +23,7 @@ export function useSendMessage() {
         conversations,
         addMessage,
         appendMessageText,
+        appendMessageTool,
         setMessageText,
         setTyping,
         setTypingStatus,
@@ -88,6 +89,11 @@ export function useSendMessage() {
             },
             (tool) => {
               setTypingStatus(conversationId, tool);
+            },
+            (label) => {
+              // 도구 완료 시점 — 말풍선이 없으면 먼저 만들고 도구 줄 추가
+              ensureBubble();
+              appendMessageTool(conversationId, assistantId, label);
             },
           );
           break;

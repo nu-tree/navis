@@ -126,6 +126,10 @@ export async function handleChatStream(
       (toolName) => {
         sse("status", { tool: toolName });
       },
+      (label) => {
+        // 도구 인풋 확정 시점 — 앱 말풍선에 실시간으로 한 줄 추가
+        sse("tool", { label });
+      },
     );
     const contextFull = result.contextTokens >= config.contextTokenLimit;
     // 권위 있는 최종 텍스트도 함께 보내 클라가 누적분을 보정하게 한다.

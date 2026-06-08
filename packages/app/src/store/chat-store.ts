@@ -60,6 +60,8 @@ type ChatStore = {
   // 스트리밍 종료 시 권위 있는 최종 텍스트로 보정
   setMessageText: (conversationId: string, messageId: string, text: string) => void;
   setMessageToolsUsed: (conversationId: string, messageId: string, tools: string[]) => void;
+  // 스트리밍 중 도구 한 개씩 실시간 추가
+  appendMessageTool: (conversationId: string, messageId: string, label: string) => void;
   setSessionId: (conversationId: string, sessionId?: string) => void;
   setTyping: (conversationId: string, typing: boolean) => void;
   setTypingStatus: (conversationId: string, tool: string) => void;
@@ -208,6 +210,23 @@ export const useChatStore = create<ChatStore>()(
               messages: c.messages.map((m) =>
                 m.id === messageId ? { ...m, toolsUsed: tools } : m,
               ),
+            }
+          : c,
+      ),
+    })),
+
+  appendMessageTool: (conversationId, messageId, label) =>
+    set((s) => ({
+      conversations: s.conversations.map((c) =>
+        c.id === conversationId
+          ? {
+              ...c,
+              messages: c.messages.map((m) => {
+                if (m.id !== messageId) return m;
+                const existing = m.toolsUsed ?? [];
+                if (existing.includes(label)) return m;
+                return { ...m, toolsUsed: [...existing, label] };
+              }),
             }
           : c,
       ),
