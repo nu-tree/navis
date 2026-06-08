@@ -38,7 +38,7 @@ function required(name: string): string {
 }
 
 // 선택적 환경변수. 없으면 undefined를 돌려주고 죽지 않는다.
-// (구글 캘린더·노션처럼 토큰이 채워졌을 때만 붙이는 부가 연동에 쓴다.)
+// (구글 캘린더처럼 토큰이 채워졌을 때만 붙이는 부가 연동에 쓴다.)
 function optional(name: string): string | undefined {
   return process.env[name] || undefined;
 }
@@ -125,12 +125,6 @@ export const config = {
   // self-improve PR 생성 webhook 검증용 HMAC secret. GitHub repo Settings → Webhooks
   // 등록 시 같은 값을 secret 으로 박는다. 미설정이면 webhook 라우트가 모든 요청을 거부.
   githubWebhookSecret: optional("GITHUB_WEBHOOK_SECRET"),
-
-  // 부가 외부 MCP 연동 (선택). 토큰이 있을 때만 navis가 붙인다.
-  // 노션: OAuth를 피하려고 호스팅 MCP가 아니라 self-host(@notionhq/notion-mcp-server)를
-  // navis 안에서 stdio로 띄우고, 내부 통합 토큰(ntn_...)만 주입한다. URL 불필요.
-  // notion.so/my-integrations 에서 발급 후 봇이 쓸 페이지/DB를 해당 통합에 공유할 것.
-  notionToken: optional("NOTION_TOKEN"),
 
   // 구글 캘린더 OAuth (refresh token 방식, 영구).
   // 셋 다 채워져야 캘린더 도구·스케줄러가 활성화됨. 미설정이면 조용히 비활성.
