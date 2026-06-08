@@ -389,6 +389,28 @@ ipcMain.handle('navis-local:run', async (event, { id, prompt, resume, workdir, n
   ].join(':');
   process.env.PATH = `${extraPaths}:${process.env.PATH || ''}`;
 
+  // SDK 가 import.meta.url 기준으로 claude 바이너리를 찾는데, 패키징된 앱에선
+  // import.meta.url 이 .asar 내부를 가리켜 spawn ENOTDIR 이 난다.
+  // pathToClaudeCodeExecutable 로 실제 파일시스템 경로를 직접 지정한다.
+  let claudeExecPath;
+  try {
+    const { execFileSync } = require('child_process');
+    claudeExecPath = execFileSync('which', ['claude'], {
+      env: { ...process.env },
+      encoding: 'utf8',
+    }).trim();
+  } catch {
+    // which 실패 시 알려진 기본 설치 경로로 폴백
+    claudeExecPath = `${require('os').homedir()}/.local/share/claude/versions/current`;
+    try {
+      // symlink 실제 경로 resolve
+      const link = require('fs').readlinkSync(`${require('os').homedir()}/.local/bin/claude`);
+      claudeExecPath = link.startsWith('/') ? link : require('path').resolve(`${require('os').homedir()}/.local/bin`, link);
+    } catch {
+      claudeExecPath = `${require('os').homedir()}/.local/bin/claude`;
+    }
+  }
+
   // 경로가 실제 디렉토리인지 확인 — 존재하지 않거나 파일이면 spawn ENOTDIR 대신 친절한 에러.
   try {
     const stat = require('fs').statSync(dir);
@@ -553,6 +575,9 @@ ipcMain.handle('navis-local:run', async (event, { id, prompt, resume, workdir, n
         permissionMode: cfg.allowWrite ? 'bypassPermissions' : 'default',
         // resume 가 있으면 이전 코드 세션을 이어간다(멀티턴).
         ...(resume ? { resume } : {}),
+        // 패키징된 앱에서 SDK 가 .asar 내부 경로로 바이너리를 찾지 않도록
+        // 실제 파일시스템의 claude CLI 경로를 명시한다(spawn ENOTDIR 방지).
+        pathToClaudeCodeExecutable: claudeExecPath,
       },
     })) {
       // SDK 세션 id 포착 — 다음 턴 resume 용.
