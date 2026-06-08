@@ -20,6 +20,11 @@ contextBridge.exposeInMainWorld('navisLocal', {
   // namory 프로젝트명(폴더명 폴백)을 돌려준다. 취소하면 null.
   pickFolder: () => ipcRenderer.invoke('navis-local:pick-folder'),
 
+  // 작업 폴더의 git 브랜치 목록·현재 브랜치 조회 / 브랜치 체크아웃.
+  listBranches: (workdir) => ipcRenderer.invoke('navis-local:list-branches', { workdir }),
+  checkoutBranch: (workdir, branch) =>
+    ipcRenderer.invoke('navis-local:checkout-branch', { workdir, branch }),
+
   // prompt 를 로컬 에이전트로 실행. onDelta 로 토큰 스트리밍, 반환은 {text} 또는 {error}.
   run: (prompt, opts) => {
     const id = `run-${nextId++}`;

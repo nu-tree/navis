@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Image,
   Platform,
@@ -8,14 +8,14 @@ import {
   View,
   type NativeSyntheticEvent,
   type TextInputKeyPressEventData,
-  type TextInputProps,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { cn } from '../../lib/cn';
 import { Button } from '../ui/button';
 import { Text } from '../ui/text';
 import { useSendMessage } from '../../hooks/use-send-message';
-import { useIsActiveTyping } from '../../store/chat-store';
+import { useIsActiveTyping, useChatStore } from '../../store/chat-store';
+import { localAgent } from '../../lib/local-agent';
 import type { Attachment } from '../../api/navis';
 
 // 첨부 최대 개수 — pickImage(selectionLimit), 붙여넣기, 합산 모두 이 한도에 맞춘다.
@@ -59,8 +59,16 @@ export function ChatInput({ placeholder = '메시지 입력…', className }: Ch
   const [measuredHeight, setMeasuredHeight] = useState(0);
   const { send } = useSendMessage();
   const typing = useIsActiveTyping();
+  const activeId = useChatStore((s) => s.activeId);
+  const stopGenerating = useChatStore((s) => s.stopGenerating);
 
   const canSend = (text.trim().length > 0 || attachments.length > 0) && !typing;
+
+  // 중지: 진행 중 서버 스트림 abort + 코드 세션이면 로컬 에이전트도 정지.
+  const stop = () => {
+    stopGenerating(activeId);
+    localAgent?.stop();
+  };
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -84,29 +92,34 @@ export function ChatInput({ placeholder = '메시지 입력…', className }: Ch
   const removeAttachment = (uri: string) =>
     setAttachments((prev) => prev.filter((a) => a.uri !== uri));
 
-  // 클립보드 이미지 붙여넣기(웹/데스크톱 전용). RN 모바일 텍스트 입력에선 paste 이벤트가
-  // 노출되지 않아 무시한다. text 만 있는 paste 는 그대로 흘려보내 텍스트 붙여넣기 동작 유지.
-  const handlePaste = useCallback((e: React.ClipboardEvent<HTMLElement>) => {
+  // 클립보드 이미지 붙여넣기(웹/데스크톱 전용). 입력창 포커스 여부와 무관하게 동작하도록
+  // document 레벨에서 'paste' 를 듣는다. 이미지 아이템이 있을 때만 가로채고(preventDefault),
+  // 순수 텍스트 paste 는 건드리지 않아 기본 붙여넣기 동작을 유지한다. RN 모바일은 no-op.
+  useEffect(() => {
     if (Platform.OS !== 'web') return;
-    const items = e.clipboardData?.items;
-    if (!items || items.length === 0) return;
-    const files: File[] = [];
-    for (let i = 0; i < items.length; i++) {
-      const it = items[i];
-      if (it.kind === 'file' && it.type.startsWith('image/')) {
-        const f = it.getAsFile();
-        if (f) files.push(f);
+    const onPaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items || items.length === 0) return;
+      const files: File[] = [];
+      for (let i = 0; i < items.length; i++) {
+        const it = items[i];
+        if (it.kind === 'file' && it.type.startsWith('image/')) {
+          const f = it.getAsFile();
+          if (f) files.push(f);
+        }
       }
-    }
-    if (files.length === 0) return;
-    e.preventDefault();
-    void Promise.all(files.map(fileToAttachment))
-      .then((picked) => {
-        setAttachments((prev) => [...prev, ...picked].slice(0, MAX_ATTACHMENTS));
-      })
-      .catch(() => {
-        /* 읽기 실패는 조용히 무시 — 사용자가 다시 시도 가능 */
-      });
+      if (files.length === 0) return;
+      e.preventDefault();
+      void Promise.all(files.map(fileToAttachment))
+        .then((picked) => {
+          setAttachments((prev) => [...prev, ...picked].slice(0, MAX_ATTACHMENTS));
+        })
+        .catch(() => {
+          /* 읽기 실패는 조용히 무시 — 사용자가 다시 시도 가능 */
+        });
+    };
+    document.addEventListener('paste', onPaste);
+    return () => document.removeEventListener('paste', onPaste);
   }, []);
 
   const submit = () => {
@@ -138,12 +151,6 @@ export function ChatInput({ placeholder = '메시지 입력…', className }: Ch
     Platform.OS === 'web'
       ? { height: clampedHeight }
       : { minHeight: MIN_INPUT_H, maxHeight: MAX_INPUT_H };
-  // react-native-web 은 TextInput 에 넘긴 onPaste 를 그대로 textarea DOM 으로 전달한다.
-  // RN 타입엔 onPaste 가 없어 Partial<TextInputProps> 로 캐스팅해 끼워 넣는다.
-  const webOnlyProps: Partial<TextInputProps> =
-    Platform.OS === 'web'
-      ? ({ onPaste: handlePaste } as unknown as Partial<TextInputProps>)
-      : {};
 
   return (
     <View className={cn('border-t border-border bg-background', className)}>
@@ -188,7 +195,6 @@ export function ChatInput({ placeholder = '메시지 입력…', className }: Ch
             height 는 인라인으로 박지 않는다(박으면 iOS contentSize 가 그 값을 되돌려보내
             MIN_INPUT_H 에 다시 잠긴다). textAlignVertical='top' 으로 멀티라인 렌더링 안정화. */}
         <TextInput
-          {...webOnlyProps}
           value={text}
           onChangeText={setText}
           placeholder={placeholder}
@@ -208,9 +214,16 @@ export function ChatInput({ placeholder = '메시지 입력…', className }: Ch
           }}
           className="rounded-xl bg-input text-foreground"
         />
-        <Button size="icon" className="rounded-full" disabled={!canSend} onPress={submit}>
-          <Text className="text-lg text-primary-foreground">↑</Text>
-        </Button>
+        {typing ? (
+          // 생성 중 — 전송 버튼 대신 중지 버튼(클로드 코드/데스크탑식).
+          <Button size="icon" variant="secondary" className="rounded-full" onPress={stop}>
+            <Text className="text-base text-foreground">⏹</Text>
+          </Button>
+        ) : (
+          <Button size="icon" className="rounded-full" disabled={!canSend} onPress={submit}>
+            <Text className="text-lg text-primary-foreground">↑</Text>
+          </Button>
+        )}
       </View>
     </View>
   );

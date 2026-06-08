@@ -48,6 +48,12 @@ export async function askClaude(
   // 사용자가 앱에서 고른 모델(클로드 데스크톱식 모델 선택). 호출부가 화이트리스트
   // (config.selectableModels) 로 이미 검증한 값만 넘긴다. 없으면 config.model 폴백.
   modelOverride?: string,
+  // 확장 사고(extended thinking) 델타 콜백 — 모델의 생각 과정을 그때그때 흘려보낸다
+  // (앱에서 접이식 '생각 과정' 블록에 표시). adaptive thinking 이라 간단한 질문엔 안 올 수도.
+  onThinkingDelta?: (delta: string) => void,
+  // 중지 전파 — 클라이언트가 스트림을 끊으면(중지 버튼) 이 컨트롤러를 abort 해 SDK query
+  // 생성을 실제로 멈춘다. 없으면 끝까지 생성(크론/다이제스트 등 신뢰 자동화 경로).
+  abortController?: AbortController,
 ): Promise<AskResult> {
   let text = "";
   let sessionId = "";
@@ -131,6 +137,12 @@ export async function askClaude(
     prompt: promptInput,
     options: {
       model: modelOverride ?? config.model,
+      // 확장 사고(adaptive) — 모델이 필요하다고 판단할 때만 스스로 생각한다. 생각 과정은
+      // 스트리밍 콜백이 있을 때(앱 채팅)만 켜서 접이식 '생각 과정' 블록으로 보여준다.
+      // 콜백 없는 경로(크론/다이제스트/CLI)는 기본 동작 유지(불필요한 지연·비용 회피).
+      ...(onThinkingDelta ? { thinking: { type: "adaptive" as const } } : {}),
+      // 중지 버튼 → 서버 생성도 실제로 끊기게 컨트롤러 연결(토큰 낭비 방지).
+      ...(abortController ? { abortController } : {}),
       systemPrompt: systemPromptFinal,
       // namory를 HTTP MCP 서버로 연결. 토큰은 Authorization 헤더로 전달.
       mcpServers: {
@@ -181,6 +193,14 @@ export async function askClaude(
       const ev = message.event;
       if (onTextDelta && ev.type === "content_block_delta" && ev.delta.type === "text_delta") {
         onTextDelta(ev.delta.text);
+      }
+      // 확장 사고 델타 — 생각 과정을 그때그때 흘려보낸다(앱 접이식 블록).
+      if (
+        onThinkingDelta &&
+        ev.type === "content_block_delta" &&
+        ev.delta.type === "thinking_delta"
+      ) {
+        onThinkingDelta(ev.delta.thinking);
       }
       if (onStatus && ev.type === "content_block_start" && ev.content_block.type === "tool_use") {
         onStatus(ev.content_block.name);

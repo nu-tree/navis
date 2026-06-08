@@ -3,6 +3,7 @@ import { KeyboardAvoidingView, Platform, Pressable, useWindowDimensions, View } 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChatDrawer, ChatHeader, ChatInput, MessageList, ModelPicker } from '../components/chat';
 import { PreviewPanel } from '../components/chat/preview-panel';
+import { BranchPicker } from '../components/chat/branch-picker';
 import { SidebarContent } from '../components/chat/sidebar-content';
 import { LocalAgentSheet } from '../components/local-agent-sheet';
 import { Text } from '../components/ui/text';
@@ -40,6 +41,7 @@ function CodeContextBar({
 }) {
   const active = useActiveConversation();
   const setCodeFolder = useChatStore((s) => s.setCodeFolder);
+  const setCodeBranch = useChatStore((s) => s.setCodeBranch);
   const [hasToken, setHasToken] = useState(true);
   const [allowWrite, setAllowWrite] = useState(false);
   useEffect(() => {
@@ -92,6 +94,15 @@ function CodeContextBar({
       >
         <Text className="text-xs text-muted-foreground">＋폴더</Text>
       </Pressable>
+
+      {/* 브랜치 칩 — 폴더가 선택돼 있을 때만. git 저장소가 아니면 시트에서 안내. */}
+      {active?.workdir ? (
+        <BranchPicker
+          workdir={active.workdir}
+          branch={active.branch}
+          onChange={(b) => setCodeBranch(active.id, b)}
+        />
+      ) : null}
 
       <View className="flex-1" />
 

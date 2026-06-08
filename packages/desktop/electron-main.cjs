@@ -326,6 +326,55 @@ ipcMain.handle('navis-local:pick-folder', async () => {
   return { workdir, project: detectProjectFromDir(workdir) };
 });
 
+// 코드 세션 작업 폴더의 git 브랜치 목록 + 현재 브랜치를 돌려준다. git 저장소가 아니거나
+// git 이 없으면 branches:[] current:null (에러 아님 — 호출부가 '저장소 아님'으로 처리).
+ipcMain.handle('navis-local:list-branches', (_e, { workdir }) => {
+  const { execFileSync } = require('child_process');
+  if (!workdir) return { branches: [], current: null };
+  try {
+    const out = execFileSync('git', ['branch', '--format=%(refname:short)'], {
+      cwd: workdir,
+      encoding: 'utf8',
+      timeout: 5000,
+    });
+    const branches = out
+      .split('\n')
+      .map((b) => b.trim())
+      .filter(Boolean);
+    let current = null;
+    try {
+      current = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+        cwd: workdir,
+        encoding: 'utf8',
+        timeout: 5000,
+      }).trim();
+    } catch {
+      /* detached HEAD 등 — current 없이 목록만 */
+    }
+    return { branches, current };
+  } catch {
+    return { branches: [], current: null };
+  }
+});
+
+// 작업 폴더에서 git 브랜치 체크아웃. 더티 트리·충돌 등으로 실패하면 stderr 를 그대로 전달.
+ipcMain.handle('navis-local:checkout-branch', (_e, { workdir, branch }) => {
+  const { execFileSync } = require('child_process');
+  if (!workdir || !branch) return { ok: false, error: '작업 폴더/브랜치가 비어 있어' };
+  try {
+    execFileSync('git', ['checkout', branch], {
+      cwd: workdir,
+      encoding: 'utf8',
+      timeout: 15000,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    return { ok: true };
+  } catch (err) {
+    const msg = (err && (err.stderr || err.message)) || '체크아웃 실패';
+    return { ok: false, error: String(msg).trim().slice(0, 300) };
+  }
+});
+
 // 도구 사용을 클로드 코드처럼 한 줄로 요약 — 코드 세션 본문에 인라인 스트리밍한다.
 function formatToolUse(name, input) {
   const i = input || {};

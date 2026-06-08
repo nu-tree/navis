@@ -8,6 +8,7 @@ import { useChatStore } from '../../store/chat-store';
 import { ReactionPicker } from './reaction-picker';
 import { MessageReactions } from './message-reactions';
 import { MarkdownText } from './markdown-text';
+import { WorkDetails } from './work-details';
 import type { ChatMessage } from '../../types';
 
 export type ChatBubbleProps = {
@@ -24,6 +25,9 @@ export function ChatBubble({ message, className }: ChatBubbleProps) {
   const images = message.images ?? [];
   const hasText = message.text.trim().length > 0;
   const toolsUsed = !isUser ? (message.toolsUsed ?? []) : [];
+  const thinking = !isUser ? message.thinking : undefined;
+  // 작업/생각 과정 접이식 블록을 보여줄지 — 둘 중 하나라도 있으면.
+  const hasWork = toolsUsed.length > 0 || !!thinking?.trim();
 
   const copyText = async () => {
     if (hasText) await Clipboard.setStringAsync(message.text);
@@ -42,23 +46,11 @@ export function ChatBubble({ message, className }: ChatBubbleProps) {
         <View
           className={cn(
             'overflow-hidden rounded-2xl',
-            hasText && 'px-4 py-2.5',
+            (hasText || hasWork) && 'px-4 py-2.5',
             isUser ? 'rounded-br-md bg-primary' : 'rounded-bl-md bg-card',
           )}
         >
-          {toolsUsed.length > 0 ? (
-            <View className="mb-2 gap-0.5">
-              {toolsUsed.map((tool) => (
-                <Text
-                  key={tool}
-                  variant="caption"
-                  className="text-muted-foreground"
-                >
-                  ● {tool}
-                </Text>
-              ))}
-            </View>
-          ) : null}
+          {hasWork ? <WorkDetails thinking={thinking} toolsUsed={toolsUsed} /> : null}
           {images.map((uri) => (
             <Image
               key={uri}

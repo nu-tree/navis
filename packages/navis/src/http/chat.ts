@@ -95,9 +95,10 @@ export async function handleChat(req: IncomingMessage, res: ServerResponse): Pro
 }
 
 // /api/chat 의 스트리밍 버전. 응답 토큰을 SSE 로 흘려보낸다:
-//   event: delta  data: {"text":"..."}   ← 토큰 조각 (여러 번)
-//   event: done   data: {"sessionId","contextFull","saved"}  ← 종료 + 메타
-//   event: error  data: {"error"}         ← 실패
+//   event: delta     data: {"text":"..."}  ← 답변 토큰 조각 (여러 번)
+//   event: thinking  data: {"text":"..."}  ← 생각 과정 조각 (adaptive — 있을 때만)
+//   event: done      data: {"sessionId","contextFull","saved"}  ← 종료 + 메타
+//   event: error     data: {"error"}        ← 실패
 export async function handleChatStream(
   req: IncomingMessage,
   res: ServerResponse,
@@ -133,7 +134,15 @@ export async function handleChatStream(
       heartbeat = undefined;
     }
   };
-  req.on("close", stopHeartbeat);
+
+  // 클라이언트가 중지(연결 종료)하면 SDK 생성도 실제로 끊어 토큰 낭비를 막는다.
+  // req "close" 는 정상 완료 후에도 켜질 수 있으나, 그 시점엔 query 루프가 이미 끝나
+  // abort() 가 무해한 no-op 이다.
+  const abortController = new AbortController();
+  req.on("close", () => {
+    stopHeartbeat();
+    abortController.abort();
+  });
 
   try {
     const result = await askClaude(
@@ -154,6 +163,11 @@ export async function handleChatStream(
         sse("tool", { label });
       },
       parsed.model,
+      (delta) => {
+        // 확장 사고 델타 — 앱의 접이식 '생각 과정' 블록에 누적 표시
+        sse("thinking", { text: delta });
+      },
+      abortController,
     );
     const contextFull = result.contextTokens >= config.contextTokenLimit;
     // 권위 있는 최종 텍스트도 함께 보내 클라가 누적분을 보정하게 한다.
@@ -168,12 +182,17 @@ export async function handleChatStream(
 
     curate(parsed.text, result.text);
   } catch (err) {
-    console.error("[chat/stream] 처리 실패:", err);
-    if (!res.headersSent) {
-      sendJson(res, 500, { error: "internal error" });
+    // 클라이언트 중지(abort)로 query 가 끊긴 건 에러가 아니다 — 조용히 종료.
+    if (abortController.signal.aborted) {
+      if (!res.writableEnded) res.end();
     } else {
-      sse("error", { error: "internal error" });
-      res.end();
+      console.error("[chat/stream] 처리 실패:", err);
+      if (!res.headersSent) {
+        sendJson(res, 500, { error: "internal error" });
+      } else {
+        sse("error", { error: "internal error" });
+        res.end();
+      }
     }
   } finally {
     stopHeartbeat();

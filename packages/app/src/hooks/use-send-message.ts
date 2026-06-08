@@ -40,9 +40,11 @@ export function useSendMessage() {
         addMessage,
         appendMessageText,
         appendMessageTool,
+        appendMessageThinking,
         setMessageText,
         setTyping,
         setTypingStatus,
+        setAborter,
       } = useChatStore.getState();
       const conv = conversations.find((c) => c.id === conversationId);
 
@@ -104,6 +106,10 @@ export function useSendMessage() {
       // 일시적 연결 실패(Railway 콜드스타트·네트워크 블립)는 사용자에게 에러를
       // 띄우기 전에 조용히 몇 번 재시도한다. 단, 델타가 한 번이라도 도착한 뒤(스트림
       // 시작됨)의 실패는 재시도하면 본문이 중복되므로 그대로 올려보낸다.
+      // 중지 버튼용 AbortController — 방별로 스토어에 등록해 stopGenerating 이 끊는다.
+      const controller = new AbortController();
+      setAborter(conversationId, controller);
+
       const MAX_ATTEMPTS = 3;
       let result: Awaited<ReturnType<typeof sendMessageStream>> | undefined;
       for (let attempt = 1; ; attempt++) {
@@ -126,9 +132,26 @@ export function useSendMessage() {
             },
             // 사용자가 고른 모델(전역). 서버가 화이트리스트로 검증 후 적용.
             useChatStore.getState().model,
+            controller.signal,
+            (delta) => {
+              // 생각 과정 — 본문 전에 올 수 있어 말풍선을 먼저 띄운다.
+              ensureBubble();
+              appendMessageThinking(conversationId, assistantId, delta);
+            },
           );
           break;
         } catch (err) {
+          // 사용자가 중지했으면 재시도하지 않고 부분 응답을 유지한 채 종료.
+          if (controller.signal.aborted) {
+            animator.flush();
+            return {
+              reply: { text: '', createdAt: new Date().toISOString() },
+              sessionId: undefined,
+              contextFull: false,
+              saved: false,
+              aborted: true,
+            };
+          }
           if (started || attempt >= MAX_ATTEMPTS) throw err;
           // 점증 백오프(0.7s → 1.4s)로 잠깐 쉬었다가 재시도.
           await new Promise((r) => setTimeout(r, attempt * 700));
@@ -137,6 +160,10 @@ export function useSendMessage() {
 
       // 애니메이터 큐에 남은 글자 즉시 방출 후 권위 텍스트로 최종 보정.
       animator.flush();
+
+      // 중지됨: 스트림이 정상 종료가 아니라 끊긴 것 → 지금까지 받은 부분 응답을
+      // 그대로 두고 빈 권위 텍스트로 덮어쓰지 않는다.
+      if (result.aborted) return result;
 
       const tools = result.toolsUsed ?? [];
       // 델타가 한 번도 안 왔으면 지금 생성, 왔으면 권위 텍스트로 보정.
@@ -175,10 +202,13 @@ export function useSendMessage() {
       return { userMessageId };
     },
     onSuccess: (
-      { sessionId, contextFull, saved, reply },
+      { sessionId, contextFull, saved, reply, aborted },
       { conversationId },
       context,
     ) => {
+      // 중지된 턴은 세션 id/저장/알림을 건드리지 않는다 — 기존 세션 맥락을 보존하고
+      // 부분 응답만 남긴다.
+      if (aborted) return;
       const { setSessionId, toggleReaction } = useChatStore.getState();
       setSessionId(
         conversationId,
@@ -212,7 +242,9 @@ export function useSendMessage() {
       });
     },
     onSettled: (_data, _err, { conversationId }) => {
-      useChatStore.getState().setTyping(conversationId, false);
+      const { setTyping, setAborter } = useChatStore.getState();
+      setTyping(conversationId, false);
+      setAborter(conversationId, undefined);
     },
   });
 

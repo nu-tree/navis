@@ -26,6 +26,8 @@ export type Conversation = {
   // 프로젝트명(폴더명 폴백). 폴더를 고르면 그 레포의 기억이 연결되고 없으면 자동 생성된다.
   workdir?: string;
   project?: string;
+  // 코드 세션의 현재 git 브랜치(폴더가 git 저장소일 때). 브랜치 칩에 표시.
+  branch?: string;
 };
 
 // 서버 동기화로 내려오는 대화방 행(머지 입력). deletedAt 있으면 삭제 전파.
@@ -58,6 +60,8 @@ type ChatStore = {
   typingIds: string[]; // 응답 생성 중인 대화방 id 목록 (방별 독립)
   typingStatus: Record<string, string>; // 대화방별 현재 도구 상태 텍스트
   typingStartedAt: Record<string, number>; // 대화방별 typing 시작 타임스탬프(ms)
+  // 진행 중인 서버 스트림의 AbortController(방별). 중지 버튼이 이걸 abort 한다. 휘발성.
+  aborters: Record<string, AbortController>;
   // 사용자가 고른 채팅 모델(클로드 데스크톱식). 전역 1개 — 모든 대화방에 적용되고
   // persist 로 유지된다. 일반 채팅(kind==='chat')에서만 의미 있다(코드 세션은
   // 로컬 에이전트, 보고방은 읽기 전용).
@@ -76,10 +80,17 @@ type ChatStore = {
   setMessageToolsUsed: (conversationId: string, messageId: string, tools: string[]) => void;
   // 스트리밍 중 도구 한 개씩 실시간 추가
   appendMessageTool: (conversationId: string, messageId: string, label: string) => void;
+  // 스트리밍 중 생각 과정(확장 사고) 델타 이어붙임
+  appendMessageThinking: (conversationId: string, messageId: string, delta: string) => void;
+  // 중지 버튼: 진행 중 스트림을 abort + typing 해제. 코드 세션은 localAgent.stop 으로 별도.
+  setAborter: (conversationId: string, controller?: AbortController) => void;
+  stopGenerating: (conversationId: string) => void;
   setSessionId: (conversationId: string, sessionId?: string) => void;
   // 코드 세션의 작업 폴더 설정(+폴더 선택 시). 폴더가 바뀌면 namory 세션(sessionId)도
   // 끊어 새 폴더 맥락으로 다시 시작한다. 제목도 폴더/프로젝트명으로 갱신.
   setCodeFolder: (conversationId: string, workdir: string, project?: string) => void;
+  // 코드 세션의 현재 브랜치 갱신(체크아웃 후 표시용).
+  setCodeBranch: (conversationId: string, branch: string) => void;
   setTyping: (conversationId: string, typing: boolean) => void;
   setTypingStatus: (conversationId: string, tool: string) => void;
   // 메시지 이모지 리액션 토글 (있으면 제거, 없으면 추가)
@@ -149,6 +160,7 @@ export const useChatStore = create<ChatStore>()(
   typingIds: [],
   typingStatus: {},
   typingStartedAt: {},
+  aborters: {},
   model: DEFAULT_MODEL,
 
   setModel: (model) => set({ model }),
@@ -280,6 +292,40 @@ export const useChatStore = create<ChatStore>()(
       ),
     })),
 
+  appendMessageThinking: (conversationId, messageId, delta) =>
+    set((s) => ({
+      conversations: s.conversations.map((c) =>
+        c.id === conversationId
+          ? {
+              ...c,
+              messages: c.messages.map((m) =>
+                m.id === messageId ? { ...m, thinking: (m.thinking ?? '') + delta } : m,
+              ),
+            }
+          : c,
+      ),
+    })),
+
+  setAborter: (conversationId, controller) =>
+    set((s) => {
+      const aborters = { ...s.aborters };
+      if (controller) aborters[conversationId] = controller;
+      else delete aborters[conversationId];
+      return { aborters };
+    }),
+
+  stopGenerating: (conversationId) => {
+    const { aborters } = get();
+    aborters[conversationId]?.abort();
+    set((s) => {
+      const next = { ...s.aborters };
+      delete next[conversationId];
+      return { aborters: next };
+    });
+    // typing 표시도 즉시 해제(스트림 catch 가 끝나기 전에 UI 반응).
+    get().setTyping(conversationId, false);
+  },
+
   setSessionId: (conversationId, sessionId) =>
     set((s) => ({
       conversations: s.conversations.map((c) =>
@@ -295,6 +341,8 @@ export const useChatStore = create<ChatStore>()(
               ...c,
               workdir,
               project,
+              // 폴더가 바뀌면 브랜치 표시도 초기화(새 폴더에서 다시 조회).
+              branch: undefined,
               // 폴더가 바뀌면 이전 SDK 세션 맥락을 끊는다(새 폴더로 깨끗이 시작).
               sessionId: undefined,
               // 아직 빈 코드 세션이면 제목을 폴더/프로젝트명으로.
@@ -303,6 +351,13 @@ export const useChatStore = create<ChatStore>()(
               updatedAt: now(),
             }
           : c,
+      ),
+    })),
+
+  setCodeBranch: (conversationId, branch) =>
+    set((s) => ({
+      conversations: s.conversations.map((c) =>
+        c.id === conversationId ? { ...c, branch, updatedAt: now() } : c,
       ),
     })),
 

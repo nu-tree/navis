@@ -17,6 +17,8 @@ export type SendResult = {
   contextFull: boolean;
   saved: boolean;
   toolsUsed: string[];
+  // 사용자가 중지 버튼으로 끊었는지 — 부분 응답을 그대로 유지하기 위함.
+  aborted?: boolean;
 };
 
 type ChatResponse = {
@@ -83,10 +85,15 @@ export async function sendMessageStream(
   onStatus?: (tool: string) => void,
   onTool?: (label: string) => void,
   model?: string,
+  // 중지 버튼용 — abort 되면 부분 응답을 유지한 채 정상 종료(aborted:true).
+  signal?: AbortSignal,
+  // 생각 과정(확장 사고) 델타 — 접이식 블록에 누적.
+  onThinking?: (delta: string) => void,
 ): Promise<SendResult> {
   if (!IS_BACKEND_CONFIGURED) {
     const result = await mockReply(text);
     for (const ch of result.reply.text.match(/.{1,3}/gu) ?? []) {
+      if (signal?.aborted) return { ...result, aborted: true };
       onDelta(ch);
       await new Promise((r) => setTimeout(r, 12));
     }
@@ -97,6 +104,7 @@ export async function sendMessageStream(
     method: 'POST',
     headers: jsonHeaders(),
     body: JSON.stringify({ text, sessionId, images: toDataUrls(attachments), model }),
+    signal,
   });
 
   if (!res.ok || !res.body) {
@@ -119,22 +127,39 @@ export async function sendMessageStream(
     if (dataLines.length === 0) return;
     const payload = JSON.parse(dataLines.join('\n'));
     if (event === 'delta') onDelta(payload.text as string);
+    else if (event === 'thinking') onThinking?.(payload.text as string);
     else if (event === 'status') onStatus?.(payload.tool as string);
     else if (event === 'tool') onTool?.(payload.label as string);
     else if (event === 'done') done = payload;
     else if (event === 'error') throw new Error(payload.error ?? '스트림 오류');
   };
 
-  while (true) {
-    const { value, done: streamDone } = await reader.read();
-    if (streamDone) break;
-    buffer += decoder.decode(value, { stream: true });
-    let idx: number;
-    while ((idx = buffer.indexOf('\n\n')) !== -1) {
-      const frame = buffer.slice(0, idx);
-      buffer = buffer.slice(idx + 2);
-      if (frame.trim()) handleFrame(frame);
+  try {
+    while (true) {
+      const { value, done: streamDone } = await reader.read();
+      if (streamDone) break;
+      buffer += decoder.decode(value, { stream: true });
+      let idx: number;
+      while ((idx = buffer.indexOf('\n\n')) !== -1) {
+        const frame = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 2);
+        if (frame.trim()) handleFrame(frame);
+      }
     }
+  } catch (err) {
+    // 사용자가 중지 버튼을 누르면 fetch 가 AbortError 로 끊긴다 → 에러가 아니라
+    // 정상 종료로 취급하고, 지금까지 받은 부분 응답을 그대로 유지한다.
+    if (signal?.aborted) {
+      return {
+        reply: assistantMessage(''),
+        sessionId: sessionId ?? '',
+        contextFull: false,
+        saved: false,
+        toolsUsed: [],
+        aborted: true,
+      };
+    }
+    throw err;
   }
 
   if (!done) throw new Error('스트림이 비정상 종료됐어');

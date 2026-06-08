@@ -37,6 +37,15 @@ type LocalAgentApi = {
   ) => Promise<{ text?: string; error?: string; sessionId?: string }>;
   // 코드 세션 작업 폴더 선택(네이티브 다이얼로그). 취소하면 null.
   pickFolder: () => Promise<{ workdir: string; project?: string } | null>;
+  // 작업 폴더의 git 브랜치 목록 + 현재 브랜치. git 저장소 아니면 branches:[] current:null.
+  listBranches: (
+    workdir: string,
+  ) => Promise<{ branches: string[]; current: string | null }>;
+  // 브랜치 체크아웃. 실패 시 ok:false + error(stderr).
+  checkoutBranch: (
+    workdir: string,
+    branch: string,
+  ) => Promise<{ ok: boolean; error?: string }>;
   // 생성 중단(정지 버튼). 진행 중인 모든 run 을 끊는다.
   stop: () => void;
 };
