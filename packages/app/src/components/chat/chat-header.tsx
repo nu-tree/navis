@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
 import { cn } from '../../lib/cn';
 import { Text } from '../ui/text';
@@ -12,6 +13,8 @@ export type ChatHeaderProps = {
   unread?: number;
   // 데스크톱 고정 사이드바 모드에선 햄버거(☰)를 숨긴다.
   showMenu?: boolean;
+  // 우측 액션 슬롯(예: 모델 픽커). 일반 채팅에서만 채운다.
+  right?: ReactNode;
   className?: string;
 };
 
@@ -21,6 +24,7 @@ export function ChatHeader({
   onMenu,
   unread = 0,
   showMenu = true,
+  right,
   className,
 }: ChatHeaderProps) {
   return (
@@ -55,6 +59,8 @@ export function ChatHeader({
           </Text>
         ) : null}
       </View>
+
+      {right ?? null}
     </View>
   );
 }

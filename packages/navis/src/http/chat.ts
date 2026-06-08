@@ -12,7 +12,14 @@ import {
   sendJson,
 } from "./respond.js";
 
-type ChatRequest = { text: string; images: InputImage[]; resume: string | undefined };
+type ChatRequest = {
+  text: string;
+  images: InputImage[];
+  resume: string | undefined;
+  // 사용자가 고른 모델(클로드 데스크톱식). 화이트리스트에 있을 때만 채워지고,
+  // 아니면 undefined → askClaude 가 config.model 로 폴백한다.
+  model: string | undefined;
+};
 
 // chat / chat-stream 공통 바디 파싱. text + 첨부 이미지(data URL) + resume(sessionId).
 // 텍스트도 이미지도 없으면 400 을 쓰고 null 을 반환한다(이미지-only 는 허용).
@@ -35,7 +42,12 @@ async function parseChatRequest(
   }
   const resume =
     typeof body?.sessionId === "string" && body.sessionId ? body.sessionId : undefined;
-  return { text, images, resume };
+  // 모델은 화이트리스트(config.selectableModels) 검증 — 임의 문자열 주입 차단.
+  const model =
+    typeof body?.model === "string" && config.selectableModels.includes(body.model)
+      ? body.model
+      : undefined;
+  return { text, images, resume, model };
 }
 
 // 사후 큐레이터(A) — 응답을 보낸 뒤 백그라운드로 한 번 더 평가해 저장 누락을 메운다.
@@ -53,7 +65,18 @@ export async function handleChat(req: IncomingMessage, res: ServerResponse): Pro
     const parsed = await parseChatRequest(req, res);
     if (!parsed) return;
 
-    const result = await askClaude(parsed.text, parsed.resume, parsed.images);
+    const result = await askClaude(
+      parsed.text,
+      parsed.resume,
+      parsed.images,
+      false,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      parsed.model,
+    );
     const contextFull = result.contextTokens >= config.contextTokenLimit;
 
     sendJson(res, 200, {
@@ -130,6 +153,7 @@ export async function handleChatStream(
         // 도구 인풋 확정 시점 — 앱 말풍선에 실시간으로 한 줄 추가
         sse("tool", { label });
       },
+      parsed.model,
     );
     const contextFull = result.contextTokens >= config.contextTokenLimit;
     // 권위 있는 최종 텍스트도 함께 보내 클라가 누적분을 보정하게 한다.

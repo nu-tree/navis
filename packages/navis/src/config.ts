@@ -110,6 +110,15 @@ export const config = {
   curatorModel: "claude-opus-4-8",
   reviewModel: process.env.NAVIS_REVIEW_MODEL ?? "claude-opus-4-8",
 
+  // 앱에서 사용자가 고를 수 있는 모델 화이트리스트(클로드 데스크톱식 모델 선택).
+  // /api/chat 의 body.model 은 이 목록에 있을 때만 적용하고, 아니면 config.model(기본
+  // Opus 4.8)로 폴백한다 — 임의 모델 문자열 주입 방지. 첫 항목이 사실상의 기본값.
+  selectableModels: [
+    "claude-opus-4-8",
+    "claude-sonnet-4-6",
+    "claude-haiku-4-5-20251001",
+  ] as readonly string[],
+
   // 대화 맥락 유지 한도(토큰). 한 대화의 컨텍스트가 이걸 넘으면 다음 메시지부터
   // 새 세션으로 리셋하고 사용자에게 알린다. 잊힌 맥락은 namory가 받쳐줌.
   // 기본 150k = opus 200k 창의 75%. 모델 한계·SDK 자동압축 전에 우리가 제어.

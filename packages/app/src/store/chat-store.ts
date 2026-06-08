@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { makeId } from '../lib/id';
+import { DEFAULT_MODEL } from '../lib/models';
 import type { ChatMessage } from '../types';
 
 // 'code' = 데스크톱 로컬 에이전트(클로드 코드) 세션. 서버 동기화 대상이 아니라
@@ -57,6 +58,11 @@ type ChatStore = {
   typingIds: string[]; // 응답 생성 중인 대화방 id 목록 (방별 독립)
   typingStatus: Record<string, string>; // 대화방별 현재 도구 상태 텍스트
   typingStartedAt: Record<string, number>; // 대화방별 typing 시작 타임스탬프(ms)
+  // 사용자가 고른 채팅 모델(클로드 데스크톱식). 전역 1개 — 모든 대화방에 적용되고
+  // persist 로 유지된다. 일반 채팅(kind==='chat')에서만 의미 있다(코드 세션은
+  // 로컬 에이전트, 보고방은 읽기 전용).
+  model: string;
+  setModel: (model: string) => void;
   newConversation: () => string;
   // 코드(로컬 에이전트) 세션 새로 만들기 — 빈 코드 세션이 이미 있으면 그걸로.
   newCodeSession: () => string;
@@ -143,6 +149,9 @@ export const useChatStore = create<ChatStore>()(
   typingIds: [],
   typingStatus: {},
   typingStartedAt: {},
+  model: DEFAULT_MODEL,
+
+  setModel: (model) => set({ model }),
 
   newConversation: () => {
     // 이미 비어 있는 새 대화 방이 있으면 또 만들지 않고 그 방으로 — 빈 방 쌓임 방지.
@@ -473,7 +482,11 @@ export const useChatStore = create<ChatStore>()(
       name: 'navis-chat',
       storage: createJSONStorage(() => AsyncStorage),
       // 응답 생성 중 표시(typingIds)는 휘발성이라 저장하지 않는다.
-      partialize: (s) => ({ conversations: s.conversations, activeId: s.activeId }),
+      partialize: (s) => ({
+        conversations: s.conversations,
+        activeId: s.activeId,
+        model: s.model,
+      }),
       // 복원 후 activeId 가 비어있거나 목록에 없으면 첫 번째 대화로 보정.
       onRehydrateStorage: () => (state) => {
         if (!state) return;
@@ -490,6 +503,9 @@ export const useActiveConversation = (): Conversation | undefined =>
 
 export const useIsActiveTyping = (): boolean =>
   useChatStore((s) => s.typingIds.includes(s.activeId));
+
+// 현재 선택된 채팅 모델 — 모델 픽커가 구독
+export const useChatModel = (): string => useChatStore((s) => s.model);
 
 // 비활성 방들의 안 읽은 메시지 총합 — 헤더 메뉴(☰) 뱃지용
 export const useTotalUnread = (): number =>

@@ -45,6 +45,9 @@ export async function askClaude(
   onStatus?: (toolName: string) => void,
   // 도구 인풋이 확정된 시점(assistant 메시지) 콜백 — 말풍선에 실시간으로 한 줄 추가.
   onToolComplete?: (label: string) => void,
+  // 사용자가 앱에서 고른 모델(클로드 데스크톱식 모델 선택). 호출부가 화이트리스트
+  // (config.selectableModels) 로 이미 검증한 값만 넘긴다. 없으면 config.model 폴백.
+  modelOverride?: string,
 ): Promise<AskResult> {
   let text = "";
   let sessionId = "";
@@ -127,7 +130,7 @@ export async function askClaude(
   for await (const message of query({
     prompt: promptInput,
     options: {
-      model: config.model,
+      model: modelOverride ?? config.model,
       systemPrompt: systemPromptFinal,
       // namory를 HTTP MCP 서버로 연결. 토큰은 Authorization 헤더로 전달.
       mcpServers: {

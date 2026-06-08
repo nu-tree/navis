@@ -46,6 +46,7 @@ export async function sendMessage(
   text: string,
   sessionId?: string,
   attachments?: Attachment[],
+  model?: string,
 ): Promise<SendResult> {
   if (!IS_BACKEND_CONFIGURED) {
     return mockReply(text);
@@ -54,7 +55,7 @@ export async function sendMessage(
   const res = await fetch(apiUrl('/api/chat'), {
     method: 'POST',
     headers: jsonHeaders(),
-    body: JSON.stringify({ text, sessionId, images: toDataUrls(attachments) }),
+    body: JSON.stringify({ text, sessionId, images: toDataUrls(attachments), model }),
   });
 
   if (!res.ok) {
@@ -81,6 +82,7 @@ export async function sendMessageStream(
   onDelta: (delta: string) => void,
   onStatus?: (tool: string) => void,
   onTool?: (label: string) => void,
+  model?: string,
 ): Promise<SendResult> {
   if (!IS_BACKEND_CONFIGURED) {
     const result = await mockReply(text);
@@ -94,7 +96,7 @@ export async function sendMessageStream(
   const res = await expoFetch(apiUrl('/api/chat/stream'), {
     method: 'POST',
     headers: jsonHeaders(),
-    body: JSON.stringify({ text, sessionId, images: toDataUrls(attachments) }),
+    body: JSON.stringify({ text, sessionId, images: toDataUrls(attachments), model }),
   });
 
   if (!res.ok || !res.body) {

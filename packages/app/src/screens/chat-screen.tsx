@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChatDrawer, ChatHeader, ChatInput, MessageList } from '../components/chat';
+import { ChatDrawer, ChatHeader, ChatInput, MessageList, ModelPicker } from '../components/chat';
 import { PreviewPanel } from '../components/chat/preview-panel';
 import { SidebarContent } from '../components/chat/sidebar-content';
 import { LocalAgentSheet } from '../components/local-agent-sheet';
@@ -235,6 +235,8 @@ export function ChatScreen() {
             onMenu={() => (isWide ? setSidebarCollapsed(false) : setDrawerOpen(true))}
             unread={totalUnread}
             showMenu={!showSidebar}
+            // 모델 선택은 일반 채팅에서만(코드 세션=로컬 에이전트, 보고방=읽기 전용).
+            right={!isReport && !isCode ? <ModelPicker /> : undefined}
           />
           <KeyboardAvoidingView
             className="flex-1"

@@ -124,6 +124,8 @@ export function useSendMessage() {
               ensureBubble();
               appendMessageTool(conversationId, assistantId, label);
             },
+            // 사용자가 고른 모델(전역). 서버가 화이트리스트로 검증 후 적용.
+            useChatStore.getState().model,
           );
           break;
         } catch (err) {
