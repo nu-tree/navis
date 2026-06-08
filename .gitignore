@@ -1,8 +1,13 @@
 node_modules/
 dist/
+# navis dist 배포 서버(ios/desktop)가 공유하는 소스 모듈 — 빌드 산출물 아님.
+!packages/navis/src/dist/
 .env
 *.log
 .desktop-dist/
+.ios-dist/
+# iOS .ipa 빌드 산출물 — git 아니라 navis 볼륨에 호스팅(데스크톱 설치파일과 동일).
+dist-ipa/
 updater-config.json
 
 # Claude Code 워크트리/로컬 (레포에 커밋 X)

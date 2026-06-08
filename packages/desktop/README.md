@@ -53,6 +53,20 @@ GitHub Actions(맥/윈도우 빌드) ──업로드──▶ navis (Railway, �
    - `EXPO_PUBLIC_NAVIS_URL`   — navis 베이스 URL (예: `https://navis.up.railway.app`)
    - `EXPO_PUBLIC_NAVIS_TOKEN` — navis `APP_API_TOKEN` 과 같은 값
    → fine-grained PAT / public 레포는 **더 이상 필요 없음**(`RELEASES_TOKEN` 삭제 가능).
+3. **macOS 자가서명 인증서**(자동 업데이트 필수, 무료): macOS 자동설치(Squirrel.Mac)는
+   "설치된 앱 == 새 버전"의 코드서명 신원이 일치해야만 교체한다. 미서명/ad-hoc 은 빌드마다
+   신원이 달라 거부 → 수동 다운로드로 폴백. 유료 Developer 인증서 없이 **자가서명 인증서**로
+   해결한다(최초 설치 시 우클릭→열기 1회만, 이후 업데이트는 완전 자동).
+   ```bash
+   bash packages/desktop/scripts/make-selfsigned-cert.sh   # 관리자 암호 1회(코드서명 신뢰 등록)
+   ```
+   → 출력 안내대로 레포 Secret 2개 등록: `MAC_CSC_LINK`(p12 base64), `MAC_CSC_KEY_PASSWORD`.
+   (둘 다 있어야 CI 가 서명함. 하나라도 없으면 mac 미서명 빌드 → 자동설치 불가. Windows 는 미서명도 OK.)
+
+   > 핵심: 자가서명 인증서는 **빌드 머신에서 "코드서명용으로 trust"** 돼야 codesign 이 신원으로
+   > 인정한다(안 그러면 `no identity found`). 스크립트가 로컬 system 키체인에, CI 워크플로가
+   > 러너 system 키체인에 각각 신뢰 등록한다. 설치되는 *사용자* 머신엔 trust 가 필요 없다
+   > (Squirrel 은 cert leaf 해시 매칭만 검증). 되돌리기: 키체인 접근.app 에서 `navis self-signed` 삭제.
 
 ### 릴리스 (이후 매번)
 ```bash

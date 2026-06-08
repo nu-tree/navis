@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import {
   handleDesktopUpload,
   handleDesktopList,
+  handleDesktopLatest,
   handleDesktopFile,
   handleDesktopPrune,
   handleDownloadPage,
@@ -11,6 +12,7 @@ import { handleChat, handleChatStream } from "./chat.js";
 import { handleReports, handlePostReport } from "./reports.js";
 import { handleCrons, handleDeleteCron } from "./crons.js";
 import { handleMemories } from "./memories.js";
+import { handleAgentNamory } from "./agent.js";
 import {
   handleGetConversations,
   handlePutConversation,
@@ -18,6 +20,7 @@ import {
 } from "./conversations.js";
 import { handleGetSystemPrompt, handlePutSystemPrompt } from "./settings.js";
 import { handleGithubWebhook } from "./webhook.js";
+import { handleIosUpload, handleIosSource, handleIosFile, handleIosPrune } from "../ios/serve.js";
 
 // HTTP 요청 1건을 적절한 핸들러로 라우팅한다. createServer 콜백에서 호출.
 export function route(req: IncomingMessage, res: ServerResponse): void {
@@ -68,6 +71,12 @@ export function route(req: IncomingMessage, res: ServerResponse): void {
     return void handleMemories(req, res);
   }
 
+  // 코드 탭(데스크톱 로컬 에이전트)이 namory 를 직접 MCP 로 붙이게 좌표를 내려줌.
+  if (req.url?.startsWith("/api/agent/namory")) {
+    if (req.method === "OPTIONS") return handlePreflight(res);
+    if (req.method === "GET") return handleAgentNamory(req, res);
+  }
+
   // 설정 — 시스템 프롬프트 조회/저장(앱 설정 화면)
   if (req.url?.startsWith("/api/settings/system-prompt")) {
     if (req.method === "OPTIONS") return handlePreflight(res);
@@ -96,17 +105,39 @@ export function route(req: IncomingMessage, res: ServerResponse): void {
   }
   if (req.url?.startsWith("/api/desktop/")) {
     const durl = new URL(req.url, "http://localhost");
+    // 데스크톱 렌더러(127.0.0.1)에서 authorization 헤더로 호출 → 브라우저 프리플라이트 발생.
+    if (req.method === "OPTIONS") return handlePreflight(res);
     if (durl.pathname === "/api/desktop/upload" && (req.method === "PUT" || req.method === "POST")) {
       return void handleDesktopUpload(req, res, durl);
     }
     if (durl.pathname === "/api/desktop/list" && req.method === "GET") {
       return void handleDesktopList(req, res, durl);
     }
+    if (durl.pathname === "/api/desktop/latest" && req.method === "GET") {
+      return void handleDesktopLatest(req, res, durl);
+    }
     if (durl.pathname === "/api/desktop/prune" && req.method === "POST") {
       return void handleDesktopPrune(req, res, durl);
     }
     if (durl.pathname.startsWith("/api/desktop/file/") && req.method === "GET") {
       return void handleDesktopFile(req, res, durl);
+    }
+  }
+
+  // iOS 사이드로드 배포(SideStore source 피드 + .ipa). 토큰은 Bearer 또는 ?token= 쿼리.
+  if (req.url?.startsWith("/api/ios/")) {
+    const iurl = new URL(req.url, "http://localhost");
+    if (iurl.pathname === "/api/ios/source.json" && req.method === "GET") {
+      return void handleIosSource(req, res, iurl);
+    }
+    if (iurl.pathname === "/api/ios/upload" && (req.method === "PUT" || req.method === "POST")) {
+      return void handleIosUpload(req, res, iurl);
+    }
+    if (iurl.pathname === "/api/ios/prune" && req.method === "POST") {
+      return void handleIosPrune(req, res, iurl);
+    }
+    if (iurl.pathname.startsWith("/api/ios/file/") && req.method === "GET") {
+      return void handleIosFile(req, res, iurl);
     }
   }
 

@@ -1,5 +1,5 @@
 import { IS_BACKEND_CONFIGURED } from '../lib/config';
-import { apiUrl, authHeaders, jsonHeaders, getJson } from './client';
+import { apiUrl, authHeaders, jsonHeaders, getJson, fetchWithTimeout } from './client';
 import type { Conversation, ConversationSyncRow } from '../store/chat-store';
 
 // 전체 대화 스냅샷 받기(pull). 서버엔 chat 방만 올리므로 chat 위주로 내려온다.
@@ -15,7 +15,7 @@ export async function fetchConversations(): Promise<ConversationSyncRow[]> {
 // 방 1개 업서트(push). 변경된 방만 디바운스 후 호출.
 export async function pushConversation(c: Conversation): Promise<void> {
   if (!IS_BACKEND_CONFIGURED) return;
-  const res = await fetch(apiUrl(`/api/conversations/${encodeURIComponent(c.id)}`), {
+  const res = await fetchWithTimeout(apiUrl(`/api/conversations/${encodeURIComponent(c.id)}`), {
     method: 'PUT',
     headers: jsonHeaders(),
     body: JSON.stringify({
@@ -34,7 +34,7 @@ export async function pushConversation(c: Conversation): Promise<void> {
 // 방 삭제 전파(툼스톤).
 export async function deleteConversationRemote(id: string): Promise<void> {
   if (!IS_BACKEND_CONFIGURED) return;
-  const res = await fetch(apiUrl(`/api/conversations/${encodeURIComponent(id)}`), {
+  const res = await fetchWithTimeout(apiUrl(`/api/conversations/${encodeURIComponent(id)}`), {
     method: 'DELETE',
     headers: authHeaders(),
   });

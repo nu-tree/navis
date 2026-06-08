@@ -1,0 +1,67 @@
+# navis 앱 OTA 자동 배포 — main 에 앱 JS 변경이 들어오면 자동으로 eas update.
+#
+# 동작:
+#   1. main 에 packages/app/** 변경이 머지되면 발동(단 네이티브 ios/android 폴더만
+#      바뀐 건 OTA 로 전달 불가라 제외).
+#   2. eas update --branch preview 로 현재 JS 번들을 Expo 서버에 publish.
+#   3. 설치된 앱(expo-updates, checkOnLaunch=ALWAYS, channel=preview)이 다음 실행 때
+#      자동 수신 → 한 번 더 실행하면 적용(fallbackToCacheTimeout=0).
+#
+# → 사용자가 손으로 `pnpm ota` 를 돌리지 않아도 고친 JS 가 폰에 도달한다.
+# 네이티브가 바뀐 경우엔 OTA 로 안 되므로 `pnpm release:ios`(SideStore) 로 따로 배포.
+#
+# 사전 준비(1회): 레포 Settings → Secrets → Actions 에 EXPO_TOKEN 추가
+#   (expo.dev → Account Settings → Access Tokens 에서 발급).
+# 특정 커밋에서 OTA 를 건너뛰려면 커밋 메시지에 [skip-ota] 를 넣는다.
+
+name: ota auto-update
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/app/**"
+      - "!packages/app/ios/**"
+      - "!packages/app/android/**"
+
+concurrency:
+  group: ota-auto-update
+  cancel-in-progress: true
+
+jobs:
+  ota:
+    if: ${{ !contains(github.event.head_commit.message, '[skip-ota]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.0.8
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # 앱 패키지 의존성만 설치(전체 워크스페이스는 navis 의 무거운 네이티브 의존성까지
+      # 끌어와 느리고 불필요). eas update 의 Metro 번들링에 필요한 것만.
+      - run: pnpm install --frozen-lockfile --filter ./packages/app
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      # 커밋 메시지는 env 로 전달(셸 인젝션 방지). 멀티라인이어도 안전.
+      # EXPO_PUBLIC_* 는 eas update 의 Metro 번들링 때 process.env 에서 읽혀 번들에
+      # 인라인된다. 이게 없으면 IS_BACKEND_CONFIGURED=false → 앱이 목업 모드로 동작
+      # (폰이 "백엔드 설정하면 진짜 navis가 답할게" 식 목업으로 답하던 원인).
+      # 데스크톱 빌드(desktop-release.yml)가 쓰는 것과 동일한 repo secret 을 참조한다.
+      - name: eas update (preview 브랜치)
+        working-directory: packages/app
+        env:
+          MSG: ${{ github.event.head_commit.message }}
+          EXPO_PUBLIC_NAVIS_URL: ${{ secrets.EXPO_PUBLIC_NAVIS_URL }}
+          EXPO_PUBLIC_NAVIS_TOKEN: ${{ secrets.EXPO_PUBLIC_NAVIS_TOKEN }}
+        run: eas update --branch preview --message "$MSG" --non-interactive

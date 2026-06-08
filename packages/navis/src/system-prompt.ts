@@ -17,7 +17,7 @@ export async function getSystemPrompt(): Promise<string> {
   if (cache && Date.now() - cache.at < TTL_MS) return cache.value;
   let value = "";
   try {
-    const res = await fetch(`${BASE}/settings/${KEY}`, { headers: auth });
+    const res = await fetch(`${BASE}/settings/${KEY}`, { headers: auth, signal: AbortSignal.timeout(10_000) });
     if (res.ok) {
       const data = (await res.json()) as { value?: string | null };
       value = (data.value ?? "").trim();
@@ -36,6 +36,7 @@ export async function setSystemPrompt(value: string): Promise<void> {
     method: "PUT",
     headers: { ...auth, "content-type": "application/json" },
     body: JSON.stringify({ value }),
+    signal: AbortSignal.timeout(10_000),
   });
   if (!res.ok) throw new Error(`시스템 프롬프트 저장 실패: ${res.status}`);
   cache = { at: Date.now(), value }; // 즉시 반영(다음 턴부터 새 프롬프트)

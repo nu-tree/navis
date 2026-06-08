@@ -9,4 +9,11 @@ if [ -n "$DESKTOP_DIR" ]; then
   chown -R app:app "$DESKTOP_DIR" 2>/dev/null || true
 fi
 
+# iOS .ipa 배포 디렉터리도 동일하게 보정 — 볼륨은 root 소유라 명시적 chown 없이는
+# app 프로세스가 /data 하위에 폴더를 못 만든다(EACCES). DESKTOP_DIR 와 같은 처리.
+if [ -n "$IOS_DIR" ]; then
+  mkdir -p "$IOS_DIR" 2>/dev/null || true
+  chown -R app:app "$IOS_DIR" 2>/dev/null || true
+fi
+
 exec su-exec app "$@"

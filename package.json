@@ -10,7 +10,10 @@
     "dev:navis": "pnpm --filter navis dev",
     "namory": "pnpm --filter namory-mcp",
     "navis": "pnpm --filter navis",
-    "release:desktop": "node scripts/release-desktop.mjs"
+    "release:desktop": "node scripts/release-desktop.mjs",
+    "ipa:build": "node scripts/build-ios-ipa.mjs",
+    "release:ios": "node scripts/release-ios.mjs",
+    "ota": "cd packages/app && eas update --branch preview"
   },
   "engines": {
     "node": ">=22"

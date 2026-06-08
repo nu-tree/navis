@@ -4,7 +4,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { makeId } from '../lib/id';
 import type { ChatMessage } from '../types';
 
-export type ConversationKind = 'chat' | 'report';
+// 'code' = 데스크톱 로컬 에이전트(클로드 코드) 세션. 서버 동기화 대상이 아니라
+// 이 기기에만 남는다(use-conversation-sync 는 'chat' 만 올림).
+export type ConversationKind = 'chat' | 'report' | 'code';
 
 export type Conversation = {
   id: string;
@@ -19,6 +21,10 @@ export type Conversation = {
   unread?: number;
   // 보고방 숨김 — 목록에서 가리되 데이터/크론은 유지(언제든 다시 보이게).
   hidden?: boolean;
+  // 코드 세션(kind==='code') 전용: 이 세션의 작업 폴더(세션별) + 그 폴더의 namory
+  // 프로젝트명(폴더명 폴백). 폴더를 고르면 그 레포의 기억이 연결되고 없으면 자동 생성된다.
+  workdir?: string;
+  project?: string;
 };
 
 // 서버 동기화로 내려오는 대화방 행(머지 입력). deletedAt 있으면 삭제 전파.
@@ -52,6 +58,8 @@ type ChatStore = {
   typingStatus: Record<string, string>; // 대화방별 현재 도구 상태 텍스트
   typingStartedAt: Record<string, number>; // 대화방별 typing 시작 타임스탬프(ms)
   newConversation: () => string;
+  // 코드(로컬 에이전트) 세션 새로 만들기 — 빈 코드 세션이 이미 있으면 그걸로.
+  newCodeSession: () => string;
   selectConversation: (id: string) => void;
   deleteConversation: (id: string) => void;
   addMessage: (conversationId: string, message: ChatMessage) => void;
@@ -63,6 +71,9 @@ type ChatStore = {
   // 스트리밍 중 도구 한 개씩 실시간 추가
   appendMessageTool: (conversationId: string, messageId: string, label: string) => void;
   setSessionId: (conversationId: string, sessionId?: string) => void;
+  // 코드 세션의 작업 폴더 설정(+폴더 선택 시). 폴더가 바뀌면 namory 세션(sessionId)도
+  // 끊어 새 폴더 맥락으로 다시 시작한다. 제목도 폴더/프로젝트명으로 갱신.
+  setCodeFolder: (conversationId: string, workdir: string, project?: string) => void;
   setTyping: (conversationId: string, typing: boolean) => void;
   setTypingStatus: (conversationId: string, tool: string) => void;
   // 메시지 이모지 리액션 토글 (있으면 제거, 없으면 추가)
@@ -102,8 +113,10 @@ function emptyConversation(): Conversation {
 }
 
 // 시드: 첫 실행 시 보여줄 빈 대화방(저장된 대화가 있으면 persist 가 덮어쓴다).
+// id 는 생성 id(`c_…`)·과거 카운터 id(`c0`)와 겹치지 않는 예약값으로 둔다 — 'c0' 면
+// 서버에 남은 실제 대화 'c0' 의 툼스톤에 시드 방이 휩쓸려 사라질 수 있다.
 const SEED_CHAT: Conversation = {
-  id: 'c0',
+  id: 'seed-chat',
   title: '나비스와의 대화',
   kind: 'chat',
   messages: [],
@@ -127,7 +140,7 @@ const REPORT_DIGEST: Conversation = {
 
 export const useChatStore = create<ChatStore>()(
   persist(
-    (set) => ({
+    (set, get) => ({
   conversations: [SEED_CHAT, REPORT_DIGEST],
   activeId: SEED_CHAT.id,
   typingIds: [],
@@ -135,7 +148,36 @@ export const useChatStore = create<ChatStore>()(
   typingStartedAt: {},
 
   newConversation: () => {
+    // 이미 비어 있는 새 대화 방이 있으면 또 만들지 않고 그 방으로 — 빈 방 쌓임 방지.
+    const existing = get().conversations.find(
+      (c) => c.kind === 'chat' && !c.hidden && c.messages.length === 0,
+    );
+    if (existing) {
+      set({ activeId: existing.id });
+      return existing.id;
+    }
     const conv = emptyConversation();
+    set((s) => ({ conversations: [conv, ...s.conversations], activeId: conv.id }));
+    return conv.id;
+  },
+
+  newCodeSession: () => {
+    const existing = get().conversations.find(
+      (c) => c.kind === 'code' && !c.hidden && c.messages.length === 0,
+    );
+    if (existing) {
+      set({ activeId: existing.id });
+      return existing.id;
+    }
+    const ts = now();
+    const conv: Conversation = {
+      id: makeId('code'),
+      title: '새 코드 세션',
+      kind: 'code',
+      messages: [],
+      createdAt: ts,
+      updatedAt: ts,
+    };
     set((s) => ({ conversations: [conv, ...s.conversations], activeId: conv.id }));
     return conv.id;
   },
@@ -236,6 +278,25 @@ export const useChatStore = create<ChatStore>()(
     set((s) => ({
       conversations: s.conversations.map((c) =>
         c.id === conversationId ? { ...c, sessionId } : c,
+      ),
+    })),
+
+  setCodeFolder: (conversationId, workdir, project) =>
+    set((s) => ({
+      conversations: s.conversations.map((c) =>
+        c.id === conversationId
+          ? {
+              ...c,
+              workdir,
+              project,
+              // 폴더가 바뀌면 이전 SDK 세션 맥락을 끊는다(새 폴더로 깨끗이 시작).
+              sessionId: undefined,
+              // 아직 빈 코드 세션이면 제목을 폴더/프로젝트명으로.
+              title:
+                c.messages.length === 0 ? (project || workdir.split('/').filter(Boolean).pop() || c.title) : c.title,
+              updatedAt: now(),
+            }
+          : c,
       ),
     })),
 
@@ -430,3 +491,9 @@ export const useIsActiveTyping = (): boolean =>
 // 비활성 방들의 안 읽은 메시지 총합 — 헤더 메뉴(☰) 뱃지용
 export const useTotalUnread = (): number =>
   useChatStore((s) => s.conversations.reduce((sum, c) => sum + (c.unread ?? 0), 0));
+
+// 보고방의 안 읽은 보고 총합 — "보고서" 탭 뱃지용
+export const useTotalReportUnread = (): number =>
+  useChatStore((s) =>
+    s.conversations.reduce((sum, c) => (c.kind === 'report' ? sum + (c.unread ?? 0) : sum), 0),
+  );

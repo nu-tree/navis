@@ -18,6 +18,7 @@ export async function saveSystemPrompt(value: string): Promise<void> {
     method: 'PUT',
     headers: jsonHeaders(),
     body: JSON.stringify({ value }),
+    signal: AbortSignal.timeout(10_000),
   });
   if (!res.ok) throw new Error(`시스템 프롬프트 저장 오류: ${res.status}`);
 }

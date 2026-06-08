@@ -4,8 +4,12 @@
 #   1. navis 봇이 디스코드에서 "이거 고쳐줘" 명령을 받으면 GitHub
 #      repository_dispatch (type: self-improve)를 던진다.
 #   2. 이 워크플로가 새 브랜치 체크아웃 → Claude Code CLI(Opus 4.7)로
-#      자연어 지시를 실행해 코드를 수정 → 커밋 → PR 생성.
-#   3. PR 생성 이벤트는 webhook → navis 봇 → 검토 서브에이전트로 전달.
+#      자연어 지시를 실행해 코드를 수정 → 빌드/타입체크 통과 검증 → 커밋 → PR 생성.
+#   3. 빌드 게이트를 통과한 PR 은 그 자리에서 squash 자동 머지(사람 검토 불필요).
+#      PR 생성/머지 이벤트는 webhook → navis 봇 → 기록/리포트로 전달.
+#
+# 안전장치: '변경 없음'(환각·빈 PR)은 commit 단계 exit 1 로 차단, 빌드/타입체크
+#   실패는 PR 생성 전에 job 을 죽이므로, 자동 머지는 '게이트 통과한 변경'에만 적용된다.
 #
 # 인증:
 #   - GITHUB_TOKEN: workflow-scoped (자동 제공, 별도 secret 불필요).
@@ -162,14 +166,15 @@ jobs:
           git commit -m "navis self-improve: $short" -m "$INSTRUCTION"
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
-      - name: PR 생성
+      - name: PR 생성 + 자동 머지
         if: steps.commit.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
           git push origin "${{ steps.branch.outputs.branch }}"
           # PR body 에 메타데이터 박음 — webhook 받을 때 channelId 복구용.
-          gh pr create \
+          pr_url=$(gh pr create \
             --base main \
             --head "${{ steps.branch.outputs.branch }}" \
             --title "navis self-improve: $(echo "$INSTRUCTION" | head -c 60)" \
@@ -184,6 +189,25 @@ jobs:
           - channel_id: \`${CHANNEL_ID}\`
           - actor: navis self-improve (Opus 4.7)
 
-          빌드 통과 확인 완료. 검토 후 머지하세요.
+          빌드(pnpm -r build) + 타입체크 통과 확인 후 자동 머지됨.
           EOF
-          )"
+          )")
+          echo "PR: $pr_url"
+
+          # 자동 머지 — 검토/머지를 사람이 손으로 하지 않도록 바로 main 에 합친다.
+          #   안전 근거: 이 잡은 PR 생성 *전에* '빌드 통과 검증'(pnpm -r build + typecheck)을
+          #   하드 게이트로 통과해야만 여기 도달한다(실패 시 job 종료). 또 '변경 사항 없음'은
+          #   commit 단계에서 exit 1 로 걸러진다(환각/빈 PR 방지).
+          #   이 repo 는 브랜치 보호가 없고 allow_auto_merge=false 라 --auto 는 못 쓰므로,
+          #   필수 체크가 없는 상태에서 즉시 squash 머지한다(= "체크 통과 후 머지"와 동일).
+          #   push 직후 mergeable 상태 계산에 잠깐 지연이 있을 수 있어 몇 번 재시도.
+          for i in 1 2 3 4 5; do
+            if gh pr merge "$pr_url" --squash --delete-branch; then
+              echo "✅ 자동 머지 완료 — $pr_url"
+              exit 0
+            fi
+            echo "머지 재시도 $i/5 …"
+            sleep 5
+          done
+          echo "::error::자동 머지 실패 — PR 은 생성됨($pr_url). 수동 머지 필요."
+          exit 1

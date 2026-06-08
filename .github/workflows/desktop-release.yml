@@ -67,15 +67,66 @@ jobs:
           NAVIS_TOKEN: ${{ secrets.EXPO_PUBLIC_NAVIS_TOKEN }}
         run: node -e "require('fs').writeFileSync('updater-config.json', JSON.stringify({url:(process.env.NAVIS_URL||'').replace(/\/+$/,'')+'/api/desktop/file', token:process.env.NAVIS_TOKEN||''}))"
 
+      # mac 자가서명: 전용 키체인에 .p12 를 넣고, 그 인증서를 "코드서명용으로 trust" 시킨다.
+      # 자가서명은 trust 되지 않으면 codesign 이 "no identity found" 로 거부하므로(핵심), 단순
+      # CSC_LINK 임포트만으론 부족 → 우리가 키체인+system trust 까지 직접 만들고 CSC_KEYCHAIN 으로
+      # 가리킨다. 빌드 머신에서만 필요한 trust 이고(러너는 끝나면 폐기), 사용자 머신은 Squirrel 의
+      # designated requirement(=cert leaf 해시 매칭)로 검증하므로 trust 가 필요 없다.
+      #   인증서 만들기: bash packages/desktop/scripts/make-selfsigned-cert.sh
+      - name: Prepare mac signing keychain
+        id: signing
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        env:
+          MAC_CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          MAC_CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "$MAC_CSC_LINK" ] || [ -z "$MAC_CSC_KEY_PASSWORD" ]; then
+            echo "sign=false" >> "$GITHUB_OUTPUT"
+            echo "⚠ MAC_CSC_LINK/MAC_CSC_KEY_PASSWORD 둘 다 필요 → 미서명 빌드(자동설치 불가)"
+            exit 0
+          fi
+          KC="$RUNNER_TEMP/navis-sign.keychain-db"
+          KCPW="$(openssl rand -hex 12)"
+          printf '%s' "$MAC_CSC_LINK" | base64 --decode > "$RUNNER_TEMP/navis-cert.p12"
+          security create-keychain -p "$KCPW" "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p "$KCPW" "$KC"
+          security import "$RUNNER_TEMP/navis-cert.p12" -k "$KC" -P "$MAC_CSC_KEY_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -k "$KCPW" "$KC" >/dev/null
+          # 우리 키체인을 검색목록에 추가(codesign/find-identity 가 보도록).
+          security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
+          # 공개 인증서를 꺼내 system 키체인에 "코드서명 신뢰 루트"로 등록(러너 한정, 휘발).
+          security find-certificate -c "navis self-signed" -p "$KC" > "$RUNNER_TEMP/navis-cert.pem"
+          sudo security add-trusted-cert -d -r trustRoot -p codeSign \
+            -k /Library/Keychains/System.keychain "$RUNNER_TEMP/navis-cert.pem"
+          echo "=== trust 후 valid 코드서명 신원(navis self-signed 이 떠야 정상) ==="
+          security find-identity -v -p codesigning "$KC"
+          echo "sign=true" >> "$GITHUB_OUTPUT"
+          echo "keychain=$KC" >> "$GITHUB_OUTPUT"
+          rm -f "$RUNNER_TEMP/navis-cert.p12" "$RUNNER_TEMP/navis-cert.pem"
+
       - name: Build desktop (no publish)
         working-directory: packages/desktop
+        shell: bash
         env:
-          # mac 코드서명 건너뜀(개인 배포 — 미서명 dmg)
-          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          # 서명 가능할 때만 키체인을 가리킨다(없으면 빈 값 → 무해).
+          CSC_KEYCHAIN: ${{ steps.signing.outputs.keychain }}
           # 백엔드 주소를 웹 빌드에 인라인 (미설정이면 앱이 목업 폴백)
           EXPO_PUBLIC_NAVIS_URL: ${{ secrets.EXPO_PUBLIC_NAVIS_URL }}
           EXPO_PUBLIC_NAVIS_TOKEN: ${{ secrets.EXPO_PUBLIC_NAVIS_TOKEN }}
-        run: pnpm web:build && npx electron-builder --publish never
+        run: |
+          pnpm web:build
+          if [ "${{ steps.signing.outputs.sign }}" = "true" ]; then
+            echo "▶ mac 자가서명 빌드 (keychain=$CSC_KEYCHAIN)"
+            npx electron-builder --publish never
+          else
+            # 미서명 폴백(win 빌드 또는 secret 미설정): identity 를 비워 "신원 못 찾음" 에러 방지.
+            echo "▶ 미서명 빌드(폴백 — mac 자동설치 불가)"
+            CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --publish never -c.mac.identity=null
+          fi
 
       - name: Upload to navis
         working-directory: packages/desktop

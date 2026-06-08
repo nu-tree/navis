@@ -1,4 +1,4 @@
-import { sql, cosineDistance, desc } from "drizzle-orm";
+import { sql, cosineDistance } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { memories, type Category } from "../db/schema.js";
 import { embed } from "../embedding.js";
@@ -33,7 +33,8 @@ async function findDuplicates(
   project: string | undefined,
 ): Promise<DuplicateCandidate[]> {
   const { dupThreshold, dupLimit, dupPool } = config.save;
-  const similarity = sql<number>`1 - (${cosineDistance(memories.embedding, embedding)})`;
+  const distance = cosineDistance(memories.embedding, embedding);
+  const similarity = sql<number>`1 - (${distance})`;
   const rows = await db
     .select({
       id: memories.id,
@@ -45,7 +46,7 @@ async function findDuplicates(
     })
     .from(memories)
     .where(projectFilter(project))
-    .orderBy(desc(similarity))
+    .orderBy(distance)
     .limit(dupPool);
   return rows
     .filter((r) => r.similarity >= dupThreshold)

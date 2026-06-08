@@ -1,5 +1,5 @@
 import { IS_BACKEND_CONFIGURED } from '../lib/config';
-import { apiUrl, authHeaders, jsonHeaders, getJson } from './client';
+import { apiUrl, authHeaders, jsonHeaders, getJson, fetchWithTimeout } from './client';
 
 export type Memory = {
   id: string;
@@ -24,7 +24,7 @@ export async function fetchMemories(): Promise<Memory[]> {
 }
 
 export async function patchMemory(id: string, patch: MemoryPatch): Promise<void> {
-  const res = await fetch(apiUrl(`/api/memories/${id}`), {
+  const res = await fetchWithTimeout(apiUrl(`/api/memories/${id}`), {
     method: 'PATCH',
     headers: jsonHeaders(),
     body: JSON.stringify(patch),
@@ -33,7 +33,7 @@ export async function patchMemory(id: string, patch: MemoryPatch): Promise<void>
 }
 
 export async function deleteMemory(id: string): Promise<void> {
-  const res = await fetch(apiUrl(`/api/memories/${id}`), {
+  const res = await fetchWithTimeout(apiUrl(`/api/memories/${id}`), {
     method: 'DELETE',
     headers: authHeaders(),
   });

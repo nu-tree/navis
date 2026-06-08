@@ -13,11 +13,14 @@ const SRC = join(here, '..', '..', 'app', 'assets', 'navis-logo.png');
 const OUT = join(here, '..', '..', 'app', 'assets', 'navis-logo-mac.png');
 
 // macOS 아이콘 그리드(Apple Big Sur 템플릿 근사):
-//   캔버스 1024, 본체 824(여백 100), 코너 반지름 ≈ 본체의 22.45%.
+//   캔버스 1024, 본체 912(여백 56), 코너 반지름 ≈ 본체의 22.45%.
+// 소스(navis-logo.png)가 이미 검정 여백을 품은 패딩본이라(iOS·맥 아이콘 통일), 여기서
+// 여백을 더 크게 주면 N 이 이중으로 작아진다 → 여백을 작게(56)만 둬 맥 squircle 이
+// 살짝 떠 보이게만 하고, N 패딩은 소스가 담당한다.
 const SIZE = 1024;
-const MARGIN = 100;
-const BODY = SIZE - MARGIN * 2; // 824
-const RADIUS = Math.round(BODY * 0.2245); // ≈185
+const MARGIN = 56;
+const BODY = SIZE - MARGIN * 2; // 912
+const RADIUS = Math.round(BODY * 0.2245); // ≈205
 
 const body = await sharp(SRC)
   .resize(BODY, BODY, { fit: 'cover' })

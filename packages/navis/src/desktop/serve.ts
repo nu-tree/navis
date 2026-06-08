@@ -13,9 +13,9 @@
 import { createReadStream, createWriteStream } from "node:fs";
 import { mkdir, readdir, stat, unlink } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
-import { timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { config } from "../config.js";
+import { authed, parseVersion, compareVersion, safePath } from "../dist/serve-utils.js";
 
 const DIR = resolve(config.desktopDir);
 
@@ -28,48 +28,6 @@ const MIME: Record<string, string> = {
   ".yml": "text/yaml; charset=utf-8",
   ".blockmap": "application/octet-stream",
 };
-
-// 토큰을 상수시간 비교. 헤더(Bearer) 우선, 없으면 쿼리(?token=).
-function authed(req: IncomingMessage, url: URL): boolean {
-  const token = config.appApiToken;
-  if (!token) return false;
-  const header = req.headers["authorization"];
-  let given: string | undefined;
-  if (typeof header === "string") {
-    const m = header.match(/^Bearer\s+(.+)$/i);
-    if (m) given = m[1];
-  }
-  if (!given) given = url.searchParams.get("token") ?? undefined;
-  if (!given) return false;
-  const a = Buffer.from(given);
-  const b = Buffer.from(token);
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(a, b);
-}
-
-// 파일명에서 시맨틱 버전(X.Y.Z) 추출. 없으면 undefined(=버전 무관 파일, 예: latest*.yml).
-function parseVersion(name: string): string | undefined {
-  return name.match(/\d+\.\d+\.\d+/)?.[0];
-}
-
-function compareVersion(a: string, b: string): number {
-  const pa = a.split(".").map(Number);
-  const pb = b.split(".").map(Number);
-  for (let i = 0; i < 3; i++) {
-    const d = (pa[i] ?? 0) - (pb[i] ?? 0);
-    if (d) return d;
-  }
-  return 0;
-}
-
-// 경로 탈출 방지: basename 만 취하고 DIR 안으로 resolve 되는지 재확인.
-function safePath(name: string): string | undefined {
-  const base = basename(name);
-  if (!base || base === "." || base === "..") return undefined;
-  const full = resolve(DIR, base);
-  if (full !== join(DIR, base)) return undefined;
-  return full;
-}
 
 // PUT/POST /api/desktop/upload?name=<파일> — Actions 가 빌드 산출물을 올린다.
 export async function handleDesktopUpload(
@@ -88,7 +46,7 @@ export async function handleDesktopUpload(
     return;
   }
   const name = url.searchParams.get("name");
-  const dest = name ? safePath(name) : undefined;
+  const dest = name ? safePath(DIR, name) : undefined;
   if (!dest) {
     res.writeHead(400, { "content-type": "application/json" });
     res.end(JSON.stringify({ error: "bad or missing ?name" }));
@@ -124,6 +82,9 @@ export async function handleDesktopUpload(
   } catch (err) {
     const e = err as NodeJS.ErrnoException;
     console.error(`[desktop] 쓰기 실패 dest=${dest}:`, e);
+    // 부분 기록된 파일을 정리 — 손상된 설치파일/yml 이 그대로 서빙되면
+    // electron-updater 가 잘못된 파일을 받아 설치 실패. 파일이 없거나 삭제 실패해도 무시.
+    await unlink(dest).catch(() => {});
     res.writeHead(500, { "content-type": "application/json" });
     res.end(JSON.stringify({ error: "write failed", dest, code: e.code, message: e.message }));
   }
@@ -161,12 +122,51 @@ export async function handleDesktopList(
   }
 }
 
-// POST /api/desktop/prune — 플랫폼별 최신 버전만 남기고 옛 버전 설치파일(+blockmap)을 지운다.
+// GET /api/desktop/latest — 보관 중 설치파일 중 가장 높은 시맨틱 버전을 반환.
+//   설치된 앱이 폴링해서 자기 버전보다 높으면 업데이트를 트리거(인앱 배너)하는 용도.
+//   가벼운 JSON 한 줄이라 30초 폴링에도 부담 없음. 크로스오리진(데스크톱 렌더러)이라 CORS 허용.
+export async function handleDesktopLatest(
+  req: IncomingMessage,
+  res: ServerResponse,
+  url: URL,
+): Promise<void> {
+  const headers = {
+    "content-type": "application/json",
+    "access-control-allow-origin": "*",
+    "access-control-allow-headers": "authorization, content-type",
+  };
+  if (!authed(req, url)) {
+    res.writeHead(401, headers);
+    res.end(JSON.stringify({ error: "unauthorized" }));
+    return;
+  }
+  try {
+    const names = await readdir(DIR).catch(() => [] as string[]);
+    let latest: string | undefined;
+    for (const n of names) {
+      const v = parseVersion(n);
+      if (v && (!latest || compareVersion(v, latest) > 0)) latest = v;
+    }
+    res.writeHead(200, headers);
+    res.end(JSON.stringify({ version: latest ?? null }));
+  } catch (err) {
+    console.error("[desktop] latest 조회 실패:", err);
+    res.writeHead(500, headers);
+    res.end(JSON.stringify({ error: "latest failed" }));
+  }
+}
+
+// POST /api/desktop/prune — 플랫폼별 최신 N개 버전만 남기고 옛 버전 설치파일(+blockmap)을 지운다.
 // 릴리스 후 upload.mjs 가 모든 업로드를 마친 뒤 한 번 호출. 같은 아티팩트의 옛 버전이
 // 쌓여 다운로드 페이지에 중복으로 보이거나 디스크를 먹는 걸 막는다.
 //   - 그룹 키 = 파일명에서 버전(X.Y.Z)을 뺀 것. 예) Navis-0.1.5-arm64.dmg → "Navis--arm64.dmg".
-//     같은 키 안에서 최신 버전만 남기고 나머지 삭제(blockmap 도 자기 키로 함께 정리됨).
+//     같은 키 안에서 최신 KEEP_RECENT 개만 남기고 나머지 삭제(blockmap 도 함께 정리됨).
 //   - 버전이 없는 파일(latest*.yml, builder-debug.yml 등)은 그룹에 안 들어가 항상 보존.
+//
+// 왜 1개가 아니라 N개? 릴리스가 짧은 간격으로 연달아 나면(예: 자동개선이 여러 커밋을
+// 빠르게 머지), 사용자의 electron-updater 가 직전 버전을 받던 중에 그 파일이 즉시 삭제돼
+// 다운로드가 404/체크섬 불일치로 깨진다("업데이트 실패"). 최근 몇 개를 남겨 이 레이스를 막는다.
+const KEEP_RECENT = 3;
 export async function handleDesktopPrune(
   req: IncomingMessage,
   res: ServerResponse,
@@ -192,14 +192,13 @@ export async function handleDesktopPrune(
 
     const deleted: string[] = [];
     for (const arr of groups.values()) {
-      if (arr.length < 2) continue;
-      // 그룹 내 최신 버전 파일.
-      const latest = arr.reduce((a, b) =>
-        compareVersion(parseVersion(a) ?? "0.0.0", parseVersion(b) ?? "0.0.0") >= 0 ? a : b,
+      if (arr.length <= KEEP_RECENT) continue;
+      // 버전 내림차순 정렬 후 최신 KEEP_RECENT 개는 보존, 나머지 삭제.
+      const sorted = [...arr].sort((a, b) =>
+        compareVersion(parseVersion(b) ?? "0.0.0", parseVersion(a) ?? "0.0.0"),
       );
-      for (const n of arr) {
-        if (n === latest) continue;
-        const p = safePath(n);
+      for (const n of sorted.slice(KEEP_RECENT)) {
+        const p = safePath(DIR, n);
         if (!p) continue;
         try {
           await unlink(p);
@@ -233,7 +232,7 @@ export async function handleDesktopFile(
     return;
   }
   const name = decodeURIComponent(url.pathname.replace(/^\/api\/desktop\/file\//, ""));
-  const full = safePath(name);
+  const full = safePath(DIR, name);
   if (!full) {
     res.writeHead(400);
     res.end("bad name");

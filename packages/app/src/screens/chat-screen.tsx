@@ -1,15 +1,124 @@
 import { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform, useWindowDimensions, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChatDrawer, ChatHeader, ChatInput, MessageList } from '../components/chat';
 import { SidebarContent } from '../components/chat/sidebar-content';
+import { LocalAgentSheet } from '../components/local-agent-sheet';
 import { Text } from '../components/ui/text';
-import { useActiveConversation, useTotalUnread } from '../store/chat-store';
+import {
+  useActiveConversation,
+  useIsActiveTyping,
+  useTotalUnread,
+  useChatStore,
+} from '../store/chat-store';
 import { useUiStore } from '../store/ui-store';
 import { useReports } from '../hooks/use-reports';
 import { useCrons } from '../hooks/use-crons';
 import { useConversationSync } from '../hooks/use-conversation-sync';
 import { ensureNotifyPermission } from '../lib/notify';
+import { localAgent } from '../lib/local-agent';
+
+// 코드 세션 폴더 칩 바 — 클로드 데스크톱 코드 느낌. [🖥 로컬] · [📁 폴더(=namory 프로젝트)]
+// · [＋폴더] · (토큰 경고 / 정지 / ⚙️). 입력창 바로 위에 둔다. 폴더는 "세션별"이라
+// active 대화의 workdir/project 를 쓰고, ＋폴더로 네이티브 다이얼로그를 열어 바꾼다.
+// 폴더를 고르면 그 레포의 namory 프로젝트 기억이 연결되고(없으면 자동 생성) cwd 도 바뀐다.
+function CodeContextBar({
+  onOpenSettings,
+  cfgKey,
+  generating,
+  onStop,
+}: {
+  onOpenSettings: () => void;
+  cfgKey: number;
+  generating: boolean;
+  onStop: () => void;
+}) {
+  const active = useActiveConversation();
+  const setCodeFolder = useChatStore((s) => s.setCodeFolder);
+  const [hasToken, setHasToken] = useState(true);
+  const [allowWrite, setAllowWrite] = useState(false);
+  useEffect(() => {
+    if (!localAgent) return;
+    let alive = true;
+    localAgent.getConfig().then((c) => {
+      if (!alive) return;
+      setHasToken(c.hasToken);
+      setAllowWrite(c.allowWrite);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [cfgKey]);
+
+  const folderName =
+    active?.project || active?.workdir?.split('/').filter(Boolean).pop() || null;
+
+  const pickFolder = async () => {
+    if (!localAgent || !active) return;
+    const r = await localAgent.pickFolder();
+    if (r) setCodeFolder(active.id, r.workdir, r.project);
+  };
+
+  return (
+    <View className="flex-row items-center gap-2 px-3 pb-2 pt-1">
+      {/* 항상 로컬 — 코드는 내 맥에서 돈다(별도 토글 없음). */}
+      <View className="flex-row items-center gap-1 rounded-lg border border-border bg-secondary px-2.5 py-1.5">
+        <Text className="text-xs">🖥</Text>
+        <Text className="text-xs font-medium text-foreground">로컬</Text>
+      </View>
+      {/* 폴더(=namory 프로젝트) 칩 — 누르면 폴더 선택. 기억은 이 폴더로 자동 연결/생성. */}
+      <Pressable
+        onPress={pickFolder}
+        className="flex-row items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 cursor-pointer active:opacity-70 hover:bg-secondary"
+      >
+        <Text className="text-xs">📁</Text>
+        <Text numberOfLines={1} className="max-w-[180px] text-xs font-medium text-foreground">
+          {folderName ?? '폴더 선택'}
+        </Text>
+        {folderName && allowWrite ? (
+          <Text className="text-[10px] text-muted-foreground">· 쓰기</Text>
+        ) : null}
+      </Pressable>
+      {/* 폴더 바꾸기 */}
+      <Pressable
+        onPress={pickFolder}
+        hitSlop={6}
+        className="rounded-lg border border-border px-2 py-1.5 cursor-pointer active:opacity-70 hover:bg-secondary"
+      >
+        <Text className="text-xs text-muted-foreground">＋폴더</Text>
+      </Pressable>
+
+      <View className="flex-1" />
+
+      {/* 토큰 없으면 경고(설정), 생성 중이면 정지, 아니면 ⚙️ 설정. */}
+      {!hasToken ? (
+        <Pressable
+          onPress={onOpenSettings}
+          hitSlop={6}
+          className="rounded-lg border border-border px-2 py-1.5 cursor-pointer active:opacity-70 hover:bg-secondary"
+        >
+          <Text className="text-xs text-muted-foreground">⚠️ 토큰</Text>
+        </Pressable>
+      ) : generating ? (
+        <Pressable
+          onPress={onStop}
+          hitSlop={6}
+          className="rounded-lg border border-border px-2 py-1.5 cursor-pointer active:opacity-70 hover:bg-secondary"
+        >
+          <Text className="text-xs font-semibold text-foreground">⏹ 정지</Text>
+        </Pressable>
+      ) : (
+        <Pressable
+          onPress={onOpenSettings}
+          hitSlop={6}
+          className="rounded-lg px-1.5 py-1.5 cursor-pointer active:opacity-70 hover:bg-secondary"
+        >
+          <Text className="text-sm text-muted-foreground">⚙️</Text>
+        </Pressable>
+      )}
+    </View>
+  );
+}
 
 // 데스크톱/태블릿 폭 기준 — 이 이상이면 드로어 대신 고정 사이드바 + 중앙 채팅 칼럼.
 const WIDE_BREAKPOINT = 900;
@@ -22,8 +131,13 @@ export function ChatScreen() {
   const { width } = useWindowDimensions();
   const isWide = width >= WIDE_BREAKPOINT;
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // 코드 세션 설정 시트 + 닫힐 때 컨텍스트 바를 새로고침할 키.
+  const [codeSheet, setCodeSheet] = useState(false);
+  const [cfgKey, setCfgKey] = useState(0);
   const active = useActiveConversation();
   const totalUnread = useTotalUnread();
+  // 활성 방이 생성(응답) 중인지 — 코드 바의 정지 버튼 노출용.
+  const isActiveTyping = useIsActiveTyping();
   const sidebarCollapsed = useUiStore((s) => s.sidebarCollapsed);
   const setSidebarCollapsed = useUiStore((s) => s.setSidebarCollapsed);
 
@@ -41,7 +155,18 @@ export function ChatScreen() {
     ensureNotifyPermission();
   }, []);
 
+  // 탭 상태는 저장하지 않으므로 항상 '채팅'으로 시작한다. 다만 저장돼 있던 활성 방이
+  // 보고방이면 첫 진입 화면이 사이드바(채팅 탭)와 어긋난다 → 탭을 활성 방 종류에 맞춘다.
+  const setChatTab = useUiStore((s) => s.setChatTab);
+  useEffect(() => {
+    if (active?.kind === 'report') setChatTab('report');
+    else if (active?.kind === 'code') setChatTab('code');
+    // 최초 마운트 시 1회만 — 이후 탭 전환은 사용자가 제어.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const isReport = active?.kind === 'report';
+  const isCode = active?.kind === 'code';
 
   return (
     <View className="flex-1 flex-row" style={{ paddingTop: insets.top }}>
@@ -55,7 +180,13 @@ export function ChatScreen() {
       <View className="flex-1">
         <ChatHeader
           title={active?.title ?? '나비스'}
-          subtitle={isReport ? '보고 전용 · 읽기 전용' : '남운님의 개인 비서'}
+          subtitle={
+            isReport
+              ? '보고 전용 · 읽기 전용'
+              : isCode
+                ? '코드 · 내 맥 로컬 에이전트'
+                : '남운님의 개인 비서'
+          }
           // 넓은 화면에선 ☰ 로 접힌 사이드바를 펼치고, 모바일에선 드로어를 연다.
           onMenu={() => (isWide ? setSidebarCollapsed(false) : setDrawerOpen(true))}
           unread={totalUnread}
@@ -80,7 +211,16 @@ export function ChatScreen() {
               </View>
             ) : (
               <View style={{ paddingBottom: insets.bottom }}>
-                <ChatInput />
+                {/* 코드 세션: 폴더 칩 바(클로드 데스크톱 코드 느낌)를 입력창 바로 위에. */}
+                {isCode ? (
+                  <CodeContextBar
+                    onOpenSettings={() => setCodeSheet(true)}
+                    cfgKey={cfgKey}
+                    generating={isActiveTyping}
+                    onStop={() => localAgent?.stop()}
+                  />
+                ) : null}
+                <ChatInput placeholder={isCode ? '작업을 설명하거나 질문하세요' : undefined} />
               </View>
             )}
           </View>
@@ -89,6 +229,15 @@ export function ChatScreen() {
 
       {/* 모바일: 드로어 (넓은 화면에선 고정 사이드바라 불필요) */}
       {isWide ? null : <ChatDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />}
+
+      {/* 코드 세션 설정(작업 폴더·토큰·쓰기 허용) — 닫히면 컨텍스트 바 새로고침 */}
+      <LocalAgentSheet
+        open={codeSheet}
+        onClose={() => {
+          setCodeSheet(false);
+          setCfgKey((k) => k + 1);
+        }}
+      />
     </View>
   );
 }

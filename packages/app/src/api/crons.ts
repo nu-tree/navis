@@ -22,6 +22,7 @@ export async function deleteCron(id: string): Promise<void> {
   const res = await fetch(apiUrl(`/api/crons/${encodeURIComponent(id)}`), {
     method: 'DELETE',
     headers: authHeaders(),
+    signal: AbortSignal.timeout(10_000),
   });
   if (!res.ok) throw new Error(`navis 크론 삭제 오류: ${res.status}`);
 }

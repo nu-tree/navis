@@ -1,4 +1,4 @@
-import { sql, cosineDistance, desc, eq, and, inArray } from "drizzle-orm";
+import { sql, cosineDistance, eq, and, inArray } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { memories, type Category } from "../db/schema.js";
 import { embed } from "../embedding.js";
@@ -15,10 +15,8 @@ export async function recall(args: {
   withRelated?: boolean;
 }) {
   const queryEmbedding = await embed(args.query, "query");
-  const similarity = sql<number>`1 - (${cosineDistance(
-    memories.embedding,
-    queryEmbedding,
-  )})`;
+  const distance = cosineDistance(memories.embedding, queryEmbedding);
+  const similarity = sql<number>`1 - (${distance})`;
 
   const limit = args.limit ?? 5;
   const { freshnessBoost, freshnessTauDays, poolMultiplier, poolMin } = config.recall;
@@ -41,7 +39,7 @@ export async function recall(args: {
         projectFilter(args.project),
       ),
     )
-    .orderBy(desc(similarity))
+    .orderBy(distance)
     .limit(poolSize);
 
   // 2단계: 시간감쇠를 곱한 합성 점수로 재정렬해 top N 반환.

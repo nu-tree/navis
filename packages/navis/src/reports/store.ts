@@ -4,6 +4,8 @@
 //
 // sourceId/sourceTitle 로 "출처별 방"을 만든다. 크론은 크론마다 방 1개(sourceId=크론 id,
 // sourceTitle=크론 DB 제목), 다이제스트/캘린더는 각각 고정 방.
+import { publishToNtfy } from "./ntfy.js";
+
 export type Report = {
   id: string;
   type: string; // logTag: "cron" | "calendar" | "digest" | ...
@@ -32,6 +34,8 @@ export function recordReport(input: RecordReportInput): void {
     createdAt: new Date().toISOString(),
   });
   if (BUFFER.length > MAX) BUFFER.splice(0, BUFFER.length - MAX);
+  // 모든 보고를 폰으로 푸시(NTFY_TOPIC 설정 시에만). 데스크톱/웹은 기존 폴링 알림 유지.
+  publishToNtfy(input.sourceTitle, input.text);
 }
 
 // since(ISO) 이후 보고만. 없으면 전체.
