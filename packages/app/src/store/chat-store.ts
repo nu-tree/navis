@@ -115,14 +115,11 @@ function emptyConversation(): Conversation {
 // 시드: 첫 실행 시 보여줄 빈 대화방(저장된 대화가 있으면 persist 가 덮어쓴다).
 // id 는 생성 id(`c_…`)·과거 카운터 id(`c0`)와 겹치지 않는 예약값으로 둔다 — 'c0' 면
 // 서버에 남은 실제 대화 'c0' 의 툼스톤에 시드 방이 휩쓸려 사라질 수 있다.
-const SEED_CHAT: Conversation = {
-  id: 'seed-chat',
-  title: '나비스와의 대화',
-  kind: 'chat',
-  messages: [],
-  createdAt: '2026-06-04T09:00:00.000Z',
-  updatedAt: '2026-06-04T09:00:00.000Z',
-};
+// 하드코딩 ID 금지 — 서버 seed-chat 충돌 방지. 새 기기/초기화 시 고유 ID 생성.
+function makeSeedChat(): Conversation {
+  const ts = new Date().toISOString();
+  return { id: makeId('c'), title: '나비스와의 대화', kind: 'chat', messages: [], createdAt: ts, updatedAt: ts };
+}
 
 // 보고방 id 규칙 — 출처(sourceId)별 방. 크론마다 방 1개(sourceId=크론 id).
 const reportRoomId = (sourceId: string) => `report:${sourceId}`;
@@ -141,8 +138,8 @@ const REPORT_DIGEST: Conversation = {
 export const useChatStore = create<ChatStore>()(
   persist(
     (set, get) => ({
-  conversations: [SEED_CHAT, REPORT_DIGEST],
-  activeId: SEED_CHAT.id,
+  conversations: [makeSeedChat(), REPORT_DIGEST],
+  activeId: '',
   typingIds: [],
   typingStatus: {},
   typingStartedAt: {},
@@ -477,6 +474,12 @@ export const useChatStore = create<ChatStore>()(
       storage: createJSONStorage(() => AsyncStorage),
       // 응답 생성 중 표시(typingIds)는 휘발성이라 저장하지 않는다.
       partialize: (s) => ({ conversations: s.conversations, activeId: s.activeId }),
+      // 복원 후 activeId 가 비어있거나 목록에 없으면 첫 번째 대화로 보정.
+      onRehydrateStorage: () => (state) => {
+        if (!state) return;
+        const valid = state.conversations.some((c) => c.id === state.activeId);
+        if (!valid) state.activeId = state.conversations[0]?.id ?? '';
+      },
     },
   ),
 );
