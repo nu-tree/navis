@@ -37,7 +37,7 @@ const WEB_TOOLS = ["WebSearch", "WebFetch"];
 const TASK_TOOLS = ["TodoWrite"];
 
 // 메인 턴(askClaude)이 항상 자동 승인할 내장 도구.
-// 외부 MCP(노션/구글/크론)는 옵션이라 ask.ts에서 동적으로 합친다.
+// 외부 MCP(구글/크론)는 옵션이라 ask.ts에서 동적으로 합친다.
 export const BUILTIN_TOOLS = [
   ...FILE_TOOLS,
   ...SHELL_TOOLS,

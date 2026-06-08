@@ -75,7 +75,7 @@ pnpm cli                          # 터미널 REPL 모드
 | 탐색 | `Glob`, `Grep` | 코드 탐색 |
 | 웹 | `WebSearch`, `WebFetch` | 리서치 |
 | 작업 추적 | `TodoWrite` | 긴 작업 분해 |
-| 외부 MCP | `mcp__notion`, `mcp__google` | env 토큰 있을 때만 |
+| 외부 MCP | `mcp__google` | env 토큰 있을 때만 |
 | 크론 도구 | `cron_create`, `cron_list`, `cron_delete`, `cron_toggle` | 항상 |
 | 설정 도구 | `update_system_prompt` | 사용자가 명시적으로 성격 변경 요청 시 |
 
@@ -109,7 +109,7 @@ pnpm cli                          # 터미널 REPL 모드
 - `Dockerfile` + `railway.json` 제공
 - HTTP 서버: 앱 API(/api/*) + `/health` + `/webhook/github` + 데스크톱 배포(/download, /api/desktop/*)
 - 필수 env: `CLAUDE_CODE_OAUTH_TOKEN`, `NAMORY_MCP_URL`, `NAMORY_TOKEN`, `APP_API_TOKEN`
-- 선택 env: `SYSTEM_PROMPT`(폴백 — DB 비었을 때), `GITHUB_REPO`/`GITHUB_TOKEN`/`GITHUB_WEBHOOK_SECRET`(자기 개선), `GOOGLE_*`(캘린더), `NOTION_TOKEN`, `DESKTOP_DIR`
+- 선택 env: `SYSTEM_PROMPT`(폴백 — DB 비었을 때), `GITHUB_REPO`/`GITHUB_TOKEN`/`GITHUB_WEBHOOK_SECRET`(자기 개선), `GOOGLE_*`(캘린더), `DESKTOP_DIR`
 
 ## 자기 개선 (멀티 에이전트)
 
