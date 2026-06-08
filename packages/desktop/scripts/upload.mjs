@@ -35,10 +35,24 @@ if (!targets.length) {
   process.exit(1);
 }
 
+async function fetchWithRetry(url, opts, retries = 4, baseDelay = 5000) {
+  for (let i = 1; i <= retries; i++) {
+    try {
+      const res = await fetch(url, { ...opts, signal: AbortSignal.timeout(60_000) });
+      return res;
+    } catch (err) {
+      if (i === retries) throw err;
+      const wait = baseDelay * i;
+      console.warn(`[upload] 연결 실패(${i}/${retries}) — ${wait / 1000}초 후 재시도: ${err.message}`);
+      await new Promise((r) => setTimeout(r, wait));
+    }
+  }
+}
+
 for (const name of targets) {
   const body = await readFile(join(RELEASE, name));
   const url = `${NAVIS_URL}/api/desktop/upload?name=${encodeURIComponent(name)}`;
-  const res = await fetch(url, {
+  const res = await fetchWithRetry(url, {
     method: "PUT",
     headers: { Authorization: `Bearer ${NAVIS_TOKEN}`, "content-type": "application/octet-stream" },
     body,
