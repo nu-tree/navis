@@ -113,6 +113,8 @@ async function createWindow() {
       // Electron 이 숨긴 창의 타이머를 throttle/정지시켜, 보고 폴링이 멈추고
       // 다시 펼칠 때 알림이 한꺼번에 늦게 뜬다(백그라운드 알림의 의미가 없어짐).
       backgroundThrottling: false,
+      // 코드 탭 미리보기 패널에서 <webview> 태그로 로컬 서버를 임베드하기 위해 필요.
+      webviewTag: true,
     },
   });
 

@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChatDrawer, ChatHeader, ChatInput, MessageList } from '../components/chat';
+import { PreviewPanel } from '../components/chat/preview-panel';
 import { SidebarContent } from '../components/chat/sidebar-content';
 import { LocalAgentSheet } from '../components/local-agent-sheet';
 import { Text } from '../components/ui/text';
@@ -27,11 +28,15 @@ function CodeContextBar({
   cfgKey,
   generating,
   onStop,
+  previewOpen,
+  onTogglePreview,
 }: {
   onOpenSettings: () => void;
   cfgKey: number;
   generating: boolean;
   onStop: () => void;
+  previewOpen: boolean;
+  onTogglePreview: () => void;
 }) {
   const active = useActiveConversation();
   const setCodeFolder = useChatStore((s) => s.setCodeFolder);
@@ -89,6 +94,17 @@ function CodeContextBar({
       </Pressable>
 
       <View className="flex-1" />
+
+      {/* 미리보기 패널 토글 */}
+      <Pressable
+        onPress={onTogglePreview}
+        hitSlop={6}
+        className={`rounded-lg border px-2 py-1.5 cursor-pointer active:opacity-70 hover:bg-secondary ${previewOpen ? 'border-primary bg-primary/10' : 'border-border'}`}
+      >
+        <Text className={`text-xs font-medium ${previewOpen ? 'text-primary' : 'text-muted-foreground'}`}>
+          🌐 미리보기
+        </Text>
+      </Pressable>
 
       {/* 토큰 없으면 경고(설정), 생성 중이면 정지, 아니면 ⚙️ 설정. */}
       {!hasToken ? (
@@ -168,6 +184,32 @@ export function ChatScreen() {
   const isReport = active?.kind === 'report';
   const isCode = active?.kind === 'code';
 
+  // 코드 탭 미리보기 패널 상태. URL 은 에이전트 응답에서 localhost:PORT 자동 감지.
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState('');
+  const conversations = useChatStore((s) => s.conversations);
+  const lastUrlRef = useRef('');
+
+  useEffect(() => {
+    if (!isCode) return;
+    const conv = conversations.find((c) => c.id === active?.id);
+    const msgs = conv?.messages ?? [];
+    // 가장 최근 어시스턴트 메시지에서 localhost URL 을 찾아 미리보기 패널을 자동 열기.
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      if (msgs[i].role !== 'assistant') continue;
+      const match = msgs[i].text?.match(/https?:\/\/localhost(:\d+)?(\/[^\s)"'`]*)?/);
+      if (match) {
+        const found = match[0];
+        if (found !== lastUrlRef.current) {
+          lastUrlRef.current = found;
+          setPreviewUrl(found);
+          setPreviewOpen(true);
+        }
+        break;
+      }
+    }
+  }, [conversations, active?.id, isCode]);
+
   return (
     <View className="flex-1 flex-row" style={{ paddingTop: insets.top }}>
       {/* 데스크톱: 고정 사이드바 (접기 가능) */}
@@ -177,54 +219,73 @@ export function ChatScreen() {
         </View>
       ) : null}
 
-      <View className="flex-1">
-        <ChatHeader
-          title={active?.title ?? '나비스'}
-          subtitle={
-            isReport
-              ? '보고 전용 · 읽기 전용'
-              : isCode
-                ? '코드 · 내 맥 로컬 에이전트'
-                : '남운님의 개인 비서'
-          }
-          // 넓은 화면에선 ☰ 로 접힌 사이드바를 펼치고, 모바일에선 드로어를 연다.
-          onMenu={() => (isWide ? setSidebarCollapsed(false) : setDrawerOpen(true))}
-          unread={totalUnread}
-          showMenu={!showSidebar}
-        />
-        <KeyboardAvoidingView
-          className="flex-1"
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={insets.top}
-        >
-          {/* 넓은 화면에선 본문을 가운데 정렬하고 폭을 제한 */}
-          <View className="w-full flex-1 self-center" style={{ maxWidth: CHAT_MAX_WIDTH }}>
-            <MessageList />
-            {isReport ? (
-              <View
-                className="border-t border-border bg-background px-4 py-3"
-                style={{ paddingBottom: insets.bottom + 12 }}
-              >
-                <Text variant="caption" className="text-center text-muted-foreground">
-                  나비스가 보내는 보고가 모이는 방이야 · 여기선 답장하지 않아도 돼
-                </Text>
-              </View>
-            ) : (
-              <View style={{ paddingBottom: insets.bottom }}>
-                {/* 코드 세션: 폴더 칩 바(클로드 데스크톱 코드 느낌)를 입력창 바로 위에. */}
-                {isCode ? (
-                  <CodeContextBar
-                    onOpenSettings={() => setCodeSheet(true)}
-                    cfgKey={cfgKey}
-                    generating={isActiveTyping}
-                    onStop={() => localAgent?.stop()}
-                  />
-                ) : null}
-                <ChatInput placeholder={isCode ? '작업을 설명하거나 질문하세요' : undefined} />
-              </View>
-            )}
+      {/* 채팅 컬럼 + (코드 탭) 오른쪽 미리보기 패널 */}
+      <View className="flex-1 flex-row">
+        <View className="flex-1" style={{ minWidth: 0 }}>
+          <ChatHeader
+            title={active?.title ?? '나비스'}
+            subtitle={
+              isReport
+                ? '보고 전용 · 읽기 전용'
+                : isCode
+                  ? '코드 · 내 맥 로컬 에이전트'
+                  : '남운님의 개인 비서'
+            }
+            // 넓은 화면에선 ☰ 로 접힌 사이드바를 펼치고, 모바일에선 드로어를 연다.
+            onMenu={() => (isWide ? setSidebarCollapsed(false) : setDrawerOpen(true))}
+            unread={totalUnread}
+            showMenu={!showSidebar}
+          />
+          <KeyboardAvoidingView
+            className="flex-1"
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            keyboardVerticalOffset={insets.top}
+          >
+            {/* 미리보기 패널이 열렸을 땐 maxWidth 제한 없이 꽉 채운다 */}
+            <View
+              className="w-full flex-1 self-center"
+              style={{ maxWidth: isCode && previewOpen ? undefined : CHAT_MAX_WIDTH }}
+            >
+              <MessageList />
+              {isReport ? (
+                <View
+                  className="border-t border-border bg-background px-4 py-3"
+                  style={{ paddingBottom: insets.bottom + 12 }}
+                >
+                  <Text variant="caption" className="text-center text-muted-foreground">
+                    나비스가 보내는 보고가 모이는 방이야 · 여기선 답장하지 않아도 돼
+                  </Text>
+                </View>
+              ) : (
+                <View style={{ paddingBottom: insets.bottom }}>
+                  {/* 코드 세션: 폴더 칩 바(클로드 데스크톱 코드 느낌)를 입력창 바로 위에. */}
+                  {isCode ? (
+                    <CodeContextBar
+                      onOpenSettings={() => setCodeSheet(true)}
+                      cfgKey={cfgKey}
+                      generating={isActiveTyping}
+                      onStop={() => localAgent?.stop()}
+                      previewOpen={previewOpen}
+                      onTogglePreview={() => setPreviewOpen((v) => !v)}
+                    />
+                  ) : null}
+                  <ChatInput placeholder={isCode ? '작업을 설명하거나 질문하세요' : undefined} />
+                </View>
+              )}
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+
+        {/* 코드 탭 미리보기 패널 — 넓은 화면에서만, 토글 on 일 때 오른쪽에 나타남 */}
+        {isCode && previewOpen && isWide ? (
+          <View className="w-[480px] border-l border-border">
+            <PreviewPanel
+              url={previewUrl}
+              onUrlChange={setPreviewUrl}
+              onClose={() => setPreviewOpen(false)}
+            />
           </View>
-        </KeyboardAvoidingView>
+        ) : null}
       </View>
 
       {/* 모바일: 드로어 (넓은 화면에선 고정 사이드바라 불필요) */}
