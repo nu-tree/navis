@@ -45,6 +45,8 @@ export async function askClaude(
   // 토큰 단위 스트리밍 콜백(있으면). 주면 includePartialMessages 를 켜고 응답 text_delta 를
   // 그때그때 흘려보낸다(앱 SSE 스트리밍용). 없으면 기존처럼 완성 후 한 번에 반환.
   onTextDelta?: (delta: string) => void,
+  // 도구 호출 시작 시 콜백 — 어떤 작업 중인지 앱에 알려 진행 상태를 표시.
+  onStatus?: (toolName: string) => void,
 ): Promise<AskResult> {
   let text = "";
   let sessionId = "";
@@ -176,11 +178,12 @@ export async function askClaude(
     // 부분 메시지: 응답 텍스트 델타를 그때그때 콜백으로 흘려보낸다(앱 스트리밍).
     // 도구 input 델타·thinking 등은 무시하고 순수 text_delta 만.
     if (message.type === "stream_event") {
-      if (onTextDelta) {
-        const ev = message.event;
-        if (ev.type === "content_block_delta" && ev.delta.type === "text_delta") {
-          onTextDelta(ev.delta.text);
-        }
+      const ev = message.event;
+      if (onTextDelta && ev.type === "content_block_delta" && ev.delta.type === "text_delta") {
+        onTextDelta(ev.delta.text);
+      }
+      if (onStatus && ev.type === "content_block_start" && ev.content_block.type === "tool_use") {
+        onStatus(ev.content_block.name);
       }
       continue;
     }

@@ -25,6 +25,7 @@ export function useSendMessage() {
         appendMessageText,
         setMessageText,
         setTyping,
+        setTypingStatus,
       } = useChatStore.getState();
       const conv = conversations.find((c) => c.id === conversationId);
 
@@ -84,6 +85,9 @@ export function useSendMessage() {
             (delta) => {
               ensureBubble();
               appendMessageText(conversationId, assistantId, delta);
+            },
+            (tool) => {
+              setTypingStatus(conversationId, tool);
             },
           );
           break;

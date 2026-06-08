@@ -49,6 +49,8 @@ type ChatStore = {
   conversations: Conversation[]; // 최신이 앞
   activeId: string;
   typingIds: string[]; // 응답 생성 중인 대화방 id 목록 (방별 독립)
+  typingStatus: Record<string, string>; // 대화방별 현재 도구 상태 텍스트
+  typingStartedAt: Record<string, number>; // 대화방별 typing 시작 타임스탬프(ms)
   newConversation: () => string;
   selectConversation: (id: string) => void;
   deleteConversation: (id: string) => void;
@@ -59,6 +61,7 @@ type ChatStore = {
   setMessageText: (conversationId: string, messageId: string, text: string) => void;
   setSessionId: (conversationId: string, sessionId?: string) => void;
   setTyping: (conversationId: string, typing: boolean) => void;
+  setTypingStatus: (conversationId: string, tool: string) => void;
   // 메시지 이모지 리액션 토글 (있으면 제거, 없으면 추가)
   toggleReaction: (conversationId: string, messageId: string, emoji: string) => void;
   // 보고방을 보장(없으면 생성, 있으면 제목 갱신) — 크론 목록으로 미리 만들 때
@@ -125,6 +128,8 @@ export const useChatStore = create<ChatStore>()(
   conversations: [SEED_CHAT, REPORT_DIGEST],
   activeId: SEED_CHAT.id,
   typingIds: [],
+  typingStatus: {},
+  typingStartedAt: {},
 
   newConversation: () => {
     const conv = emptyConversation();
@@ -201,10 +206,25 @@ export const useChatStore = create<ChatStore>()(
     })),
 
   setTyping: (conversationId, typing) =>
-    set((s) => ({
-      typingIds: typing
+    set((s) => {
+      const ids = typing
         ? Array.from(new Set([...s.typingIds, conversationId]))
-        : s.typingIds.filter((x) => x !== conversationId),
+        : s.typingIds.filter((x) => x !== conversationId);
+      const startedAt = { ...s.typingStartedAt };
+      const status = { ...s.typingStatus };
+      if (typing) {
+        startedAt[conversationId] = Date.now();
+        status[conversationId] = '';
+      } else {
+        delete startedAt[conversationId];
+        delete status[conversationId];
+      }
+      return { typingIds: ids, typingStartedAt: startedAt, typingStatus: status };
+    }),
+
+  setTypingStatus: (conversationId, tool) =>
+    set((s) => ({
+      typingStatus: { ...s.typingStatus, [conversationId]: tool },
     })),
 
   toggleReaction: (conversationId, messageId, emoji) =>
