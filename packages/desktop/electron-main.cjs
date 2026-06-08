@@ -378,6 +378,24 @@ ipcMain.handle('navis-local:run', async (event, { id, prompt, resume, workdir, n
   const dir = workdir || cfg.workdir;
   if (!token) return { error: 'CLAUDE_CODE_OAUTH_TOKEN 이 없어요(설정에서 토큰 입력).' };
   if (!dir) return { error: '작업 폴더를 먼저 선택해주세요(+폴더).' };
+
+  // macOS 에서 Dock/Finder 실행 시 PATH 가 /usr/bin:/bin 수준으로 빈약해
+  // claude CLI(~/.local/bin)를 못 찾아 spawn ENOTDIR/ENOENT 가 난다.
+  // 알려진 설치 위치를 PATH 에 선제 주입한다.
+  const extraPaths = [
+    `${require('os').homedir()}/.local/bin`,
+    '/opt/homebrew/bin',
+    '/usr/local/bin',
+  ].join(':');
+  process.env.PATH = `${extraPaths}:${process.env.PATH || ''}`;
+
+  // 경로가 실제 디렉토리인지 확인 — 존재하지 않거나 파일이면 spawn ENOTDIR 대신 친절한 에러.
+  try {
+    const stat = require('fs').statSync(dir);
+    if (!stat.isDirectory()) return { error: `작업 폴더가 디렉토리가 아닙니다: ${dir}` };
+  } catch {
+    return { error: `작업 폴더를 찾을 수 없어요: ${dir}\n+폴더에서 다시 선택해주세요.` };
+  }
   // catch/finally 에서도 접근하도록 try 밖에 선언(중단 시 부분 결과 반환용).
   let streamed = '';
   let finalText = '';
