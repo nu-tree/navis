@@ -5,6 +5,7 @@ import { useUiStore } from '../store/ui-store';
 import { localAgent, hasLocalAgent } from '../lib/local-agent';
 import { makeId } from '../lib/id';
 import { notify, isWindowHidden } from '../lib/notify';
+import { TextAnimator } from '../lib/text-animator';
 
 type SendVars = {
   text: string;
@@ -30,7 +31,7 @@ export function useSendMessage() {
       } = useChatStore.getState();
       const conv = conversations.find((c) => c.id === conversationId);
 
-      // 응답 말풍선은 첫 델타가 올 때 생성(그 전까진 typing 점 표시).
+      // 응답 말풍선은 첫 델타/도구 호출이 올 때 생성(그 전까진 typing 점 표시).
       const assistantId = makeId('a');
       let started = false;
       const ensureBubble = () => {
@@ -44,6 +45,11 @@ export function useSendMessage() {
           createdAt: new Date().toISOString(),
         });
       };
+
+      // 델타를 한 글자씩 흘려 Claude 웹처럼 부드럽게 보이게 한다.
+      const animator = new TextAnimator((chars) => {
+        appendMessageText(conversationId, assistantId, chars);
+      });
 
       // 로컬 모드: 데스크톱 로컬 에이전트(내 맥 파일/터미널)로 실행. 서버 navis 안 거침.
       if (local && localAgent) {
@@ -85,7 +91,7 @@ export function useSendMessage() {
             attachments,
             (delta) => {
               ensureBubble();
-              appendMessageText(conversationId, assistantId, delta);
+              animator.push(delta);
             },
             (tool) => {
               setTypingStatus(conversationId, tool);
@@ -103,6 +109,9 @@ export function useSendMessage() {
           await new Promise((r) => setTimeout(r, attempt * 700));
         }
       }
+
+      // 애니메이터 큐에 남은 글자 즉시 방출 후 권위 텍스트로 최종 보정.
+      animator.flush();
 
       const tools = result.toolsUsed ?? [];
       // 델타가 한 번도 안 왔으면 지금 생성, 왔으면 권위 텍스트로 보정.
