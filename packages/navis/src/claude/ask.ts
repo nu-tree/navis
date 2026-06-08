@@ -4,6 +4,7 @@ import { buildCronTools, CRON_TOOL_NAMES } from "../cron/mcp.js";
 import { buildRepoTools, REPO_TOOL_NAMES } from "../repo/mcp.js";
 import { buildSelfModifyTools, SELF_MODIFY_TOOL_NAMES } from "../self-modify/mcp.js";
 import { buildSettingsTools, SETTINGS_TOOL_NAMES } from "../settings/mcp.js";
+import { buildEnabledConnectors } from "../connectors/mcp.js";
 import { getSystemPrompt } from "../system-prompt.js";
 import { buildGoogleTools, GOOGLE_TOOL_NAMES } from "../google/mcp.js";
 import { isCalendarEnabled } from "../google/auth.js";
@@ -98,6 +99,11 @@ export async function askClaude(
   // 일정 조회·생성은 어느 경로(앱/CLI)에서든 동일하게 의미 있음.
   const googleServer = isCalendarEnabled() ? buildGoogleTools() : undefined;
 
+  // 동적 MCP 커넥터(claude.ai 스타일). namory DB 에 등록된 외부 HTTP MCP 서버들을
+  // 코드 수정 없이 이 query 에 주입한다. 인증(none/apikey/oauth)은 store/mcp 에서 처리.
+  // 조회 실패 시 빈 결과라 연동 없이 안전 동작.
+  const connectors = await buildEnabledConnectors();
+
   // 프로젝트 컨텍스트가 있으면 시스템 프롬프트에 부속문을 합성. 코드로 강제 인젝션
   // 하지 않고 모델에 지시 — 큐레이터도 같은 규칙으로 따라온다.
   const baseSystemPrompt = await getSystemPrompt();
@@ -125,6 +131,9 @@ export async function askClaude(
       systemPrompt: systemPromptFinal,
       // namory를 HTTP MCP 서버로 연결. 토큰은 Authorization 헤더로 전달.
       mcpServers: {
+        // DB 등록 커넥터들(있을 때만)을 먼저 펼친다 — 내장 서버 키(namory/cron/...)가
+        // 항상 이기도록(같은 id 면 아래 내장 정의가 덮음). 등록 단계에서도 예약어를 거부한다.
+        ...connectors.servers,
         namory: {
           type: "http",
           url: config.namoryMcpUrl,
@@ -149,6 +158,8 @@ export async function askClaude(
         ...SELF_MODIFY_TOOL_NAMES,
         ...SETTINGS_TOOL_NAMES,
         ...(googleServer ? GOOGLE_TOOL_NAMES : []),
+        // 동적 커넥터: "mcp__<id>" 와일드카드로 각 커넥터의 모든 도구를 자동 승인.
+        ...connectors.allowedTools,
         ...BUILTIN_TOOLS,
       ],
       // 로컬 설정(CLAUDE.md, settings.json) 무시.

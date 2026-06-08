@@ -19,6 +19,14 @@ import {
   handleDeleteConversation,
 } from "./conversations.js";
 import { handleGetSystemPrompt, handlePutSystemPrompt } from "./settings.js";
+import {
+  handleGetConnectors,
+  handlePutConnector,
+  handleDeleteConnector,
+  handleGetProviders,
+  handleOAuthStart,
+  handleOAuthCallback,
+} from "./connectors.js";
 import { handleGithubWebhook } from "./webhook.js";
 import { handleIosUpload, handleIosSource, handleIosFile, handleIosPrune } from "../ios/serve.js";
 
@@ -82,6 +90,30 @@ export function route(req: IncomingMessage, res: ServerResponse): void {
     if (req.method === "OPTIONS") return handlePreflight(res);
     if (req.method === "GET") return void handleGetSystemPrompt(req, res);
     if (req.method === "PUT") return void handlePutSystemPrompt(req, res);
+  }
+
+  // 동적 MCP 커넥터 — 코드 수정 없이 외부 MCP 서버 등록/삭제 + OAuth 연결.
+  if (req.url?.startsWith("/api/connectors")) {
+    const curl = new URL(req.url, "http://localhost");
+    // OAuth 콜백은 제공자가 브라우저로 직접 여는 경로 — 프리플라이트/인증 없이 먼저 처리.
+    if (curl.pathname === "/api/connectors/oauth/callback" && req.method === "GET") {
+      return void handleOAuthCallback(req, res, curl);
+    }
+    if (req.method === "OPTIONS") return handlePreflight(res);
+    if (curl.pathname === "/api/connectors/providers" && req.method === "GET") {
+      return void handleGetProviders(req, res);
+    }
+    if (curl.pathname === "/api/connectors/oauth/start" && req.method === "POST") {
+      return void handleOAuthStart(req, res);
+    }
+    if (curl.pathname === "/api/connectors" && req.method === "GET") {
+      return void handleGetConnectors(req, res);
+    }
+    if (curl.pathname.startsWith("/api/connectors/")) {
+      const id = decodeURIComponent(curl.pathname.slice("/api/connectors/".length));
+      if (req.method === "PUT") return void handlePutConnector(req, res, id);
+      if (req.method === "DELETE") return void handleDeleteConnector(req, res, id);
+    }
   }
 
   // 대화 동기화 — GET(pull 전체) / PUT(방 upsert) / DELETE(툼스톤)

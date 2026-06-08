@@ -164,4 +164,9 @@ export const config = {
 
   // HTTP 포트 — 앱 API(/api/*) + 헬스체크(/health) + webhook + 데스크톱 배포.
   port: Number(process.env.PORT) || 3000,
+
+  // navis 백엔드의 공개 URL(예: https://navis.up.railway.app). 커넥터 OAuth 의
+  // redirect_uri 를 만들 때 쓴다 — 제공자(구글/노션 등)에 등록한 콜백과 정확히 일치해야 함.
+  // 미설정이면 OAuth 시작이 에러(정적 키 커넥터는 영향 없음). 끝의 슬래시는 제거.
+  publicUrl: (optional("NAVIS_PUBLIC_URL") ?? "").replace(/\/+$/, "") || undefined,
 } as const;

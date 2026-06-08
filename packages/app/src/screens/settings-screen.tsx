@@ -6,6 +6,7 @@ import { Text } from '../components/ui/text';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
 import { LocalAgentSheet } from '../components/local-agent-sheet';
+import { ConnectorsSheet } from '../components/connectors-sheet';
 import { useUiStore } from '../store/ui-store';
 import { useThemeStore } from '../store/theme-store';
 import { hasLocalAgent } from '../lib/local-agent';
@@ -52,6 +53,7 @@ export function SettingsScreen() {
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState('');
   const [localSheet, setLocalSheet] = useState(false);
+  const [connectorsSheet, setConnectorsSheet] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -116,6 +118,16 @@ export function SettingsScreen() {
           </View>
         </View>
 
+        {/* 커넥터 — 외부 MCP 서버 연결 */}
+        <View className="gap-2">
+          <Text className="font-semibold text-foreground">커넥터</Text>
+          <Text variant="caption" className="text-muted-foreground">
+            Notion 등 외부 도구를 연결해요. OAuth 는 브라우저로 한 번 동의하면 이후 자동 갱신,
+            또는 MCP URL + API 키로 직접 추가할 수 있어요.
+          </Text>
+          <Button label="커넥터 관리" variant="secondary" onPress={() => setConnectorsSheet(true)} />
+        </View>
+
         {/* 시스템 프롬프트 */}
         <View className="gap-2">
           <Text className="font-semibold text-foreground">시스템 프롬프트 (나비스 성격·지침)</Text>
@@ -154,6 +166,7 @@ export function SettingsScreen() {
       </ScrollView>
 
       <LocalAgentSheet open={localSheet} onClose={() => setLocalSheet(false)} />
+      <ConnectorsSheet open={connectorsSheet} onClose={() => setConnectorsSheet(false)} />
     </View>
   );
 }

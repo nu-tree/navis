@@ -36,10 +36,11 @@ src/
 │   ├── images.ts        # 앱 첨부 이미지 디코드/리사이즈
 │   ├── allowed-tools.ts # 도구 화이트리스트
 │   └── types.ts         # InputImage, AskResult
-├── http/                # 앱 API 라우터/핸들러 (chat, reports, conversations, settings, crons, memories, webhook)
+├── http/                # 앱 API 라우터/핸들러 (chat, reports, conversations, settings, connectors, crons, memories, webhook)
 ├── reports/             # 선제 보고 기록(emit) + 인메모리 버퍼(store)
 ├── cron/                # node-cron 스케줄러 + namory REST + cron MCP 도구
 ├── settings/            # update_system_prompt MCP 도구
+├── connectors/          # 동적 MCP 커넥터 — DB(store)→SDK 주입(mcp), OAuth(oauth), 제공자 프리셋(providers), 타입(types)
 ├── self-modify/         # request_self_modification MCP 도구 + PR 검토
 ├── google/              # 캘린더 OAuth + 스케줄러 + MCP 도구
 └── conversations/       # 대화 동기화 namory REST 클라이언트
@@ -86,6 +87,49 @@ pnpm cli                          # 터미널 REPL 모드
 
 봇 성격은 `system-prompt.ts`가 1순위 namory(DB `settings.system_prompt`) → env `SYSTEM_PROMPT`(폴백) → 내장 기본값 순으로 정한다.
 앱 설정 화면에서 편집하거나, 대화 중 "성격 바꿔줘"라고 하면 navis 가 `update_system_prompt` 도구로 직접 갱신(다음 턴부터 적용).
+
+## 동적 MCP 커넥터 (`connectors/*`)
+
+claude.ai 스타일 — 외부 HTTP MCP 서버(Notion·Linear 등)를 **코드 수정 없이 DB 등록만으로** 붙였다 뺀다.
+목록은 namory `settings.connectors`(JSON 배열) 한 칸에 보관하고, `askClaude`가 매 query 직전 활성 커넥터를
+`mcpServers`에 동적 주입한다(`buildEnabledConnectors`). 도구는 `mcp__<id>` 와일드카드로 자동 승인.
+
+- **인증 타입**: `none` / `apikey`(임의 헤더+값) / `oauth`(Authorization: Bearer access token + 자동 갱신).
+- **id**: 소문자/숫자/`_` 슬러그(=MCP 서버명). 내장 키(`namory`/`cron`/`repo`/`self_modify`/`settings`/`google`)는 예약어.
+
+### OAuth 연결 (앱 ↔ 백엔드 분리)
+
+데스크탑이 한 앱에 뭉쳐둔 OAuth 생애주기를 navis 는 **앱(브라우저 동의) + 백엔드(코드 교환·토큰 저장·자동 갱신)**
+로 나눠 갖는다. 헤드리스 서버는 최초 동의만 못 하므로, 동의는 navis 앱(웹뷰+사람)에서 1회 받고 토큰은 백엔드가 굴린다.
+
+1. 앱이 `POST /api/connectors/oauth/start {provider}` (authed) → 동의 URL 수신 → 브라우저로 엶
+2. 사용자 동의 → 제공자가 `GET /api/connectors/oauth/callback?code&state` 로 리다이렉트 → 백엔드가 토큰 교환
+3. refresh_token 을 커넥터 레코드에 저장 → `buildEnabledConnectors`가 사용 직전 만료 임박 시 자동 갱신(`refreshIfNeeded`)
+
+제공자 프리셋은 `connectors/providers.ts`(엔드포인트·스코프·MCP URL). client 자격은 env `<KEY>_OAUTH_CLIENT_ID`/`_SECRET`
+에서 읽는다(예: `NOTION_OAUTH_CLIENT_ID`). redirect_uri 는 `NAVIS_PUBLIC_URL` + `/api/connectors/oauth/callback`
+— 제공자에 **정확히 같은 값**으로 등록해야 함.
+
+> 주의: notion 프리셋은 클래식 공개 OAuth 엔드포인트 기준. hosted MCP(mcp.notion.com)가 MCP-스펙 OAuth(PKCE+DCR)를
+> 요구하면 `providers.ts` 조정이 필요할 수 있다.
+
+### REST API (`/api/connectors`, `APP_API_TOKEN` Bearer)
+
+- `GET    /api/connectors` — 목록(비밀값 마스킹)
+- `GET    /api/connectors/providers` — OAuth 제공자 프리셋 + 사용가능 여부
+- `POST   /api/connectors/oauth/start` — `{provider}` → `{authUrl}`
+- `GET    /api/connectors/oauth/callback` — 제공자 콜백(브라우저, 인증 불필요·state 검증)
+- `PUT    /api/connectors/:id` — 추가/수정(본문 `label`/`url`/`auth`/`enabled`/`alwaysLoad`; 전체 교체)
+- `DELETE /api/connectors/:id` — 삭제
+
+```bash
+# 정적 키 MCP 직접 등록(self-host 서버 + 통합 토큰 등) — 즉시 가능, 코드 0줄
+curl -X PUT "$NAVIS/api/connectors/linear" \
+  -H "authorization: Bearer $APP_API_TOKEN" -H "content-type: application/json" \
+  -d '{"label":"Linear","url":"https://mcp.linear.app/mcp","auth":{"type":"apikey","header":"Authorization","value":"Bearer lin_..."}}'
+```
+
+등록 후 최대 30초(캐시 TTL) 안에 다음 대화부터 도구가 붙는다. 앱에선 **설정 → 커넥터 관리**에서 GUI 로 처리.
 
 ## CLI 동작
 
