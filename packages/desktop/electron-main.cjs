@@ -406,16 +406,38 @@ ipcMain.handle('navis-local:run', async (event, { id, prompt, resume, workdir, n
       'mcp__namory__graphify',
     ];
     const useNamory = !!(namory && namory.url && namory.token);
-    const mcpServers = useNamory
-      ? {
-          namory: {
-            type: 'http',
-            url: namory.url,
-            headers: { Authorization: `Bearer ${namory.token}` },
-            alwaysLoad: true,
-          },
-        }
-      : undefined;
+
+    // Playwright MCP — 코드 세션에서 브라우저 제어·스크린샷·클릭 등을 쓸 수 있게.
+    // allowWrite(작업 모드)에서만 활성화. node 경로는 Electron 번들 기준으로 resolve.
+    let playwrightServer;
+    if (cfg.allowWrite) {
+      try {
+        const mcpPkg = require.resolve('@playwright/mcp/package.json');
+        const playwrightMcpDir = require('path').dirname(mcpPkg);
+        const playwrightMcpCli = require('path').join(playwrightMcpDir, 'cli.js');
+        playwrightServer = {
+          type: 'stdio',
+          command: 'node',
+          args: [playwrightMcpCli, '--headless'],
+          env: { ...process.env },
+        };
+      } catch {
+        // @playwright/mcp 없으면 조용히 스킵
+      }
+    }
+
+    const mcpServers = {
+      ...(useNamory ? {
+        namory: {
+          type: 'http',
+          url: namory.url,
+          headers: { Authorization: `Bearer ${namory.token}` },
+          alwaysLoad: true,
+        },
+      } : {}),
+      ...(playwrightServer ? { browser: playwrightServer } : {}),
+    };
+    const hasMcp = Object.keys(mcpServers).length > 0;
 
     // 쓰기 모드에선 독립 코드 리뷰어 서브에이전트를 등록한다 — 메인 에이전트가 수정 후
     // Task 로 호출해 자기 변경을 비판적으로 재검토받는다(단일 패스보다 버그를 더 잡음).
@@ -437,10 +459,12 @@ ipcMain.handle('navis-local:run', async (event, { id, prompt, resume, workdir, n
         }
       : undefined;
 
+    const PLAYWRIGHT_TOOLS = playwrightServer ? ['mcp__browser'] : [];
     const allowedTools = [
       ...fileTools,
       ...(useNamory ? NAMORY_TOOLS : []),
       ...(agents ? ['Task'] : []),
+      ...PLAYWRIGHT_TOOLS,
     ];
 
     // 클로드 코드 기본 시스템 프롬프트(코딩 실력의 핵심)를 켜고, navis 만의 강점인
@@ -494,7 +518,7 @@ ipcMain.handle('navis-local:run', async (event, { id, prompt, resume, workdir, n
         allowedTools,
         abortController,
         ...(agents ? { agents } : {}),
-        ...(mcpServers ? { mcpServers } : {}),
+        ...(hasMcp ? { mcpServers } : {}),
         // CLAUDE.md + 레포/유저 .claude 설정을 로드해 클로드 코드와 동일하게 프로젝트에
         // 그라운딩한다(빈 배열이면 CLAUDE.md 가 안 읽혀 맥락이 빈약해짐).
         settingSources: ['user', 'project', 'local'],
