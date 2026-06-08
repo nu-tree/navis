@@ -433,8 +433,12 @@ ipcMain.handle('navis-local:run', async (event, { id, prompt, resume, workdir, n
     if (cfg.allowWrite) {
       try {
         const mcpPkg = require.resolve('@playwright/mcp/package.json');
+        // .asar 아카이브 안 경로는 spawn 불가(ENOTDIR) — 반드시 실제 파일시스템이어야 함.
+        if (mcpPkg.includes('.asar')) throw new Error('asar-bundled, skip');
         const playwrightMcpDir = require('path').dirname(mcpPkg);
         const playwrightMcpCli = require('path').join(playwrightMcpDir, 'cli.js');
+        // cli.js 가 실제 파일로 존재하는지 재확인.
+        require('fs').statSync(playwrightMcpCli);
         playwrightServer = {
           type: 'stdio',
           command: 'node',
@@ -442,7 +446,7 @@ ipcMain.handle('navis-local:run', async (event, { id, prompt, resume, workdir, n
           env: { ...process.env },
         };
       } catch {
-        // @playwright/mcp 없으면 조용히 스킵
+        // @playwright/mcp 없거나 ASAR 번들이면 조용히 스킵
       }
     }
 
