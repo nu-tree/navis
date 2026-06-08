@@ -12,11 +12,6 @@ import {
   NAMORY_PROFILE_UPDATE_TOOL,
   NAMORY_TOOLS,
 } from "./allowed-tools.js";
-import {
-  notionStdio,
-  type McpHttpServer,
-  type McpStdioServer,
-} from "./mcp.js";
 import { applySaveNudge } from "./nudge.js";
 import { projectGuidance } from "../projects.js";
 import type { AskResult, InputImage } from "./types.js";
@@ -103,16 +98,6 @@ export async function askClaude(
   // 일정 조회·생성은 어느 경로(앱/CLI)에서든 동일하게 의미 있음.
   const googleServer = isCalendarEnabled() ? buildGoogleTools() : undefined;
 
-  // 선택 외부 연동(노션). env에 토큰이 있을 때만 설정이 채워진다.
-  // 서버 단위로 allowedTools에 `mcp__<name>` 을 넣어 그 서버의 모든 도구를 자동 승인.
-  const extraServers: Record<string, McpHttpServer | McpStdioServer> = {};
-  const extraToolNames: string[] = [];
-  if (config.notionToken) {
-    // 노션은 OAuth 회피용 self-host stdio (내부 통합 토큰만 주입).
-    extraServers.notion = notionStdio(config.notionToken);
-    extraToolNames.push("mcp__notion");
-  }
-
   // 프로젝트 컨텍스트가 있으면 시스템 프롬프트에 부속문을 합성. 코드로 강제 인젝션
   // 하지 않고 모델에 지시 — 큐레이터도 같은 규칙으로 따라온다.
   const baseSystemPrompt = await getSystemPrompt();
@@ -152,7 +137,6 @@ export async function askClaude(
         self_modify: selfModifyServer,
         settings: settingsServer,
         ...(googleServer ? { google: googleServer } : {}),
-        ...extraServers,
       },
       // 자동 승인 도구: namory + 내장(파일/셸/웹/탐색) + repo 조회 + (대화 중이면) 크론·자기개선 + 부가 연동.
       // 목록은 ./allowed-tools.ts 한 곳에서 관리. profile_update는 신뢰된 다이제스트
@@ -166,7 +150,6 @@ export async function askClaude(
         ...SETTINGS_TOOL_NAMES,
         ...(googleServer ? GOOGLE_TOOL_NAMES : []),
         ...BUILTIN_TOOLS,
-        ...extraToolNames,
       ],
       // 로컬 설정(CLAUDE.md, settings.json) 무시.
       settingSources: [],
@@ -289,12 +272,6 @@ function richToolStatus(name: string, input: Record<string, unknown> = {}): stri
     return title ? `일정 추가: ${short(title)}` : "일정 추가 중";
   }
   if (name.startsWith("mcp__google__")) return "캘린더 작업 중";
-
-  if (name === "mcp__notion__search") {
-    const q = input.query ?? "";
-    return q ? `노션 검색: ${short(q)}` : "노션 검색 중";
-  }
-  if (name.startsWith("mcp__notion__")) return "노션 작업 중";
 
   if (name === "mcp__repo__read_repo_file") {
     const p = input.path ?? input.file_path ?? "";

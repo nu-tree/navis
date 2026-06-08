@@ -37,9 +37,6 @@ const TOOL_LABELS: Record<string, string> = {
   mcp__google__create_event: '일정을 추가하는 중',
   mcp__google__update_event: '일정을 수정하는 중',
   mcp__google__delete_event: '일정을 삭제하는 중',
-  mcp__notion__search: '노션을 검색하는 중',
-  mcp__notion__fetch: '노션 페이지를 읽는 중',
-  mcp__notion__create_pages: '노션 페이지를 만드는 중',
   mcp__repo__read_repo_file: '코드를 확인하는 중',
   mcp__repo__list_repo_files: '파일 목록을 보는 중',
   mcp__self_modify__request_self_modification: '개선 작업을 요청하는 중',
@@ -56,7 +53,6 @@ const TOOL_LABELS: Record<string, string> = {
 function toolLabel(tool: string): string {
   if (TOOL_LABELS[tool]) return TOOL_LABELS[tool];
   if (tool.startsWith('mcp__google__')) return '캘린더 작업 중';
-  if (tool.startsWith('mcp__notion__')) return '노션 작업 중';
   if (tool.startsWith('mcp__namory__')) return '기억 작업 중';
   if (tool.startsWith('mcp__cron__')) return '예약 작업 중';
   return '작업하는 중';
