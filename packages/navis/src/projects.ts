@@ -14,7 +14,7 @@ let cache: { at: number; names: string[] } | undefined;
 async function fetchProjectNames(): Promise<string[]> {
   if (cache && Date.now() - cache.at < TTL_MS) return cache.names;
   try {
-    const res = await fetch(`${BASE}/projects`, { headers: auth });
+    const res = await fetch(`${BASE}/projects`, { headers: auth, signal: AbortSignal.timeout(5_000) });
     if (!res.ok) throw new Error(`projects 조회 실패: ${res.status}`);
     const data = (await res.json()) as { projects?: { project: string }[] };
     const names = (data.projects ?? [])

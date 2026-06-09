@@ -111,11 +111,15 @@ export async function askClaude(
   // 동적 MCP 커넥터(claude.ai 스타일). namory DB 에 등록된 외부 HTTP MCP 서버들을
   // 코드 수정 없이 이 query 에 주입한다. 인증(none/apikey/oauth)은 store/mcp 에서 처리.
   // 조회 실패 시 빈 결과라 연동 없이 안전 동작.
-  const connectors = await buildEnabledConnectors();
+  // 세 준비 작업을 병렬로 실행해 왕복 지연을 줄인다(직렬이면 namory 3번 직렬 호출).
+  const [connectors, baseSystemPrompt, guidance] = await Promise.all([
+    buildEnabledConnectors(),
+    getSystemPrompt(),
+    projectGuidance(),
+  ]);
 
   // 프로젝트 컨텍스트가 있으면 시스템 프롬프트에 부속문을 합성. 코드로 강제 인젝션
   // 하지 않고 모델에 지시 — 큐레이터도 같은 규칙으로 따라온다.
-  const baseSystemPrompt = await getSystemPrompt();
   let systemPromptFinal = projectContext
     ? `${baseSystemPrompt}\n\n[운영 컨텍스트] 현재 작업 프로젝트: "${projectContext}". 이 대화에서 mcp__namory__save 를 호출할 때 모든 항목에 project: "${projectContext}" 를 명시할 것.`
     : baseSystemPrompt;
@@ -130,8 +134,7 @@ export async function askClaude(
     "- 자기 코드 조회는 mcp__repo__read_repo_file / mcp__repo__list_repo_files 사용.\n" +
     "- 사용자 시스템의 다른 파일·셸 작업은 평소대로 허용(자기 수정만 위임).";
 
-  // 저장 시 기존 프로젝트 표기를 재사용하도록 가이던스 주입(나비스↔navis 분기 방지).
-  systemPromptFinal += await projectGuidance();
+  systemPromptFinal += guidance;
 
   for await (const message of query({
     prompt: promptInput,
