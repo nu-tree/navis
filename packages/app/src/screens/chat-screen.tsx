@@ -7,6 +7,7 @@ import { BranchPicker } from '../components/chat/branch-picker';
 import { SidebarContent } from '../components/chat/sidebar-content';
 import { LocalAgentSheet } from '../components/local-agent-sheet';
 import { Text } from '../components/ui/text';
+import { Button } from '../components/ui/button';
 import {
   useActiveConversation,
   useIsActiveTyping,
@@ -127,13 +128,15 @@ function CodeContextBar({
           <Text className="text-xs text-muted-foreground">⚠️ 토큰</Text>
         </Pressable>
       ) : generating ? (
-        <Pressable
+        // 채팅 입력창의 중지 버튼과 동일한 모양(둥근 secondary + 빨간 호버).
+        <Button
+          size="icon"
+          variant="secondary"
+          className="rounded-full transition-colors hover:bg-destructive/20 active:bg-destructive/30"
           onPress={onStop}
-          hitSlop={6}
-          className="rounded-lg border border-border px-2 py-1.5 cursor-pointer active:opacity-70 hover:bg-secondary"
         >
-          <Text className="text-xs font-semibold text-foreground">⏹ 정지</Text>
-        </Pressable>
+          <Text className="text-base text-foreground">⏹</Text>
+        </Button>
       ) : (
         <Pressable
           onPress={onOpenSettings}

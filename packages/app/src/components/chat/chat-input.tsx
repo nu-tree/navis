@@ -216,7 +216,12 @@ export function ChatInput({ placeholder = '메시지 입력…', className }: Ch
         />
         {typing ? (
           // 생성 중 — 전송 버튼 대신 중지 버튼(클로드 코드/데스크탑식).
-          <Button size="icon" variant="secondary" className="rounded-full" onPress={stop}>
+          <Button
+            size="icon"
+            variant="secondary"
+            className="rounded-full transition-colors hover:bg-destructive/20 active:bg-destructive/30"
+            onPress={stop}
+          >
             <Text className="text-base text-foreground">⏹</Text>
           </Button>
         ) : (
