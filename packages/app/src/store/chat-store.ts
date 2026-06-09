@@ -60,6 +60,9 @@ type ChatStore = {
   typingIds: string[]; // 응답 생성 중인 대화방 id 목록 (방별 독립)
   typingStatus: Record<string, string>; // 대화방별 현재 도구 상태 텍스트
   typingStartedAt: Record<string, number>; // 대화방별 typing 시작 타임스탬프(ms)
+  // 대화방별 '지금 스트리밍 중인 응답 말풍선 id'. 그 말풍선의 작업/생각 블록을 생성
+  // 중엔 자동으로 펼쳐 두고, 끝나면(id 해제) 자동으로 접는다. 휘발성(persist 제외).
+  streamingId: Record<string, string | undefined>;
   // 진행 중인 서버 스트림의 AbortController(방별). 중지 버튼이 이걸 abort 한다. 휘발성.
   aborters: Record<string, AbortController>;
   // 사용자가 고른 채팅 모델(클로드 데스크톱식). 전역 1개 — 모든 대화방에 적용되고
@@ -93,6 +96,8 @@ type ChatStore = {
   setCodeBranch: (conversationId: string, branch: string) => void;
   setTyping: (conversationId: string, typing: boolean) => void;
   setTypingStatus: (conversationId: string, tool: string) => void;
+  // 스트리밍 중인 응답 말풍선 id 설정/해제(undefined 면 해제).
+  setStreamingId: (conversationId: string, messageId?: string) => void;
   // 메시지 이모지 리액션 토글 (있으면 제거, 없으면 추가)
   toggleReaction: (conversationId: string, messageId: string, emoji: string) => void;
   // 보고방을 보장(없으면 생성, 있으면 제목 갱신) — 크론 목록으로 미리 만들 때
@@ -160,6 +165,7 @@ export const useChatStore = create<ChatStore>()(
   typingIds: [],
   typingStatus: {},
   typingStartedAt: {},
+  streamingId: {},
   aborters: {},
   model: DEFAULT_MODEL,
 
@@ -381,6 +387,11 @@ export const useChatStore = create<ChatStore>()(
   setTypingStatus: (conversationId, tool) =>
     set((s) => ({
       typingStatus: { ...s.typingStatus, [conversationId]: tool },
+    })),
+
+  setStreamingId: (conversationId, messageId) =>
+    set((s) => ({
+      streamingId: { ...s.streamingId, [conversationId]: messageId },
     })),
 
   toggleReaction: (conversationId, messageId, emoji) =>

@@ -45,6 +45,7 @@ export function useSendMessage() {
         setTyping,
         setTypingStatus,
         setAborter,
+        setStreamingId,
       } = useChatStore.getState();
       const conv = conversations.find((c) => c.id === conversationId);
 
@@ -54,13 +55,17 @@ export function useSendMessage() {
       const ensureBubble = () => {
         if (started) return;
         started = true;
-        setTyping(conversationId, false);
+        // typing 은 여기서 끄지 않는다 — 답변이 스트리밍되는 동안에도 로딩
+        // 인디케이터("기억을 다듬는 중…")를 말풍선 아래에 계속 띄워, 응답이 끝났는지
+        // 아직 진행 중인지 명확히 보이게 한다. onSettled(완전 종료/중지/에러)에서만 끈다.
         addMessage(conversationId, {
           id: assistantId,
           role: "assistant",
           text: "",
           createdAt: new Date().toISOString(),
         });
+        // 이 말풍선이 스트리밍 중임을 표시 — 작업/생각 블록 자동 펼침. onSettled 에서 해제.
+        setStreamingId(conversationId, assistantId);
       };
 
       // 델타를 한 글자씩 흘려 Claude 웹처럼 부드럽게 보이게 한다.
@@ -252,9 +257,11 @@ export function useSendMessage() {
       });
     },
     onSettled: (_data, _err, { conversationId }) => {
-      const { setTyping, setAborter } = useChatStore.getState();
+      const { setTyping, setAborter, setStreamingId } = useChatStore.getState();
       setTyping(conversationId, false);
       setAborter(conversationId, undefined);
+      // 스트리밍 종료(완료/중지/에러) — 작업/생각 블록 자동 접힘.
+      setStreamingId(conversationId, undefined);
     },
   });
 

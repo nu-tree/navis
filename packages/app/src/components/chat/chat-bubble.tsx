@@ -14,9 +14,11 @@ import type { ChatMessage } from '../../types';
 export type ChatBubbleProps = {
   message: ChatMessage;
   className?: string;
+  // 이 메시지가 지금 생성 중인 응답인지 — 작업/생각 블록을 자동으로 펼쳐 보여준다.
+  streaming?: boolean;
 };
 
-export function ChatBubble({ message, className }: ChatBubbleProps) {
+export function ChatBubble({ message, className, streaming = false }: ChatBubbleProps) {
   const isUser = message.role === 'user';
   const [pickerOpen, setPickerOpen] = useState(false);
   const activeId = useChatStore((s) => s.activeId);
@@ -50,7 +52,9 @@ export function ChatBubble({ message, className }: ChatBubbleProps) {
             isUser ? 'rounded-br-md bg-primary' : 'rounded-bl-md bg-card',
           )}
         >
-          {hasWork ? <WorkDetails thinking={thinking} toolsUsed={toolsUsed} /> : null}
+          {hasWork ? (
+            <WorkDetails thinking={thinking} toolsUsed={toolsUsed} streaming={streaming} />
+          ) : null}
           {images.map((uri) => (
             <Image
               key={uri}

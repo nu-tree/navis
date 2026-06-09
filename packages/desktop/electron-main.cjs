@@ -619,6 +619,9 @@ ipcMain.handle('navis-local:run', async (event, { id, prompt, resume, workdir, n
         // 그라운딩한다(빈 배열이면 CLAUDE.md 가 안 읽혀 맥락이 빈약해짐).
         settingSources: ['user', 'project', 'local'],
         includePartialMessages: true,
+        // 확장 사고(adaptive) — 모델이 필요하다고 판단할 때만 생각한다. 생각 과정은
+        // think 델타로 흘려보내 접이식 '생각 과정' 블록에 실시간 표시(채팅 경로와 동일).
+        thinking: { type: 'adaptive' },
         // 전체 제어 모드(allowWrite): bypassPermissions — 확인 없이 모든 도구/명령을
         // 실행한다(클로드 코드처럼 시뮬레이터 설치·xcodebuild·brew 등 내 맥 전체 조작).
         // 끄면 기본(읽기 전용 안전모드). 토글이 곧 "전체 제어" 스위치.
