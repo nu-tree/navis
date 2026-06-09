@@ -127,7 +127,7 @@ export async function handleChatStream(
   res.write(": open\n\n");
   let heartbeat: ReturnType<typeof setInterval> | undefined = setInterval(() => {
     if (!res.writableEnded) res.write(": ping\n\n");
-  }, 15_000);
+  }, 5_000);
   const stopHeartbeat = () => {
     if (heartbeat) {
       clearInterval(heartbeat);
