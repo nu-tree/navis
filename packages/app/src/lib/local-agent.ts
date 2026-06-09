@@ -30,6 +30,10 @@ type LocalAgentApi = {
     // workdir: 이 세션의 작업 폴더(세션별). onDelta 로 본문/도구 사용을 스트리밍.
     opts?: {
       onDelta?: (text: string) => void;
+      // 도구 사용 한 줄(파일 읽기/수정/터미널 등) — 접이식 '작업 과정' 블록에 쌓인다.
+      onTool?: (label: string) => void;
+      // 생각 과정(확장 사고) 델타 — 접이식 '생각 과정' 블록에 누적.
+      onThinking?: (delta: string) => void;
       resume?: string;
       workdir?: string;
       namory?: NamoryMcp;

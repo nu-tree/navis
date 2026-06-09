@@ -597,13 +597,14 @@ ipcMain.handle('navis-local:run', async (event, { id, prompt, resume, workdir, n
     }
     const systemPrompt = { type: 'preset', preset: 'claude_code', ...(append ? { append } : {}) };
 
-    const send = (s) => event.sender.send(`navis-local:delta:${id}`, s);
+    // 답변 본문(text)·도구 사용(tool)·생각 과정(think)을 종류(k)로 구분해 보낸다.
+    // 렌더러가 답변과 작업 내역을 섞지 않고 접이식 '작업 과정' 블록으로 분리 표시한다.
+    const send = (k, v) => event.sender.send(`navis-local:delta:${id}`, { k, v });
     // 사용자가 "정지"를 누르면 이 컨트롤러로 생성을 중단한다(클로드 코드의 Esc).
     const abortController = new AbortController();
     runAborts.set(id, abortController);
     // streamed/finalText/sessionId 는 try 밖에서 선언됨(중단 시 부분 결과 반환).
-    // 스트리밍한 본문(도구 사용 줄 포함)을 그대로 모아 최종 text 로 돌려준다 —
-    // 렌더러가 마지막에 권위 텍스트로 덮어써도 도구 사용 내역이 사라지지 않게.
+    // streamed 에는 답변 본문만 모은다(도구 사용 줄은 toolsUsed 로 따로 전달돼 사라지지 않음).
     for await (const m of query({
       prompt,
       options: {
@@ -640,21 +641,30 @@ ipcMain.handle('navis-local:run', async (event, { id, prompt, resume, workdir, n
         m.event.delta.type === 'text_delta'
       ) {
         streamed += m.event.delta.text;
-        send(m.event.delta.text);
+        send('text', m.event.delta.text);
       }
-      // 도구 사용(파일 읽기/수정/터미널 등)을 한 줄로 인라인 표시 — "클로드 코드" 느낌.
+      // 생각 과정(확장 사고) 델타 — 접이식 블록의 '생각 과정' 으로 분리 표시.
+      if (
+        m.type === 'stream_event' &&
+        m.event &&
+        m.event.type === 'content_block_delta' &&
+        m.event.delta &&
+        m.event.delta.type === 'thinking_delta'
+      ) {
+        send('think', m.event.delta.thinking);
+      }
+      // 도구 사용(파일 읽기/수정/터미널 등) — 답변 본문에 섞지 않고 따로 보내
+      // 접이식 '작업 과정' 블록에 한 줄씩 쌓이게 한다("클로드 데스크탑" 느낌).
       if (m.type === 'assistant' && m.message && Array.isArray(m.message.content)) {
         for (const block of m.message.content) {
           if (block && block.type === 'tool_use') {
-            const line = formatToolUse(block.name, block.input);
-            streamed += line;
-            send(line);
+            send('tool', formatToolUse(block.name, block.input).trim());
           }
         }
       }
       if (m.type === 'result' && m.subtype === 'success') finalText = m.result;
     }
-    // 도구 줄을 흘렸으면 그 전체 트랜스크립트를, 아니면 최종 답변만.
+    // 답변 본문만 최종 text 로 — 도구 내역은 toolsUsed 로 따로 보존됨.
     const text = streamed.trim() ? streamed : finalText || '(빈 응답)';
     return { text, sessionId };
   } catch (err) {

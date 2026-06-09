@@ -26,27 +26,29 @@ export function WorkDetails({
         ? '생각 과정'
         : '작업 과정';
 
+  // 답변 본문(bg-card)과 명확히 구분되도록 다른 톤(muted)·아이콘으로 표시.
   return (
-    <View className="mb-2 overflow-hidden rounded-xl border border-border bg-secondary">
+    <View className="mb-2 overflow-hidden rounded-xl border border-border bg-muted/60">
       <Pressable
         onPress={() => setOpen((o) => !o)}
         className="flex-row items-center gap-1.5 px-3 py-2 active:opacity-70"
       >
         <Text className="text-[11px] text-muted-foreground">{open ? '▾' : '▸'}</Text>
+        <Text className="text-[11px]">{hasThinking ? '💭' : '🔧'}</Text>
         <Text className="text-[11px] font-medium text-muted-foreground">
           {label}
-          {tools.length > 0 ? ` · ${tools.length}` : ''}
+          {tools.length > 0 ? ` · ${tools.length}단계` : ''}
         </Text>
       </Pressable>
 
       {open ? (
-        <View className="gap-1 border-t border-border px-3 py-2">
+        <View className="gap-1.5 border-t border-border bg-background/40 px-3 py-2.5">
           {hasThinking ? (
             <Text className="mb-1 text-xs italic leading-5 text-muted-foreground">{think}</Text>
           ) : null}
           {tools.map((t, i) => (
-            <Text key={`${t}-${i}`} className="text-xs text-muted-foreground">
-              ● {t}
+            <Text key={`${t}-${i}`} className="text-xs leading-5 text-muted-foreground">
+              {t}
             </Text>
           ))}
         </View>

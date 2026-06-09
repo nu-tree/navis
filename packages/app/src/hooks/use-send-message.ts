@@ -78,6 +78,16 @@ export function useSendMessage() {
             ensureBubble();
             appendMessageText(conversationId, assistantId, delta);
           },
+          // 도구 사용은 답변 본문과 분리해 접이식 '작업 과정' 블록(WorkDetails)에 쌓는다.
+          onTool: (label) => {
+            ensureBubble();
+            appendMessageTool(conversationId, assistantId, label);
+          },
+          // 생각 과정도 별도 블록으로 누적.
+          onThinking: (delta) => {
+            ensureBubble();
+            appendMessageThinking(conversationId, assistantId, delta);
+          },
         });
         const replyText = res.error
           ? `⚠️ 로컬 에이전트: ${res.error}`

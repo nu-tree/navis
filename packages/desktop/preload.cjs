@@ -30,8 +30,22 @@ contextBridge.exposeInMainWorld('navisLocal', {
     const id = `run-${nextId++}`;
     const deltaCh = `navis-local:delta:${id}`;
     const onDelta = opts && opts.onDelta;
-    const listener = (_e, text) => {
-      if (onDelta) onDelta(text);
+    const onTool = opts && opts.onTool;
+    const onThinking = opts && opts.onThinking;
+    // 메인이 보내는 메시지는 { k, v } — 종류별로 콜백 분기(답변/도구/생각).
+    // 구버전(문자열) 호환: 객체가 아니면 답변 델타로 취급.
+    const listener = (_e, msg) => {
+      if (msg && typeof msg === 'object') {
+        if (msg.k === 'tool') {
+          if (onTool) onTool(msg.v);
+        } else if (msg.k === 'think') {
+          if (onThinking) onThinking(msg.v);
+        } else if (onDelta) {
+          onDelta(msg.v);
+        }
+        return;
+      }
+      if (onDelta) onDelta(msg);
     };
     ipcRenderer.on(deltaCh, listener);
     activeRuns.add(id);
