@@ -19,6 +19,9 @@ type ChatRequest = {
   // 사용자가 고른 모델(클로드 데스크톱식). 화이트리스트에 있을 때만 채워지고,
   // 아니면 undefined → askClaude 가 config.model 로 폴백한다.
   model: string | undefined;
+  // 확장 사고(adaptive thinking) opt-in. body 에 명시적으로 true 일 때만 켠다.
+  // 기본 off — adaptive 라도 첫 토큰을 2~4초 늦추므로 응답성 우선.
+  thinking: boolean;
 };
 
 // chat / chat-stream 공통 바디 파싱. text + 첨부 이미지(data URL) + resume(sessionId).
@@ -47,7 +50,8 @@ async function parseChatRequest(
     typeof body?.model === "string" && config.selectableModels.includes(body.model)
       ? body.model
       : undefined;
-  return { text, images, resume, model };
+  const thinking = body?.thinking === true;
+  return { text, images, resume, model, thinking };
 }
 
 // 사후 큐레이터(A) — 응답을 보낸 뒤 백그라운드로 한 번 더 평가해 저장 누락을 메운다.
@@ -163,10 +167,14 @@ export async function handleChatStream(
         sse("tool", { label });
       },
       parsed.model,
-      (delta) => {
-        // 확장 사고 델타 — 앱의 접이식 '생각 과정' 블록에 누적 표시
-        sse("thinking", { text: delta });
-      },
+      // 확장 사고는 opt-in — body.thinking:true 일 때만 델타를 흘려보낸다.
+      // 콜백 자체가 askClaude 의 adaptive thinking 스위치라 undefined 면 thinking off.
+      parsed.thinking
+        ? (delta) => {
+            // 확장 사고 델타 — 앱의 접이식 '생각 과정' 블록에 누적 표시
+            sse("thinking", { text: delta });
+          }
+        : undefined,
       abortController,
     );
     const contextFull = result.contextTokens >= config.contextTokenLimit;
