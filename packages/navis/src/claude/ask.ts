@@ -17,6 +17,17 @@ import { applySaveNudge } from "./nudge.js";
 import { projectGuidance } from "../projects.js";
 import type { AskResult, InputImage } from "./types.js";
 
+// in-process MCP 서버 빌더들 — 상태가 변하지 않아 매 요청마다 다시 짜지 않는다.
+// 빌더 호출은 도구 메타 등록만 하지 외부 I/O 가 없어 모듈 로드 시 만들어도 안전.
+// 캐싱으로 첫 토큰 지연을 줄인다(이전엔 매 askClaude 호출마다 5개 서버를 재구성).
+const cronServer = buildCronTools();
+const repoServer = buildRepoTools();
+const selfModifyServer = buildSelfModifyTools();
+const settingsServer = buildSettingsTools();
+// 구글은 env(client/secret/refresh) 셋이 모두 채워졌을 때만 활성 — 환경변수는 프로세스
+// 수명 동안 안 바뀌므로 모듈 로드 시점에 한 번만 판정해도 충분.
+const googleServer = isCalendarEnabled() ? buildGoogleTools() : undefined;
+
 // 프롬프트 한 개를 Claude에 넣고 답변 + 세션 정보를 받는다.
 // resumeSessionId 가 있으면 그 대화를 이어받는다(멀티턴). 없으면 새 대화.
 // images 가 있으면 텍스트+이미지 content block을 가진 user 메시지로 넘긴다
@@ -90,23 +101,8 @@ export async function askClaude(
       ? buildImageMessage(promptWithHistory, images)
       : promptWithHistory;
 
-  // in-process 크론 도구(등록/조회/삭제/토글). 발동 결과는 앱 보고로 기록된다.
-  const cronServer = buildCronTools();
-
-  // 자기 소스 조회 도구(read-only). 호스팅 컨테이너(Railway)엔 src/가 없어서 이 도구로
-  // GitHub raw를 읽어야 자기 코드를 볼 수 있다. CLI 모드에서도 풀어둠(레포 어디에 있든
-  // 같은 명령으로 동작) — 다만 CLI는 로컬 Read가 더 빠르니 거의 안 쓸 것.
-  const repoServer = buildRepoTools();
-
-  // 자기 개선 트리거. 결과(PR 검토)는 앱 보고(/api/reports)로 기록되고, GitHub PR 로도 확인.
-  const selfModifyServer = buildSelfModifyTools();
-
-  // 시스템 프롬프트 자가 갱신 도구(사용자가 "성격 바꿔줘" 요청 시 navis 가 직접 갱신).
-  const settingsServer = buildSettingsTools();
-
-  // 구글 캘린더 in-process MCP. env 셋(client/secret/refresh) 다 채워졌을 때만 활성.
-  // 일정 조회·생성은 어느 경로(앱/CLI)에서든 동일하게 의미 있음.
-  const googleServer = isCalendarEnabled() ? buildGoogleTools() : undefined;
+  // in-process MCP 서버들(cron/repo/self_modify/settings/google)은 모듈 최상단에서
+  // 한 번만 초기화한 캐시를 그대로 쓴다 — askClaude 가 호출될 때마다 다시 짜지 않는다.
 
   // 동적 MCP 커넥터(claude.ai 스타일). namory DB 에 등록된 외부 HTTP MCP 서버들을
   // 코드 수정 없이 이 query 에 주입한다. 인증(none/apikey/oauth)은 store/mcp 에서 처리.
