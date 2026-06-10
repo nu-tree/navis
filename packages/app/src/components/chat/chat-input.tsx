@@ -134,8 +134,17 @@ export function ChatInput({ placeholder = '메시지 입력…', className }: Ch
   // 데스크톱/웹: Enter 전송, Shift+Enter 줄바꿈. 네이티브 모바일은 기본(줄바꿈) 유지.
   const handleKeyPress = (e: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
     if (Platform.OS !== 'web') return;
-    const ne = e.nativeEvent as TextInputKeyPressEventData & { shiftKey?: boolean };
-    if (ne.key === 'Enter' && !ne.shiftKey) {
+    const ne = e.nativeEvent as TextInputKeyPressEventData & {
+      shiftKey?: boolean;
+      isComposing?: boolean;
+      keyCode?: number;
+    };
+    // IME(한글 등) 조합 중 Enter 는 음절 확정용이지 전송이 아니다. 이 가드가 없으면
+    // 마지막 음절을 조합 중에 친 Enter 가 조합 확정과 전송으로 겹쳐, 첫 메시지가
+    // "너 뭐해" + "해" 처럼 쪼개진다. react-native-web 내장 제출 로직과 동일한 판정
+    // (isComposing 또는 keyCode===229)으로 조합 중에는 전송을 건너뛴다.
+    const isComposing = ne.isComposing || ne.keyCode === 229;
+    if (ne.key === 'Enter' && !ne.shiftKey && !isComposing) {
       e.preventDefault?.();
       if (canSend) submit();
     }
