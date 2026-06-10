@@ -56,21 +56,48 @@ function saveWindowState(win) {
   }
 }
 
-function startStaticServer() {
+// 정적 서버 포트는 반드시 고정 — 웹 저장소(localStorage = 앱 persist)는
+// origin(127.0.0.1:포트) 단위라, 랜덤 포트(listen(0))를 쓰면 실행마다 origin 이
+// 바뀌어 로컬 저장 상태가 통째로 초기화된다. 서버 동기화로 복원되는 대화방과 달리
+// 보고방 숨김·방 순서·모델 선택 등 로컬 전용 상태는 그대로 증발한다.
+// 충돌 시(드묾) 예비 포트로 폴백 — 그 회차만 다른 origin 으로 뜬다.
+const STATIC_PORTS = [47621, 47622, 47623];
+
+function listenOn(srv, port) {
   return new Promise((resolve, reject) => {
-    server = http.createServer((req, res) =>
-      handler(req, res, {
-        public: WEB_DIR,
-        // SPA: 모든 경로를 index.html 로 폴백
-        rewrites: [{ source: '**', destination: '/index.html' }],
-      }),
-    );
-    server.on('error', reject);
-    server.listen(0, '127.0.0.1', () => {
-      const address = server.address();
-      resolve(typeof address === 'object' && address ? address.port : 0);
+    const onError = (err) => reject(err);
+    srv.once('error', onError);
+    srv.listen(port, '127.0.0.1', () => {
+      srv.removeListener('error', onError);
+      resolve();
     });
   });
+}
+
+async function startStaticServer() {
+  server = http.createServer((req, res) =>
+    handler(req, res, {
+      public: WEB_DIR,
+      // SPA: 모든 경로를 index.html 로 폴백
+      rewrites: [{ source: '**', destination: '/index.html' }],
+    }),
+  );
+  for (const port of STATIC_PORTS) {
+    try {
+      await listenOn(server, port);
+      return port;
+    } catch (err) {
+      if (err && err.code === 'EADDRINUSE') {
+        console.warn(`[static] 포트 ${port} 사용 중 — 다음 포트 시도`);
+        continue;
+      }
+      throw err;
+    }
+  }
+  // 전부 막혀 있으면 랜덤 포트(이 회차만 로컬 저장소가 빈 상태로 뜸).
+  await listenOn(server, 0);
+  const address = server.address();
+  return typeof address === 'object' && address ? address.port : 0;
 }
 
 async function createWindow() {
