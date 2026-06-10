@@ -267,12 +267,21 @@ export async function completeOAuth(code: string, state: string): Promise<Connec
   return upsertConnector(connector);
 }
 
+// refresh 실패 백오프 — "Grant not found" 처럼 영구 실패하는 토큰을 매 채팅 요청마다
+// 다시 시도하면 토큰 엔드포인트 왕복(수백 ms~수 초)이 모든 응답 앞에 끼어든다.
+// 실패한 커넥터는 일정 시간 재시도를 건너뛴다(성공하면 해제).
+const refreshFailedAt = new Map<string, number>();
+const REFRESH_BACKOFF_MS = 5 * 60_000;
+
 // 사용 직전 — access token 만료 임박(60초 이내)이면 refresh 로 갱신·영속하고 갱신된 커넥터 반환.
 export async function refreshIfNeeded(c: Connector): Promise<Connector> {
   if (c.auth.type !== "oauth") return c;
   const a = c.auth;
   if (!a.expiresAt || !a.refreshToken || !a.tokenUrl || !a.clientId) return c;
   if (Date.now() < a.expiresAt - 60_000) return c;
+
+  const failedAt = refreshFailedAt.get(c.id);
+  if (failedAt && Date.now() - failedAt < REFRESH_BACKOFF_MS) return c;
 
   try {
     const tok = await tokenRequest(a.tokenUrl, a.clientId, a.clientSecret, {
@@ -289,8 +298,10 @@ export async function refreshIfNeeded(c: Connector): Promise<Connector> {
         ...(tok.expires_in ? { expiresAt: Date.now() + tok.expires_in * 1000 } : {}),
       },
     };
+    refreshFailedAt.delete(c.id);
     return upsertConnector(updated);
   } catch (err) {
+    refreshFailedAt.set(c.id, Date.now());
     console.error(`[connectors] ${c.id} 토큰 갱신 실패(기존 토큰으로 진행):`, err);
     return c;
   }

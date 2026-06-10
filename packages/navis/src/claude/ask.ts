@@ -143,7 +143,12 @@ export async function askClaude(
       // 확장 사고(adaptive) — 모델이 필요하다고 판단할 때만 스스로 생각한다. 생각 과정은
       // 스트리밍 콜백이 있을 때(앱 채팅)만 켜서 접이식 '생각 과정' 블록으로 보여준다.
       // 콜백 없는 경로(크론/다이제스트/CLI)는 기본 동작 유지(불필요한 지연·비용 회피).
-      ...(onThinkingDelta ? { thinking: { type: "adaptive" as const } } : {}),
+      // effort 기본값(high)은 '안녕' 같은 인사에도 첫 토큰을 ~1.5초 늦춘다(실측:
+      // high 4.0s → medium 2.6s). 채팅은 응답성이 우선이라 medium 으로 고정 —
+      // adaptive 라 어려운 질문엔 여전히 생각 블록이 붙는다.
+      ...(onThinkingDelta
+        ? { thinking: { type: "adaptive" as const }, effort: "medium" as const }
+        : {}),
       // 중지 버튼 → 서버 생성도 실제로 끊기게 컨트롤러 연결(토큰 낭비 방지).
       ...(abortController ? { abortController } : {}),
       systemPrompt: systemPromptFinal,
