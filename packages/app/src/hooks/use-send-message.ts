@@ -73,6 +73,14 @@ export function useSendMessage() {
         appendMessageText(conversationId, assistantId, chars);
       });
 
+      // typing 인디케이터 상태 갱신 — 같은 값이면 set 을 건너뛴다(델타마다 호출되므로
+      // 매번 스토어를 갈아끼우면 모든 구독자가 불필요하게 재렌더된다).
+      // '__thinking__'/'__answering__' 은 typing-indicator 가 문구로 변환하는 의사 상태.
+      const setStatus = (s: string) => {
+        if (useChatStore.getState().typingStatus[conversationId] !== s)
+          setTypingStatus(conversationId, s);
+      };
+
       // 로컬 모드: 데스크톱 로컬 에이전트(내 맥 파일/터미널)로 실행. 서버 navis 안 거침.
       if (local && localAgent) {
         const res = await localAgent.run(text, {
@@ -81,16 +89,20 @@ export function useSendMessage() {
           namory: namory ?? undefined,
           onDelta: (delta) => {
             ensureBubble();
+            setStatus("__answering__");
             appendMessageText(conversationId, assistantId, delta);
           },
           // 도구 사용은 답변 본문과 분리해 접이식 '작업 과정' 블록(WorkDetails)에 쌓는다.
+          // 인디케이터에도 같은 레이블을 띄워 지금 뭘 하는지 보이게 한다.
           onTool: (label) => {
             ensureBubble();
+            setStatus(label);
             appendMessageTool(conversationId, assistantId, label);
           },
           // 생각 과정도 별도 블록으로 누적.
           onThinking: (delta) => {
             ensureBubble();
+            setStatus("__thinking__");
             appendMessageThinking(conversationId, assistantId, delta);
           },
         });
@@ -135,10 +147,11 @@ export function useSendMessage() {
             attachments,
             (delta) => {
               ensureBubble();
+              setStatus("__answering__");
               animator.push(delta);
             },
             (tool) => {
-              setTypingStatus(conversationId, tool);
+              setStatus(tool);
             },
             (label) => {
               // 도구 완료 시점 — 말풍선이 없으면 먼저 만들고 도구 줄 추가
@@ -151,6 +164,7 @@ export function useSendMessage() {
             (delta) => {
               // 생각 과정 — 본문 전에 올 수 있어 말풍선을 먼저 띄운다.
               ensureBubble();
+              setStatus("__thinking__");
               appendMessageThinking(conversationId, assistantId, delta);
             },
           );

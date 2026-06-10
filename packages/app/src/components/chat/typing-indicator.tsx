@@ -51,10 +51,16 @@ const TOOL_LABELS: Record<string, string> = {
 };
 
 function toolLabel(tool: string): string {
+  // 의사 상태 — use-send-message 가 스트림 단계에 따라 넣는다.
+  if (tool === '__thinking__') return '생각하는 중';
+  if (tool === '__answering__') return '답변 작성하는 중';
   if (TOOL_LABELS[tool]) return TOOL_LABELS[tool];
   if (tool.startsWith('mcp__google__')) return '캘린더 작업 중';
   if (tool.startsWith('mcp__namory__')) return '기억 작업 중';
   if (tool.startsWith('mcp__cron__')) return '예약 작업 중';
+  // 서버가 보내는 리치 레이블("기억 검색: …", "실행: …")은 그대로 표시.
+  // 영문 식별자(모르는 도구 이름)만 일반 문구로 뭉갠다.
+  if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(tool)) return tool;
   return '작업하는 중';
 }
 
@@ -122,7 +128,8 @@ function ThinkingLabel({ status, startedAt }: { status: string; startedAt?: numb
   }, [label, opacity]);
 
   const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
-  const elapsedStr = elapsed >= 5000 ? ` · ${formatElapsed(elapsed)}` : '';
+  // 경과 시간은 1초부터 바로 표시 — 클로드 코드처럼 "지금 N초째 작업 중"이 항상 보이게.
+  const elapsedStr = elapsed >= 1000 ? ` · ${formatElapsed(elapsed)}` : '';
 
   return (
     <Animated.View style={style}>
