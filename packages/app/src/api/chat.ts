@@ -19,6 +19,9 @@ export type SendResult = {
   toolsUsed: string[];
   // 사용자가 중지 버튼으로 끊었는지 — 부분 응답을 그대로 유지하기 위함.
   aborted?: boolean;
+  // 스트림이 done 없이 끊겼지만(폰 백그라운드/연결 끊김) 서버가 백그라운드로 완주 중 —
+  // 에러가 아니다. 서버가 응답을 영속 + 폰 푸시하고, 앱은 다음 동기화에서 답을 받는다.
+  incomplete?: boolean;
 };
 
 type ChatResponse = {
@@ -37,6 +40,16 @@ function assistantMessage(text: string): ChatMessage {
     createdAt: new Date().toISOString(),
   };
 }
+
+// 스트림이 done 없이 끊겼지만 서버가 백그라운드로 완주 중인 경우의 결과(에러 아님).
+const incompleteResult = (sessionId?: string): SendResult => ({
+  reply: assistantMessage(''),
+  sessionId: sessionId ?? '',
+  contextFull: false,
+  saved: false,
+  toolsUsed: [],
+  incomplete: true,
+});
 
 // 첨부 → data URL(base64) 배열. 백엔드가 Claude 비전에 전달.
 const toDataUrls = (attachments?: Attachment[]): string[] | undefined =>
@@ -89,6 +102,14 @@ export async function sendMessageStream(
   signal?: AbortSignal,
   // 생각 과정(확장 사고) 델타 — 접이식 블록에 누적.
   onThinking?: (delta: string) => void,
+  // 백그라운드 완주/푸시용 — 클라가 응답 전에 떠나도(폰 잠금/백그라운드) 서버가
+  // 답변을 끝까지 만들어 대화에 써넣고 폰으로 푸시한다. conversationId+snapshot 으로
+  // 서버가 어디에 무엇을 append 할지 알고, turnId 로 중지(/api/chat/cancel)를 매칭한다.
+  bg?: {
+    conversationId?: string;
+    turnId?: string;
+    snapshot?: { title: string; messages: unknown[]; unread: number; sessionId: string | null };
+  },
 ): Promise<SendResult> {
   if (!IS_BACKEND_CONFIGURED) {
     const result = await mockReply(text);
@@ -103,7 +124,15 @@ export async function sendMessageStream(
   const res = await expoFetch(apiUrl('/api/chat/stream'), {
     method: 'POST',
     headers: jsonHeaders(),
-    body: JSON.stringify({ text, sessionId, images: toDataUrls(attachments), model }),
+    body: JSON.stringify({
+      text,
+      sessionId,
+      images: toDataUrls(attachments),
+      model,
+      conversationId: bg?.conversationId,
+      turnId: bg?.turnId,
+      conversation: bg?.snapshot,
+    }),
     signal,
   });
 
@@ -159,10 +188,19 @@ export async function sendMessageStream(
         aborted: true,
       };
     }
+    // 스트림이 도중에 끊겼지만(폰 백그라운드/연결 끊김) 백그라운드 메타(bg)를 보냈다면,
+    // 서버가 생성을 끝까지 완주해 응답을 영속 + 폰 푸시한다 → 에러 아님(incomplete).
+    // 여기서 throw 하면 호출부가 에러 말풍선을 추가해(updatedAt 갱신) 동기화 LWW 에서
+    // 서버 응답을 덮어쓸 수 있으므로, 핸드오프로 조용히 종료한다.
+    if (bg?.conversationId) return incompleteResult(sessionId);
     throw err;
   }
 
-  if (!done) throw new Error('스트림이 비정상 종료됐어');
+  // done 없이 스트림이 끝남 — bg 핸드오프면 서버 완주에 맡기고, 아니면 진짜 비정상.
+  if (!done) {
+    if (bg?.conversationId) return incompleteResult(sessionId);
+    throw new Error('스트림이 비정상 종료됐어');
+  }
 
   return {
     reply: { ...assistantMessage(done.text), text: done.text, toolsUsed: done.toolsUsed },
@@ -171,6 +209,22 @@ export async function sendMessageStream(
     saved: done.saved,
     toolsUsed: done.toolsUsed ?? [],
   };
+}
+
+// 챗 중지 — 서버에 turnId 로 명시적 취소를 알린다. 단순히 fetch 를 abort 만 하면
+// 서버는 그걸 "백그라운드로 떠남"으로 보고 생성을 계속하므로, 진짜 멈추려면 이걸 부른다.
+// fire-and-forget(실패해도 UI 는 이미 멈춤).
+export async function cancelChat(turnId: string): Promise<void> {
+  if (!IS_BACKEND_CONFIGURED || !turnId) return;
+  try {
+    await fetch(apiUrl('/api/chat/cancel'), {
+      method: 'POST',
+      headers: jsonHeaders(),
+      body: JSON.stringify({ turnId }),
+    });
+  } catch {
+    /* 무시 */
+  }
 }
 
 async function mockReply(text: string): Promise<SendResult> {

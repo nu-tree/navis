@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import { sendMessageStream, type Attachment } from "../api/navis";
+import { sendMessageStream, cancelChat, type Attachment } from "../api/navis";
 import { fetchNamoryMcp } from "../api/agent";
 import { useChatStore } from "../store/chat-store";
 import { useUiStore } from "../store/ui-store";
@@ -137,6 +137,19 @@ export function useSendMessage() {
       const controller = new AbortController();
       setAborter(conversationId, controller);
 
+      // 백그라운드 완주/푸시 — 폰을 잠그거나 앱을 나가도(연결 끊김) 서버가 답을 끝까지
+      // 만들어 대화에 써넣고 폰으로 푸시한다. 스냅샷(직전까지 메시지 = 방금 추가된 유저
+      // 메시지 포함)을 보내 서버가 어시스턴트 메시지를 append 한다. turnId 로 서버 중지 매칭.
+      const turnId = makeId("t");
+      const snapshot = {
+        title: conv?.title ?? "나비스와의 대화",
+        messages: conv?.messages ?? [],
+        unread: conv?.unread ?? 0,
+        sessionId: conv?.sessionId ?? null,
+      };
+      // 중지 버튼이 서버에도 취소를 보내도록 등록 — 연결 종료만으론 서버가 안 멈춘다.
+      useChatStore.getState().setCanceler(conversationId, () => void cancelChat(turnId));
+
       const MAX_ATTEMPTS = 3;
       let result: Awaited<ReturnType<typeof sendMessageStream>> | undefined;
       for (let attempt = 1; ; attempt++) {
@@ -167,6 +180,8 @@ export function useSendMessage() {
               setStatus("__thinking__");
               appendMessageThinking(conversationId, assistantId, delta);
             },
+            // 백그라운드 완주/푸시 메타 — 클라가 응답 전에 떠나면 서버가 이걸로 영속+푸시.
+            { conversationId, turnId, snapshot },
           );
           break;
         } catch (err) {
@@ -193,6 +208,12 @@ export function useSendMessage() {
       // 중지됨: 스트림이 정상 종료가 아니라 끊긴 것 → 지금까지 받은 부분 응답을
       // 그대로 두고 빈 권위 텍스트로 덮어쓰지 않는다.
       if (result.aborted) return result;
+
+      // 백그라운드 핸드오프: 폰을 잠갔다/나가서 스트림이 done 없이 끊겼지만 서버가
+      // 완주 중 → 에러 말풍선/덮어쓰기 없이 그대로 종료한다. 부분 말풍선은 다음 동기화
+      // pull 에서 서버 권위 응답으로 교체되고, 서버가 폰으로 푸시도 보낸다. (에러로
+      // 처리하면 updatedAt 이 갱신돼 LWW 에서 서버 응답을 덮어쓸 수 있어 위험.)
+      if (result.incomplete) return result;
 
       const tools = result.toolsUsed ?? [];
       // 델타가 한 번도 안 왔으면 지금 생성, 왔으면 권위 텍스트로 보정.
@@ -230,14 +251,16 @@ export function useSendMessage() {
       // onSuccess 에서 💡 부착에 쓸 유저 메시지 id 를 context 로 넘김
       return { userMessageId };
     },
-    onSuccess: (
-      { sessionId, contextFull, saved, reply, aborted },
-      { conversationId },
-      context,
-    ) => {
+    onSuccess: (data, { conversationId }, context) => {
+      const { sessionId, contextFull, saved, reply, aborted, incomplete } =
+        data as Awaited<ReturnType<typeof sendMessageStream>>;
       // 중지된 턴은 세션 id/저장/알림을 건드리지 않는다 — 기존 세션 맥락을 보존하고
       // 부분 응답만 남긴다.
       if (aborted) return;
+      // 백그라운드 핸드오프: 서버가 완주·영속·푸시한다. 세션 id/저장/알림은 동기화 pull
+      // 로 서버 권위 행에서 내려오므로 여기서 건드리지 않는다(빈 sessionId 로 덮어쓰면
+      // 멀티턴이 끊긴다).
+      if (incomplete) return;
       const { setSessionId, toggleReaction } = useChatStore.getState();
       setSessionId(
         conversationId,
@@ -271,9 +294,10 @@ export function useSendMessage() {
       });
     },
     onSettled: (_data, _err, { conversationId }) => {
-      const { setTyping, setAborter, setStreamingId } = useChatStore.getState();
+      const { setTyping, setAborter, setCanceler, setStreamingId } = useChatStore.getState();
       setTyping(conversationId, false);
       setAborter(conversationId, undefined);
+      setCanceler(conversationId, undefined);
       // 스트리밍 종료(완료/중지/에러) — 작업/생각 블록 자동 접힘.
       setStreamingId(conversationId, undefined);
     },

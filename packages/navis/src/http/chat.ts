@@ -11,6 +11,14 @@ import {
   requireAppAuth,
   sendJson,
 } from "./respond.js";
+import {
+  registerTurn,
+  clearTurn,
+  cancelTurn,
+  consumeCancelled,
+  persistAndNotify,
+  type ChatSnapshot,
+} from "./chat-turns.js";
 
 type ChatRequest = {
   text: string;
@@ -22,6 +30,11 @@ type ChatRequest = {
   // 확장 사고(adaptive thinking) opt-in. body 에 명시적으로 true 일 때만 켠다.
   // 기본 off — adaptive 라도 첫 토큰을 2~4초 늦추므로 응답성 우선.
   thinking: boolean;
+  // 백그라운드 완주/푸시용(스트림 전용). conversationId+conversation 스냅샷이 있으면
+  // 클라가 응답 전에 떠나도 서버가 응답을 영속 + 폰 푸시한다. turnId 로 명시적 중지.
+  conversationId: string | undefined;
+  turnId: string | undefined;
+  snapshot: ChatSnapshot | undefined;
 };
 
 // chat / chat-stream 공통 바디 파싱. text + 첨부 이미지(data URL) + resume(sessionId).
@@ -51,7 +64,40 @@ async function parseChatRequest(
       ? body.model
       : undefined;
   const thinking = body?.thinking === true;
-  return { text, images, resume, model, thinking };
+
+  const conversationId =
+    typeof body?.conversationId === "string" && body.conversationId
+      ? body.conversationId
+      : undefined;
+  const turnId =
+    typeof body?.turnId === "string" && body.turnId ? body.turnId : undefined;
+  const snap =
+    body?.conversation && typeof body.conversation === "object"
+      ? (body.conversation as Record<string, unknown>)
+      : undefined;
+  const snapshot: ChatSnapshot | undefined = snap
+    ? {
+        title: typeof snap.title === "string" ? snap.title : "",
+        messages: Array.isArray(snap.messages) ? snap.messages : [],
+        unread: typeof snap.unread === "number" ? snap.unread : 0,
+        sessionId: typeof snap.sessionId === "string" ? snap.sessionId : null,
+      }
+    : undefined;
+
+  return { text, images, resume, model, thinking, conversationId, turnId, snapshot };
+}
+
+// 명시적 중지 — 진행 중인 챗 턴 생성을 실제로 끊는다(토큰 절약). 단순 연결 종료
+// (폰 백그라운드)는 생성을 끊지 않으므로, 중지 버튼은 이 엔드포인트를 따로 부른다.
+export async function handleChatCancel(
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<void> {
+  if (!requireAppAuth(req, res)) return;
+  const body = safeParse(await readBody(req));
+  const turnId = typeof body?.turnId === "string" ? body.turnId : "";
+  const ok = turnId ? cancelTurn(turnId) : false;
+  sendJson(res, 200, { ok });
 }
 
 // 사후 큐레이터(A) — 응답을 보낸 뒤 백그라운드로 한 번 더 평가해 저장 누락을 메운다.
@@ -120,8 +166,9 @@ export async function handleChatStream(
     "x-accel-buffering": "no",
   });
 
+  // 연결이 끊긴 뒤(클라가 떠남) 쓰면 EPIPE 가 나므로 항상 가드한다.
   const sse = (event: string, data: unknown) => {
-    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    if (!res.writableEnded) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   };
 
   // 도구 호출이 길게 이어지는 동안 바이트가 안 흐르면 Railway 프록시·클라가 idle
@@ -139,13 +186,15 @@ export async function handleChatStream(
     }
   };
 
-  // 클라이언트가 중지(연결 종료)하면 SDK 생성도 실제로 끊어 토큰 낭비를 막는다.
-  // req "close" 는 정상 완료 후에도 켜질 수 있으나, 그 시점엔 query 루프가 이미 끝나
-  // abort() 가 무해한 no-op 이다.
+  // 연결 종료 != 중지. 폰을 잠그거나 앱을 나가면 연결이 끊기지만(clientGone) 생성은
+  // 계속 돌려 완료 후 서버가 응답을 영속 + 폰 푸시한다. 실제 중지는 /api/chat/cancel
+  // 이 turnId 로 이 컨트롤러를 abort 할 때만 일어난다(토큰 절약은 그 경로로 유지).
   const abortController = new AbortController();
+  if (parsed.turnId) registerTurn(parsed.turnId, abortController);
+  let clientGone = false;
   req.on("close", () => {
     stopHeartbeat();
-    abortController.abort();
+    clientGone = true;
   });
 
   try {
@@ -177,20 +226,41 @@ export async function handleChatStream(
         : undefined,
       abortController,
     );
+    if (parsed.turnId) clearTurn(parsed.turnId);
     const contextFull = result.contextTokens >= config.contextTokenLimit;
-    // 권위 있는 최종 텍스트도 함께 보내 클라가 누적분을 보정하게 한다.
-    sse("done", {
-      text: result.text,
-      sessionId: result.sessionId,
-      contextFull,
-      saved: result.saved,
-      toolsUsed: result.toolsUsed,
-    });
-    res.end();
+
+    if (clientGone) {
+      // 클라가 응답 전에 떠남 → 서버가 대신 대화에 답변을 써넣고(동기화로 복원) 폰 푸시.
+      // 포그라운드(연결 유지)였다면 클라가 받은 응답을 스스로 동기화하므로 생략(중복 방지).
+      // 단, 완료 직후 도착한 중지 신호가 있으면(consumeCancelled) 사용자가 멈춘 것이므로
+      // 영속/푸시하지 않는다.
+      const stopped = parsed.turnId ? consumeCancelled(parsed.turnId) : false;
+      if (!stopped && parsed.conversationId && parsed.snapshot) {
+        await persistAndNotify(parsed.conversationId, parsed.snapshot, {
+          text: result.text,
+          toolsUsed: result.toolsUsed,
+          sessionId: result.sessionId,
+        });
+      }
+    } else {
+      // 권위 있는 최종 텍스트도 함께 보내 클라가 누적분을 보정하게 한다.
+      sse("done", {
+        text: result.text,
+        sessionId: result.sessionId,
+        contextFull,
+        saved: result.saved,
+        toolsUsed: result.toolsUsed,
+        // 지연 계측(ms) — 앱/디버그에서 응답 속도 분해 확인용.
+        timing: result.timing,
+      });
+      if (!res.writableEnded) res.end();
+    }
 
     curate(parsed.text, result.text);
   } catch (err) {
-    // 클라이언트 중지(abort)로 query 가 끊긴 건 에러가 아니다 — 조용히 종료.
+    if (parsed.turnId) clearTurn(parsed.turnId);
+    // 명시적 중지(/api/chat/cancel → abort)로 query 가 끊긴 건 에러가 아니다 —
+    // 영속/푸시 없이 조용히 종료(사용자가 의도적으로 멈춤).
     if (abortController.signal.aborted) {
       if (!res.writableEnded) res.end();
     } else {
@@ -199,7 +269,7 @@ export async function handleChatStream(
         sendJson(res, 500, { error: "internal error" });
       } else {
         sse("error", { error: "internal error" });
-        res.end();
+        if (!res.writableEnded) res.end();
       }
     }
   } finally {

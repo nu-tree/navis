@@ -8,7 +8,7 @@ import {
   handleDownloadPage,
 } from "../desktop/serve.js";
 import { handlePreflight } from "./respond.js";
-import { handleChat, handleChatStream } from "./chat.js";
+import { handleChat, handleChatStream, handleChatCancel } from "./chat.js";
 import { handleReports, handlePostReport } from "./reports.js";
 import { handleCrons, handleDeleteCron } from "./crons.js";
 import { handleMemories } from "./memories.js";
@@ -52,6 +52,12 @@ export function route(req: IncomingMessage, res: ServerResponse): void {
   if (req.url === "/api/chat/stream") {
     if (req.method === "OPTIONS") return handlePreflight(res);
     if (req.method === "POST") return void handleChatStream(req, res);
+  }
+
+  // 챗 중지 — 진행 중인 턴 생성을 turnId 로 실제 끊는다(연결 종료와 구분).
+  if (req.url === "/api/chat/cancel") {
+    if (req.method === "OPTIONS") return handlePreflight(res);
+    if (req.method === "POST") return void handleChatCancel(req, res);
   }
 
   if (req.url?.startsWith("/api/reports")) {

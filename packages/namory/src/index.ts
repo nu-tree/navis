@@ -144,7 +144,8 @@ app.put<{ Params: { id: string } }>("/conversations/:id", async (req, reply) => 
     hidden: typeof b.hidden === "boolean" ? b.hidden : false,
     updatedAt: typeof b.updatedAt === "string" ? new Date(b.updatedAt) : new Date(),
   });
-  return row;
+  // row 가 없으면 LWW 로 더 오래된 쓰기가 무시된 것 — 에러가 아니라 정상(no-op).
+  return row ?? { id: req.params.id, skipped: true };
 });
 
 app.delete<{ Params: { id: string } }>("/conversations/:id", async (req) => {
