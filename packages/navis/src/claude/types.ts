@@ -15,4 +15,9 @@ export interface AskResult {
   saved: boolean;
   // 이번 턴에 사용된 도구 요약 목록 (앱 말풍선 표시용)
   toolsUsed: string[];
+  // 지연 계측(ms). 채팅 응답 속도 진단용 — 어디서 시간이 새는지 분해한다.
+  //   prefetchMs:  query 시작 전 사전 준비(커넥터/시스템프롬프트/프로젝트목록, 병렬·대부분 캐시)
+  //   firstMsgMs:  query() 시작 → SDK 첫 메시지까지(CLI 스폰 + MCP 핸드셰이크 바닥)
+  //   totalMs:     askClaude 전체 소요
+  timing?: { prefetchMs: number; firstMsgMs: number; totalMs: number };
 }

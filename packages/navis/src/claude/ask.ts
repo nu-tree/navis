@@ -66,6 +66,8 @@ export async function askClaude(
   // 생성을 실제로 멈춘다. 없으면 끝까지 생성(크론/다이제스트 등 신뢰 자동화 경로).
   abortController?: AbortController,
 ): Promise<AskResult> {
+  // 지연 계측 — 채팅 속도 진단. 전 구간 시작점.
+  const t0 = Date.now();
   let text = "";
   let sessionId = "";
   let contextTokens = 0;
@@ -108,11 +110,13 @@ export async function askClaude(
   // 코드 수정 없이 이 query 에 주입한다. 인증(none/apikey/oauth)은 store/mcp 에서 처리.
   // 조회 실패 시 빈 결과라 연동 없이 안전 동작.
   // 세 준비 작업을 병렬로 실행해 왕복 지연을 줄인다(직렬이면 namory 3번 직렬 호출).
+  const tPrefetch = Date.now();
   const [connectors, baseSystemPrompt, guidance] = await Promise.all([
     buildEnabledConnectors(),
     getSystemPrompt(),
     projectGuidance(),
   ]);
+  const prefetchMs = Date.now() - tPrefetch;
 
   // 프로젝트 컨텍스트가 있으면 시스템 프롬프트에 부속문을 합성. 코드로 강제 인젝션
   // 하지 않고 모델에 지시 — 큐레이터도 같은 규칙으로 따라온다.
@@ -132,6 +136,9 @@ export async function askClaude(
 
   systemPromptFinal += guidance;
 
+  // query() 시작 시각 — 첫 메시지까지가 CLI 스폰 + MCP 핸드셰이크 바닥(모델 무관).
+  const tQuery = Date.now();
+  let firstMsgMs = 0;
   for await (const message of query({
     prompt: promptInput,
     options: {
@@ -191,6 +198,8 @@ export async function askClaude(
       ...(resumeSessionId ? { resume: resumeSessionId } : {}),
     },
   })) {
+    // SDK 첫 메시지 도착 시점 — 스폰+핸드셰이크 바닥을 한 번만 기록.
+    if (!firstMsgMs) firstMsgMs = Date.now() - tQuery;
     // 부분 메시지: 응답 텍스트 델타를 그때그때 콜백으로 흘려보낸다(앱 스트리밍).
     // 도구 input 델타·thinking 등은 무시하고 순수 text_delta 만.
     if (message.type === "stream_event") {
@@ -255,7 +264,19 @@ export async function askClaude(
     }
   }
 
-  return { text: text.trim() || "(빈 응답)", sessionId, contextTokens, saved, toolsUsed };
+  const totalMs = Date.now() - t0;
+  // 한 줄 진단 로그(Railway 로그에서 어디서 시간이 새는지 바로 확인).
+  console.log(
+    `[chat:timing] model=${modelOverride ?? config.model} prefetch=${prefetchMs}ms firstMsg=${firstMsgMs}ms total=${totalMs}ms tools=${toolsUsed.length}`,
+  );
+  return {
+    text: text.trim() || "(빈 응답)",
+    sessionId,
+    contextTokens,
+    saved,
+    toolsUsed,
+    timing: { prefetchMs, firstMsgMs, totalMs },
+  };
 }
 
 // 텍스트(있으면) + 이미지들을 하나의 user 메시지로 묶어 yield 하는 async generator.
