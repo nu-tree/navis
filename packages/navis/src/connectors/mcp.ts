@@ -27,13 +27,19 @@ function authHeaders(auth: Connector["auth"]): Record<string, string> {
 }
 
 // 커넥터 1개 → SDK http 서버 설정.
+// alwaysLoad 는 의도적으로 항상 false — 동적 커넥터(노션 등)의 도구를 매 메시지
+// 컨텍스트에 eager-load 하지 않고 tool-search 뒤로 미룬다. 노션 MCP 는 도구가 많아
+// alwaysLoad:true 면 인사 한 줄에도 수십 개 도구 스키마가 프롬프트에 실려 첫 토큰을
+// 늦춘다(채팅 지연의 큰 축). 모델은 노션이 필요한 턴에만 tool-search 로 도구를
+// 발견해 쓴다(allowedTools 의 mcp__<id> 와일드카드로 발견 즉시 자동 승인).
+// 저장된 c.alwaysLoad 필드는 UI 표시용으로 남되 query 시점엔 honor 하지 않는다.
 export function connectorToServer(c: Connector): McpHttpServerConfig {
   const headers = authHeaders(c.auth);
   return {
     type: "http",
     url: c.url,
     ...(Object.keys(headers).length > 0 ? { headers } : {}),
-    alwaysLoad: c.alwaysLoad,
+    alwaysLoad: false,
   };
 }
 
