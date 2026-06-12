@@ -14,6 +14,7 @@ import { getSetting, setSetting } from "./tools/settings.js";
 import { update } from "./tools/update.js";
 import { remove } from "./tools/remove.js";
 import { CATEGORIES, type Category } from "./db/schema.js";
+import { runMigrations } from "./db/migrate.js";
 import { ensureConversationsTable } from "./db/ensure.js";
 
 // REST 핸들러 공통 에러 매핑: 도메인 에러 메시지를 HTTP 코드로.
@@ -237,9 +238,12 @@ app.delete<{ Params: { id: string } }>("/memories/:id", async (req, reply) => {
 });
 
 const port = Number(process.env.PORT) || 3000;
-// 부팅 시 conversations 테이블 보장(멱등) — 마이그레이션 미적용으로 인한 PUT 500 방지.
-// 실패해도 서버는 띄운다(다른 기능은 살아야 하므로) — 에러만 크게 남긴다.
-ensureConversationsTable()
+// 부팅 시퀀스: ① 정식 마이그레이션(미적용분 자동 반영 + 이력 기록 → 앞으로도 자동) →
+// ② conversations 테이블 멱등 보장(마이그레이터가 이력 불일치 등으로 실패해도 받치는
+// 안전망) → ③ listen. 각 단계는 실패해도 안 죽고 에러만 남긴 뒤 다음으로(서버는 떠야 함).
+runMigrations()
+  .catch((err) => app.log.error({ err }, "[migrate] 마이그레이션 실패(계속 진행, ensure 가 받침)"))
+  .then(() => ensureConversationsTable())
   .catch((err) => app.log.error({ err }, "[ensure] conversations 테이블 보장 실패(계속 진행)"))
   .then(() => app.listen({ port, host: "0.0.0.0" }))
   .then(() => app.log.info(`namory listening on :${port}`))
