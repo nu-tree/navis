@@ -14,6 +14,7 @@ import { getSetting, setSetting } from "./tools/settings.js";
 import { update } from "./tools/update.js";
 import { remove } from "./tools/remove.js";
 import { CATEGORIES, type Category } from "./db/schema.js";
+import { ensureConversationsTable } from "./db/ensure.js";
 
 // REST 핸들러 공통 에러 매핑: 도메인 에러 메시지를 HTTP 코드로.
 // "해당 id의 ... 없습니다" → 404, "수정할 필드가 없습니다" → 400, 그 외 → 500.
@@ -236,8 +237,11 @@ app.delete<{ Params: { id: string } }>("/memories/:id", async (req, reply) => {
 });
 
 const port = Number(process.env.PORT) || 3000;
-app
-  .listen({ port, host: "0.0.0.0" })
+// 부팅 시 conversations 테이블 보장(멱등) — 마이그레이션 미적용으로 인한 PUT 500 방지.
+// 실패해도 서버는 띄운다(다른 기능은 살아야 하므로) — 에러만 크게 남긴다.
+ensureConversationsTable()
+  .catch((err) => app.log.error({ err }, "[ensure] conversations 테이블 보장 실패(계속 진행)"))
+  .then(() => app.listen({ port, host: "0.0.0.0" }))
   .then(() => app.log.info(`namory listening on :${port}`))
   .catch((err) => {
     app.log.error(err);
