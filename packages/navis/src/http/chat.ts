@@ -1,9 +1,10 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { config } from "../config.js";
 import { askClaude } from "../claude/ask.js";
+import { warmEnabled, runWarmTurn, WarmFallback, dropWarmSession } from "../claude/warm.js";
 import { curateTurn } from "../claude/curator.js";
 import { collectImagesFromDataUrls } from "../claude/images.js";
-import type { InputImage } from "../claude/types.js";
+import type { AskResult, InputImage } from "../claude/types.js";
 import {
   CORS_HEADERS,
   readBody,
@@ -198,34 +199,63 @@ export async function handleChatStream(
   });
 
   try {
-    const result = await askClaude(
-      parsed.text,
-      parsed.resume,
-      parsed.images,
-      false,
-      undefined,
-      undefined,
-      (delta) => {
-        sse("delta", { text: delta });
-      },
-      (toolName) => {
-        sse("status", { tool: toolName });
-      },
-      (label) => {
-        // 도구 인풋 확정 시점 — 앱 말풍선에 실시간으로 한 줄 추가
-        sse("tool", { label });
-      },
-      parsed.model,
-      // 확장 사고는 opt-in — body.thinking:true 일 때만 델타를 흘려보낸다.
-      // 콜백 자체가 askClaude 의 adaptive thinking 스위치라 undefined 면 thinking off.
-      parsed.thinking
-        ? (delta) => {
-            // 확장 사고 델타 — 앱의 접이식 '생각 과정' 블록에 누적 표시
-            sse("thinking", { text: delta });
-          }
-        : undefined,
-      abortController,
-    );
+    // 스트리밍 콜백 — 워밍/콜드 경로 공통.
+    const onDelta = (delta: string) => sse("delta", { text: delta });
+    const onStatus = (toolName: string) => sse("status", { tool: toolName });
+    const onTool = (label: string) => sse("tool", { label });
+    // 확장 사고는 opt-in — body.thinking:true 일 때만 델타를 흘려보낸다(콜드 경로 전용).
+    const onThinking = parsed.thinking
+      ? (delta: string) => sse("thinking", { text: delta })
+      : undefined;
+
+    // 워밍 경로 조건: 켜짐 + 대화 id 있음 + 이미지/확장사고 아님(이 둘은 턴마다 세션
+    // 옵션이 달라 콜드로 처리). 워밍이 폴백을 던지면(스트리밍 시작 전) 콜드로 재시도.
+    const canWarm =
+      warmEnabled() && !!parsed.conversationId && parsed.images.length === 0 && !parsed.thinking;
+
+    const askCold = (): Promise<AskResult> =>
+      askClaude(
+        parsed.text,
+        parsed.resume,
+        parsed.images,
+        false,
+        undefined,
+        undefined,
+        onDelta,
+        onStatus,
+        onTool,
+        parsed.model,
+        onThinking,
+        abortController,
+      );
+
+    let result: AskResult;
+    if (canWarm) {
+      const convId = parsed.conversationId as string;
+      // 중지(/api/chat/cancel → abort) 시 워밍 세션을 폐기해 SDK 생성을 끊는다.
+      const onAbort = () => dropWarmSession(convId);
+      abortController.signal.addEventListener("abort", onAbort);
+      try {
+        result = await runWarmTurn({
+          conversationId: convId,
+          prompt: parsed.text,
+          model: parsed.model ?? config.model,
+          resume: parsed.resume,
+          callbacks: { onTextDelta: onDelta, onStatus, onToolComplete: onTool },
+        });
+      } catch (err) {
+        // 스트리밍 시작 전 폴백 신호이고 사용자가 멈춘 게 아니면 콜드로 같은 턴 재실행.
+        if (err instanceof WarmFallback && !abortController.signal.aborted) {
+          result = await askCold();
+        } else {
+          throw err;
+        }
+      } finally {
+        abortController.signal.removeEventListener("abort", onAbort);
+      }
+    } else {
+      result = await askCold();
+    }
     if (parsed.turnId) clearTurn(parsed.turnId);
     const contextFull = result.contextTokens >= config.contextTokenLimit;
 

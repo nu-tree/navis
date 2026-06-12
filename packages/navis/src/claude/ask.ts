@@ -1,10 +1,15 @@
-import { query, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
+import {
+  query,
+  type SDKUserMessage,
+  type SDKMessage,
+  type McpServerConfig,
+} from "@anthropic-ai/claude-agent-sdk";
 import { config } from "../config.js";
 import { buildCronTools, CRON_TOOL_NAMES } from "../cron/mcp.js";
 import { buildRepoTools, REPO_TOOL_NAMES } from "../repo/mcp.js";
 import { buildSelfModifyTools, SELF_MODIFY_TOOL_NAMES } from "../self-modify/mcp.js";
 import { buildSettingsTools, SETTINGS_TOOL_NAMES } from "../settings/mcp.js";
-import { buildEnabledConnectors } from "../connectors/mcp.js";
+import { buildEnabledConnectors, type BuiltConnectors } from "../connectors/mcp.js";
 import { getSystemPrompt } from "../system-prompt.js";
 import { buildGoogleTools, GOOGLE_TOOL_NAMES } from "../google/mcp.js";
 import { isCalendarEnabled } from "../google/auth.js";
@@ -27,6 +32,168 @@ const settingsServer = buildSettingsTools();
 // 구글은 env(client/secret/refresh) 셋이 모두 채워졌을 때만 활성 — 환경변수는 프로세스
 // 수명 동안 안 바뀌므로 모듈 로드 시점에 한 번만 판정해도 충분.
 const googleServer = isCalendarEnabled() ? buildGoogleTools() : undefined;
+
+// ── 채팅 query 설정 빌더 (콜드 askClaude · 워밍 세션이 공유) ──────────────────────
+// mcpServers/allowedTools/systemPrompt 는 보안·동작에 직결되므로 한 곳에서 만들어
+// 두 경로(매 메시지 askClaude, 지속 워밍 세션 warm.ts)가 절대 어긋나지 않게 한다.
+
+// 시스템 프롬프트: 기본 + (프로젝트 컨텍스트) + 원격 실행 안내 + 프로젝트 표기 가이던스.
+export function buildChatSystemPrompt(
+  baseSystemPrompt: string,
+  guidance: string,
+  projectContext?: string,
+): string {
+  let s = projectContext
+    ? `${baseSystemPrompt}\n\n[운영 컨텍스트] 현재 작업 프로젝트: "${projectContext}". 이 대화에서 mcp__namory__save 를 호출할 때 모든 항목에 project: "${projectContext}" 를 명시할 것.`
+    : baseSystemPrompt;
+  // 원격 실행(Railway 컨테이너) 운영 안내 — 소스 파일이 없어 자기 코드 직접 수정 불가.
+  s +=
+    "\n\n[원격 실행 안내]\n" +
+    "- 이 환경(Railway 컨테이너)에는 소스 파일이 없다. Edit/Write/Bash 로 이 모노레포 코드(packages/** — navis, namory, app, desktop 등)를 직접 수정하려 시도하지 말 것.\n" +
+    "- 코드 수정 요청(어느 패키지든)은 반드시 mcp__self_modify__request_self_modification 도구로 GitHub Actions 의 코드 수정 서브에이전트에게 위임. 즉시 트리거만 던지면 작업·검토 결과는 별도 보고로 전달됨.\n" +
+    "- 자기 코드 조회는 mcp__repo__read_repo_file / mcp__repo__list_repo_files 사용.\n" +
+    "- 사용자 시스템의 다른 파일·셸 작업은 평소대로 허용(자기 수정만 위임).";
+  s += guidance;
+  return s;
+}
+
+// MCP 서버 묶음: 동적 커넥터(있으면) + namory(항상 로드) + 내장 in-process 서버들.
+export function buildChatMcpServers(
+  connectors: BuiltConnectors,
+): Record<string, McpServerConfig> {
+  return {
+    // DB 등록 커넥터들(있을 때만)을 먼저 펼친다 — 내장 서버 키(namory/cron/...)가
+    // 항상 이기도록(같은 id 면 아래 내장 정의가 덮음). 등록 단계에서도 예약어를 거부한다.
+    ...connectors.servers,
+    namory: {
+      type: "http",
+      url: config.namoryMcpUrl,
+      headers: { Authorization: `Bearer ${config.namoryToken}` },
+      // 도구가 tool-search 뒤로 deferred 되지 않게 항상 로드.
+      alwaysLoad: true,
+    },
+    cron: cronServer,
+    repo: repoServer,
+    self_modify: selfModifyServer,
+    settings: settingsServer,
+    ...(googleServer ? { google: googleServer } : {}),
+  };
+}
+
+// 자동 승인 도구 목록. profile_update는 신뢰된 다이제스트 경로에서만 추가.
+export function buildChatAllowedTools(
+  connectors: BuiltConnectors,
+  allowProfileUpdate: boolean,
+): string[] {
+  return [
+    ...NAMORY_TOOLS,
+    ...(allowProfileUpdate ? [NAMORY_PROFILE_UPDATE_TOOL] : []),
+    ...CRON_TOOL_NAMES,
+    ...REPO_TOOL_NAMES,
+    ...SELF_MODIFY_TOOL_NAMES,
+    ...SETTINGS_TOOL_NAMES,
+    ...(googleServer ? GOOGLE_TOOL_NAMES : []),
+    // 동적 커넥터: "mcp__<id>" 와일드카드로 각 커넥터의 모든 도구를 자동 승인.
+    ...connectors.allowedTools,
+    ...BUILTIN_TOOLS,
+  ];
+}
+
+// 한 턴의 누적 상태. 콜드/워밍 공통.
+export interface TurnAccumulator {
+  text: string;
+  sessionId: string;
+  contextTokens: number;
+  saved: boolean;
+  toolsUsed: string[];
+  firstMsgMs: number;
+  // 클라이언트로 보낼 만한 출력(텍스트/생각/도구)을 한 번이라도 흘렸는지. 워밍 실패 시
+  // 콜드 폴백을 해도 안전한지(델타 중복 안 남는지) 판정에 쓴다 — 첫 메시지(system init 등)
+  // 수신만으론 출력이 아니므로 firstMsgMs 보다 정확하다.
+  emitted: boolean;
+  lastAssistantUsage?: {
+    input_tokens?: number;
+    cache_read_input_tokens?: number;
+    cache_creation_input_tokens?: number;
+  };
+  // query() 시작 시각 — 첫 메시지까지(스폰+핸드셰이크 바닥) 측정용.
+  tQuery: number;
+}
+
+export interface TurnCallbacks {
+  onTextDelta?: (delta: string) => void;
+  onThinkingDelta?: (delta: string) => void;
+  onStatus?: (label: string) => void;
+  onToolComplete?: (label: string) => void;
+}
+
+export function newTurnAccumulator(tQuery: number): TurnAccumulator {
+  return { text: "", sessionId: "", contextTokens: 0, saved: false, toolsUsed: [], firstMsgMs: 0, emitted: false, tQuery };
+}
+
+// SDK 메시지 한 개를 처리해 accumulator 갱신 + 콜백 호출. result 를 만나면 true 반환
+// (이 턴 종료 신호) — 워밍은 이걸로 루프를 멈춘다(제너레이터를 닫지 않고). 콜드 경로는
+// for-await 가 자연 종료하므로 반환값을 무시해도 된다.
+export function processChatMessage(
+  message: SDKMessage,
+  acc: TurnAccumulator,
+  cb: TurnCallbacks,
+): boolean {
+  // SDK 첫 메시지 도착 시점 — 스폰+핸드셰이크 바닥을 한 번만 기록.
+  if (!acc.firstMsgMs) acc.firstMsgMs = Date.now() - acc.tQuery;
+
+  if (message.type === "stream_event") {
+    const ev = message.event;
+    if (ev.type === "content_block_delta" && ev.delta.type === "text_delta") {
+      acc.emitted = true;
+      if (cb.onTextDelta) cb.onTextDelta(ev.delta.text);
+    }
+    if (ev.type === "content_block_delta" && ev.delta.type === "thinking_delta") {
+      acc.emitted = true;
+      if (cb.onThinkingDelta) cb.onThinkingDelta(ev.delta.thinking);
+    }
+    if (ev.type === "content_block_start" && ev.content_block.type === "tool_use") {
+      acc.emitted = true;
+      if (cb.onStatus) cb.onStatus(ev.content_block.name);
+    }
+    return false;
+  }
+
+  if (message.type === "assistant") {
+    const content = message.message.content;
+    if (Array.isArray(content)) {
+      for (const block of content) {
+        if (block.type === "tool_use") {
+          acc.emitted = true;
+          if (block.name === "mcp__namory__save") acc.saved = true;
+          const label = richToolStatus(block.name, block.input as Record<string, unknown>);
+          if (cb.onStatus) cb.onStatus(label);
+          if (cb.onToolComplete) cb.onToolComplete(label);
+          if (!acc.toolsUsed.includes(label)) acc.toolsUsed.push(label);
+        }
+      }
+    }
+    const u = (message.message as unknown as { usage?: TurnAccumulator["lastAssistantUsage"] }).usage;
+    if (u) acc.lastAssistantUsage = u;
+    return false;
+  }
+
+  if (message.type === "result") {
+    acc.sessionId = message.session_id;
+    // 현재 컨텍스트 크기 = 마지막 assistant 호출의 프롬프트 토큰 합(누적 result.usage 는 부정확).
+    const u = acc.lastAssistantUsage ?? {};
+    acc.contextTokens =
+      (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0);
+    if (message.subtype === "success") {
+      acc.text = message.result;
+    } else {
+      throw new Error(`Claude 응답 실패: ${message.subtype}`);
+    }
+    return true;
+  }
+
+  return false;
+}
 
 // 프롬프트 한 개를 Claude에 넣고 답변 + 세션 정보를 받는다.
 // resumeSessionId 가 있으면 그 대화를 이어받는다(멀티턴). 없으면 새 대화.
@@ -68,22 +235,6 @@ export async function askClaude(
 ): Promise<AskResult> {
   // 지연 계측 — 채팅 속도 진단. 전 구간 시작점.
   const t0 = Date.now();
-  let text = "";
-  let sessionId = "";
-  let contextTokens = 0;
-  let saved = false;
-  // 에이전트 루프 마지막 assistant 턴의 usage 를 기억해두기 위한 변수.
-  // result.usage 는 루프 내부 모든 API 호출의 누적이라 cache_read 가 매 턴 중복
-  // 카운트돼 도구 몇 번 쓰면 컨텍스트가 5~10배 부풀려진다(한도에 비정상적으로 빨리
-  // 도달). 정확한 "지금 컨텍스트 크기" 는 마지막 호출의 프롬프트 토큰 합.
-  let lastAssistantUsage:
-    | {
-        input_tokens?: number;
-        cache_read_input_tokens?: number;
-        cache_creation_input_tokens?: number;
-      }
-    | undefined;
-  const toolsUsed: string[] = [];
 
   // 키워드 너지(B): 사용자 메시지에 결정/약속/할 일/배움 신호가 보이면 메인 턴에도
   // save 호출을 상기시키는 가벼운 힌트를 앞에 붙인다. 사후 큐레이터(A)가 그물이지만
@@ -118,27 +269,13 @@ export async function askClaude(
   ]);
   const prefetchMs = Date.now() - tPrefetch;
 
-  // 프로젝트 컨텍스트가 있으면 시스템 프롬프트에 부속문을 합성. 코드로 강제 인젝션
-  // 하지 않고 모델에 지시 — 큐레이터도 같은 규칙으로 따라온다.
-  let systemPromptFinal = projectContext
-    ? `${baseSystemPrompt}\n\n[운영 컨텍스트] 현재 작업 프로젝트: "${projectContext}". 이 대화에서 mcp__namory__save 를 호출할 때 모든 항목에 project: "${projectContext}" 를 명시할 것.`
-    : baseSystemPrompt;
-
-  // 원격 실행(Railway 컨테이너) 운영 안내. 호스팅 컨테이너엔 소스 파일이 없어서
-  // Edit/Write/Bash 로 자기 코드를 직접 수정할 수 없다 — 모델이 그걸 시도하다
-  // 실패하고 "셸 접근 막혔다" 같은 답변을 하지 않도록 명시.
-  systemPromptFinal +=
-    "\n\n[원격 실행 안내]\n" +
-    "- 이 환경(Railway 컨테이너)에는 소스 파일이 없다. Edit/Write/Bash 로 이 모노레포 코드(packages/** — navis, namory, app, desktop 등)를 직접 수정하려 시도하지 말 것.\n" +
-    "- 코드 수정 요청(어느 패키지든)은 반드시 mcp__self_modify__request_self_modification 도구로 GitHub Actions 의 코드 수정 서브에이전트에게 위임. 즉시 트리거만 던지면 작업·검토 결과는 별도 보고로 전달됨.\n" +
-    "- 자기 코드 조회는 mcp__repo__read_repo_file / mcp__repo__list_repo_files 사용.\n" +
-    "- 사용자 시스템의 다른 파일·셸 작업은 평소대로 허용(자기 수정만 위임).";
-
-  systemPromptFinal += guidance;
+  // 시스템 프롬프트 + MCP/도구 — 콜드/워밍 공유 빌더로 동일 설정 보장.
+  const systemPromptFinal = buildChatSystemPrompt(baseSystemPrompt, guidance, projectContext);
 
   // query() 시작 시각 — 첫 메시지까지가 CLI 스폰 + MCP 핸드셰이크 바닥(모델 무관).
   const tQuery = Date.now();
-  let firstMsgMs = 0;
+  const acc = newTurnAccumulator(tQuery);
+  const cb: TurnCallbacks = { onTextDelta, onThinkingDelta, onStatus, onToolComplete };
   for await (const message of query({
     prompt: promptInput,
     options: {
@@ -155,39 +292,10 @@ export async function askClaude(
       // 중지 버튼 → 서버 생성도 실제로 끊기게 컨트롤러 연결(토큰 낭비 방지).
       ...(abortController ? { abortController } : {}),
       systemPrompt: systemPromptFinal,
-      // namory를 HTTP MCP 서버로 연결. 토큰은 Authorization 헤더로 전달.
-      mcpServers: {
-        // DB 등록 커넥터들(있을 때만)을 먼저 펼친다 — 내장 서버 키(namory/cron/...)가
-        // 항상 이기도록(같은 id 면 아래 내장 정의가 덮음). 등록 단계에서도 예약어를 거부한다.
-        ...connectors.servers,
-        namory: {
-          type: "http",
-          url: config.namoryMcpUrl,
-          headers: { Authorization: `Bearer ${config.namoryToken}` },
-          // 도구가 tool-search 뒤로 deferred 되지 않게 항상 로드.
-          alwaysLoad: true,
-        },
-        cron: cronServer,
-        repo: repoServer,
-        self_modify: selfModifyServer,
-        settings: settingsServer,
-        ...(googleServer ? { google: googleServer } : {}),
-      },
-      // 자동 승인 도구: namory + 내장(파일/셸/웹/탐색) + repo 조회 + (대화 중이면) 크론·자기개선 + 부가 연동.
-      // 목록은 ./allowed-tools.ts 한 곳에서 관리. profile_update는 신뢰된 다이제스트
-      // 경로(allowProfileUpdate)에서만 추가.
-      allowedTools: [
-        ...NAMORY_TOOLS,
-        ...(allowProfileUpdate ? [NAMORY_PROFILE_UPDATE_TOOL] : []),
-        ...CRON_TOOL_NAMES,
-        ...REPO_TOOL_NAMES,
-        ...SELF_MODIFY_TOOL_NAMES,
-        ...SETTINGS_TOOL_NAMES,
-        ...(googleServer ? GOOGLE_TOOL_NAMES : []),
-        // 동적 커넥터: "mcp__<id>" 와일드카드로 각 커넥터의 모든 도구를 자동 승인.
-        ...connectors.allowedTools,
-        ...BUILTIN_TOOLS,
-      ],
+      // namory(항상 로드) + 동적 커넥터 + 내장 in-process 서버 — 공유 빌더.
+      mcpServers: buildChatMcpServers(connectors),
+      // 자동 승인 도구 — 공유 빌더(./allowed-tools.ts 가 단일 출처).
+      allowedTools: buildChatAllowedTools(connectors, allowProfileUpdate),
       // 로컬 설정(CLAUDE.md, settings.json) 무시.
       settingSources: [],
       // 도구 호출 루프 여유.
@@ -198,84 +306,22 @@ export async function askClaude(
       ...(resumeSessionId ? { resume: resumeSessionId } : {}),
     },
   })) {
-    // SDK 첫 메시지 도착 시점 — 스폰+핸드셰이크 바닥을 한 번만 기록.
-    if (!firstMsgMs) firstMsgMs = Date.now() - tQuery;
-    // 부분 메시지: 응답 텍스트 델타를 그때그때 콜백으로 흘려보낸다(앱 스트리밍).
-    // 도구 input 델타·thinking 등은 무시하고 순수 text_delta 만.
-    if (message.type === "stream_event") {
-      const ev = message.event;
-      if (onTextDelta && ev.type === "content_block_delta" && ev.delta.type === "text_delta") {
-        onTextDelta(ev.delta.text);
-      }
-      // 확장 사고 델타 — 생각 과정을 그때그때 흘려보낸다(앱 접이식 블록).
-      if (
-        onThinkingDelta &&
-        ev.type === "content_block_delta" &&
-        ev.delta.type === "thinking_delta"
-      ) {
-        onThinkingDelta(ev.delta.thinking);
-      }
-      if (onStatus && ev.type === "content_block_start" && ev.content_block.type === "tool_use") {
-        onStatus(ev.content_block.name);
-      }
-      continue;
-    }
-
-    // 턴 중 save 도구가 실제로 호출됐는지 감지 → 💡 리액션 트리거.
-    // 동시에 이 턴의 usage 를 기록해 마지막 turn 이 끝나면 그 값을 컨텍스트
-    // 크기로 사용한다(누적 합인 result.usage 는 부정확함).
-    if (message.type === "assistant") {
-      const content = message.message.content;
-      if (Array.isArray(content)) {
-        for (const block of content) {
-          if (block.type === "tool_use") {
-            if (block.name === "mcp__namory__save") saved = true;
-            const label = richToolStatus(block.name, block.input as Record<string, unknown>);
-            // typing indicator 를 상세 레이블로 갱신
-            if (onStatus) onStatus(label);
-            // 말풍선에 실시간으로 한 줄 추가 (도구 인풋 확정 시점)
-            if (onToolComplete) onToolComplete(label);
-            // 최종 done 이벤트용 누적 (중복 제거)
-            if (!toolsUsed.includes(label)) toolsUsed.push(label);
-          }
-        }
-      }
-      const u = (message.message as unknown as { usage?: typeof lastAssistantUsage })
-        .usage;
-      if (u) lastAssistantUsage = u;
-    }
-
-    if (message.type === "result") {
-      sessionId = message.session_id;
-      // 현재 컨텍스트 크기 = 마지막 assistant 호출의 프롬프트 토큰 합.
-      // result.usage 는 에이전트 루프 모든 내부 API 호출의 누적치라 cache_read 가
-      // 매 턴 중복돼 부정확. 마지막 호출의 input + cache_read + cache_creation 이
-      // 그 시점에서 모델로 보낸 실제 프롬프트 크기 = 컨텍스트 윈도 사용량.
-      const u = lastAssistantUsage ?? {};
-      contextTokens =
-        (u.input_tokens ?? 0) +
-        (u.cache_read_input_tokens ?? 0) +
-        (u.cache_creation_input_tokens ?? 0);
-      if (message.subtype === "success") {
-        text = message.result;
-      } else {
-        throw new Error(`Claude 응답 실패: ${message.subtype}`);
-      }
-    }
+    // 메시지 처리(델타·도구·result)는 콜드/워밍 공유 처리기로.
+    processChatMessage(message, acc, cb);
   }
 
   const totalMs = Date.now() - t0;
   // 한 줄 진단 로그(Railway 로그에서 어디서 시간이 새는지 바로 확인).
   console.log(
-    `[chat:timing] model=${modelOverride ?? config.model} prefetch=${prefetchMs}ms firstMsg=${firstMsgMs}ms total=${totalMs}ms tools=${toolsUsed.length}`,
+    `[chat:timing] model=${modelOverride ?? config.model} prefetch=${prefetchMs}ms firstMsg=${acc.firstMsgMs}ms total=${totalMs}ms tools=${acc.toolsUsed.length}`,
   );
   return {
-    text: text.trim() || "(빈 응답)",
-    sessionId,
-    contextTokens,
-    saved,
-    toolsUsed,
-    timing: { prefetchMs, firstMsgMs, totalMs },
+    text: acc.text.trim() || "(빈 응답)",
+    sessionId: acc.sessionId,
+    contextTokens: acc.contextTokens,
+    saved: acc.saved,
+    toolsUsed: acc.toolsUsed,
+    timing: { prefetchMs, firstMsgMs: acc.firstMsgMs, totalMs },
   };
 }
 
