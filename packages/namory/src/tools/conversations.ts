@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { eq, lte } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { conversations } from "../db/schema.js";
 
@@ -37,13 +37,16 @@ export async function upsertConversation(input: {
   };
   // LWW: 충돌(같은 id) 시 들어온 updatedAt 이 기존 이상일 때만 갱신. 더 오래된 쓰기는
   // 무시(returning 빈 배열 → undefined). 신규 행은 충돌이 없으니 항상 INSERT.
+  // 비교는 drizzle lte 연산자로 — raw sql 템플릿에 Date 를 직접 바인딩하면 컬럼 타입
+  // 코덱을 안 거쳐 postgres-js(prepare:false)가 Date 직렬화에 실패한다("Received an
+  // instance of Date"). lte 는 timestamp 컬럼 타입을 알고 Date 를 올바로 변환한다.
   const [row] = await db
     .insert(conversations)
     .values({ id: input.id, ...set })
     .onConflictDoUpdate({
       target: conversations.id,
       set,
-      where: sql`${conversations.updatedAt} <= ${input.updatedAt}`,
+      where: lte(conversations.updatedAt, input.updatedAt),
     })
     .returning();
   return row;
