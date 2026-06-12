@@ -8,12 +8,13 @@ export type ChatModel = {
 };
 
 export const CHAT_MODELS: ChatModel[] = [
-  { value: 'claude-opus-4-8', label: 'Opus 4.8', hint: '최고 성능 · 기본' },
-  { value: 'claude-sonnet-4-6', label: 'Sonnet 4.6', hint: '빠르고 균형 잡힘' },
+  { value: 'claude-sonnet-4-6', label: 'Sonnet 4.6', hint: '빠르고 균형 · 기본' },
+  { value: 'claude-opus-4-8', label: 'Opus 4.8', hint: '최고 성능' },
   { value: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5', hint: '가장 빠르고 가벼움' },
 ];
 
-// 미선택 시 기본값 = 목록 첫 항목(서버 config.model 과 동일한 Opus 4.8).
+// 미선택 시 기본값 = 목록 첫 항목. 일반 채팅은 응답성이 우선이라 Sonnet 을 기본으로 둔다
+// (Opus 대비 첫 토큰·생성이 빨라 체감이 크다). 더 깊은 답이 필요하면 픽커로 Opus 선택.
 export const DEFAULT_MODEL = CHAT_MODELS[0].value;
 
 // 저장된 model 값에 해당하는 짧은 라벨(픽커 칩 표시용). 모르는 값이면 기본 라벨.

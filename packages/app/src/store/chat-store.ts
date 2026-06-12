@@ -566,6 +566,14 @@ export const useChatStore = create<ChatStore>()(
     {
       name: 'navis-chat',
       storage: createJSONStorage(() => AsyncStorage),
+      // v1: 일반 채팅 기본 모델을 Opus→Sonnet 으로 변경. 기존에 '기본값(Opus)'을 쓰던
+      // 사용자만 새 기본값으로 옮기고, 일부러 다른 모델을 고른 경우는 존중한다(1회만 실행).
+      version: 1,
+      migrate: (persisted, version) => {
+        const s = (persisted ?? {}) as { model?: string };
+        if (version < 1 && s.model === 'claude-opus-4-8') s.model = DEFAULT_MODEL;
+        return s as unknown as ChatStore;
+      },
       // 응답 생성 중 표시(typingIds)는 휘발성이라 저장하지 않는다.
       partialize: (s) => ({
         conversations: s.conversations,

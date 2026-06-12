@@ -252,6 +252,8 @@ export async function handleChatStream(
         toolsUsed: result.toolsUsed,
         // 지연 계측(ms) — 앱/디버그에서 응답 속도 분해 확인용.
         timing: result.timing,
+        // 이 턴에 실제로 사용된 모델 — 앱이 모델 선택이 반영됐는지 확인/표시.
+        model: parsed.model ?? config.model,
       });
       if (!res.writableEnded) res.end();
     }
