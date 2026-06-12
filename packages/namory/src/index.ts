@@ -238,13 +238,27 @@ app.delete<{ Params: { id: string } }>("/memories/:id", async (req, reply) => {
 });
 
 const port = Number(process.env.PORT) || 3000;
+
+// 부팅 준비작업(마이그레이션/ensure)이 느리거나 멈춰도 listen 을 막지 않게 타임아웃을
+// 씌운다. DB 준비가 listen 을 무한정 지연시키면 /health 가 안 떠서 Railway 헬스체크가
+// 실패→컨테이너 재시작 루프가 난다. 시간 초과 시 그냥 진행(준비는 다음 부팅/ensure 가 받침).
+function bootStep(work: () => Promise<unknown>, ms: number, label: string): Promise<void> {
+  return Promise.race([
+    work().catch((err) => app.log.error({ err }, `[boot] ${label} 실패(계속 진행)`)),
+    new Promise<void>((resolve) =>
+      setTimeout(() => {
+        app.log.error(`[boot] ${label} ${ms}ms 초과 — 건너뛰고 부팅 계속`);
+        resolve();
+      }, ms),
+    ),
+  ]).then(() => undefined);
+}
+
 // 부팅 시퀀스: ① 정식 마이그레이션(미적용분 자동 반영 + 이력 기록 → 앞으로도 자동) →
-// ② conversations 테이블 멱등 보장(마이그레이터가 이력 불일치 등으로 실패해도 받치는
-// 안전망) → ③ listen. 각 단계는 실패해도 안 죽고 에러만 남긴 뒤 다음으로(서버는 떠야 함).
-runMigrations()
-  .catch((err) => app.log.error({ err }, "[migrate] 마이그레이션 실패(계속 진행, ensure 가 받침)"))
-  .then(() => ensureConversationsTable())
-  .catch((err) => app.log.error({ err }, "[ensure] conversations 테이블 보장 실패(계속 진행)"))
+// ② conversations 테이블 멱등 보장(①이 이력 불일치 등으로 실패해도 받치는 안전망) →
+// ③ listen. ①② 는 타임아웃으로 묶여 listen 을 절대 막지 않는다.
+bootStep(runMigrations, 20_000, "migrate")
+  .then(() => bootStep(ensureConversationsTable, 10_000, "ensure"))
   .then(() => app.listen({ port, host: "0.0.0.0" }))
   .then(() => app.log.info(`namory listening on :${port}`))
   .catch((err) => {
