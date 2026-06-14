@@ -240,7 +240,7 @@ export function ChatScreen() {
             title={active?.title ?? '나비스'}
             subtitle={
               isReport
-                ? '보고 전용 · 읽기 전용'
+                ? '나비스 보고방 · 질문 가능'
                 : isCode
                   ? '코드 · 내 맥 로컬 에이전트'
                   : '남운님의 개인 비서'
@@ -249,8 +249,8 @@ export function ChatScreen() {
             onMenu={() => (isWide ? setSidebarCollapsed(false) : setDrawerOpen(true))}
             unread={totalUnread}
             showMenu={!showSidebar}
-            // 모델 선택은 일반 채팅에서만(코드 세션=로컬 에이전트, 보고방=읽기 전용).
-            right={!isReport && !isCode ? <ModelPicker /> : undefined}
+            // 모델 선택은 코드 세션(=로컬 에이전트)에서만 숨긴다.
+            right={!isCode ? <ModelPicker /> : undefined}
           />
           <KeyboardAvoidingView
             className="flex-1"
@@ -263,31 +263,28 @@ export function ChatScreen() {
               style={{ maxWidth: isCode && previewOpen ? undefined : CHAT_MAX_WIDTH }}
             >
               <MessageList />
-              {isReport ? (
-                <View
-                  className="border-t border-border bg-background px-4 py-3"
-                  style={{ paddingBottom: insets.bottom + 12 }}
-                >
-                  <Text variant="caption" className="text-center text-muted-foreground">
-                    나비스가 보내는 보고가 모이는 방이야 · 여기선 답장하지 않아도 돼
-                  </Text>
-                </View>
-              ) : (
-                <View style={{ paddingBottom: insets.bottom }}>
-                  {/* 코드 세션: 폴더 칩 바(클로드 데스크톱 코드 느낌)를 입력창 바로 위에. */}
-                  {isCode ? (
-                    <CodeContextBar
-                      onOpenSettings={() => setCodeSheet(true)}
-                      cfgKey={cfgKey}
-                      generating={isActiveTyping}
-                      onStop={() => localAgent?.stop()}
-                      previewOpen={previewOpen}
-                      onTogglePreview={() => setPreviewOpen((v) => !v)}
-                    />
-                  ) : null}
-                  <ChatInput placeholder={isCode ? '작업을 설명하거나 질문하세요' : undefined} />
-                </View>
-              )}
+              <View style={{ paddingBottom: insets.bottom }}>
+                {/* 코드 세션: 폴더 칩 바(클로드 데스크톱 코드 느낌)를 입력창 바로 위에. */}
+                {isCode ? (
+                  <CodeContextBar
+                    onOpenSettings={() => setCodeSheet(true)}
+                    cfgKey={cfgKey}
+                    generating={isActiveTyping}
+                    onStop={() => localAgent?.stop()}
+                    previewOpen={previewOpen}
+                    onTogglePreview={() => setPreviewOpen((v) => !v)}
+                  />
+                ) : null}
+                <ChatInput
+                  placeholder={
+                    isReport
+                      ? '보고에 대해 질문하세요'
+                      : isCode
+                        ? '작업을 설명하거나 질문하세요'
+                        : undefined
+                  }
+                />
+              </View>
             </View>
           </KeyboardAvoidingView>
         </View>
