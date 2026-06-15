@@ -446,7 +446,7 @@ function formatToolUse(name, input) {
   return `\n${icon} ${name}${arg ? ` · ${arg}` : ''}\n`;
 }
 
-ipcMain.handle('navis-local:run', async (event, { id, prompt, resume, workdir, namory }) => {
+ipcMain.handle('navis-local:run', async (event, { id, prompt, resume, workdir, namory, images }) => {
   const cfg = loadLocalConfig();
   const token = cfg.token || process.env.CLAUDE_CODE_OAUTH_TOKEN;
   // 코드 탭은 항상 로컬 — 별도 '로컬 모드' 토글 없음. 세션이 고른 폴더(workdir)를
@@ -630,10 +630,38 @@ ipcMain.handle('navis-local:run', async (event, { id, prompt, resume, workdir, n
     // 사용자가 "정지"를 누르면 이 컨트롤러로 생성을 중단한다(클로드 코드의 Esc).
     const abortController = new AbortController();
     runAborts.set(id, abortController);
+    // 첨부 이미지(data URL)가 있으면 prompt 를 문자열 대신 content 블록(텍스트+이미지)을
+    // 담은 단발 user 메시지 스트림으로 구성한다. SDK 는 AsyncIterable<SDKUserMessage> 를
+    // 받아 비전 입력을 처리한다(문자열 prompt 로는 이미지를 전달할 방법이 없음).
+    const imageBlocks = Array.isArray(images)
+      ? images
+          .map((uri) => {
+            const m = /^data:([^;]+);base64,(.+)$/s.exec(uri || '');
+            return m
+              ? { type: 'image', source: { type: 'base64', media_type: m[1], data: m[2] } }
+              : null;
+          })
+          .filter(Boolean)
+      : [];
+    const promptArg = imageBlocks.length
+      ? (async function* () {
+          // 텍스트가 비어 있으면(이미지만 첨부) 빈 text 블록을 넣지 않는다 — Anthropic
+          // API 가 빈 text 블록을 거부할 수 있다. 텍스트가 있을 때만 추가.
+          const content = prompt && prompt.trim()
+            ? [...imageBlocks, { type: 'text', text: prompt }]
+            : imageBlocks;
+          yield {
+            type: 'user',
+            parent_tool_use_id: null,
+            message: { role: 'user', content },
+          };
+        })()
+      : prompt;
+
     // streamed/finalText/sessionId 는 try 밖에서 선언됨(중단 시 부분 결과 반환).
     // streamed 에는 답변 본문만 모은다(도구 사용 줄은 toolsUsed 로 따로 전달돼 사라지지 않음).
     for await (const m of query({
-      prompt,
+      prompt: promptArg,
       options: {
         cwd: dir,
         model: 'claude-opus-4-8',

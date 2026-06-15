@@ -58,6 +58,8 @@ contextBridge.exposeInMainWorld('navisLocal', {
         workdir: opts && opts.workdir,
         // namory 좌표(코드 세션 기억 연결). 없으면 순정 코드 에이전트.
         namory: opts && opts.namory,
+        // 첨부 이미지(data URL 배열) — 코드 세션 비전 입력. 없으면 텍스트만.
+        images: opts && opts.images,
       })
       .finally(() => {
         activeRuns.delete(id);

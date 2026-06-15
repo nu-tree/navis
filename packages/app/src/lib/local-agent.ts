@@ -37,6 +37,8 @@ type LocalAgentApi = {
       resume?: string;
       workdir?: string;
       namory?: NamoryMcp;
+      // 첨부 이미지(data URL 배열) — 코드 세션 비전 입력.
+      images?: string[];
     },
   ) => Promise<{ text?: string; error?: string; sessionId?: string }>;
   // 코드 세션 작업 폴더 선택(네이티브 다이얼로그). 취소하면 null.
