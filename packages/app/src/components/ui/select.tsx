@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Modal, Pressable, View } from 'react-native';
 import { cn } from '../../lib/cn';
 import { Text } from './text';
+import { Icon } from './icon';
 import { Separator } from './separator';
 
 export type SelectOption = {
@@ -45,7 +46,7 @@ export function Select({
         <Text className={cn(selected ? 'text-foreground' : 'text-muted-foreground')}>
           {selected ? selected.label : placeholder}
         </Text>
-        <Text className="text-muted-foreground">⌄</Text>
+        <Icon name="chevron-down" size={16} tone="muted-foreground" />
       </Pressable>
 
       {/* Bottom sheet */}
@@ -68,7 +69,7 @@ export function Select({
                     <Text className={cn(active ? 'font-semibold text-primary' : 'text-foreground')}>
                       {opt.label}
                     </Text>
-                    {active ? <Text className="text-primary">✓</Text> : null}
+                    {active ? <Icon name="check" size={16} tone="primary" /> : null}
                   </Pressable>
                 </View>
               );

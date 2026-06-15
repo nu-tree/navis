@@ -15,7 +15,7 @@ export function useCrons() {
       const { ensureReportRoom } = useChatStore.getState();
       crons
         .filter((c) => c.enabled)
-        .forEach((c) => ensureReportRoom(c.id, `⏰ ${c.title}`));
+        .forEach((c) => ensureReportRoom(c.id, c.title));
       return crons;
     },
   });

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, TextInput, View } from 'react-native';
 import { Text } from '../ui/text';
+import { Icon } from '../ui/icon';
 
 type Props = {
   url: string;
@@ -58,7 +59,7 @@ export function PreviewPanel({ url, onUrlChange, onClose }: Props) {
       {/* URL 바 */}
       <View className="flex-row items-center gap-1 border-b border-border bg-surface px-2 py-1.5">
         <Pressable onPress={reload} hitSlop={6} className="px-1 cursor-pointer hover:opacity-70">
-          <Text className="text-sm text-muted-foreground">↺</Text>
+          <Icon name="rotate-cw" size={14} tone="muted-foreground" />
         </Pressable>
         {/* URL 입력 */}
         <View className="flex-1 rounded-md border border-border bg-background px-2 py-1">
@@ -75,7 +76,7 @@ export function PreviewPanel({ url, onUrlChange, onClose }: Props) {
           />
         </View>
         <Pressable onPress={onClose} hitSlop={6} className="px-1 cursor-pointer hover:opacity-70">
-          <Text className="text-sm text-muted-foreground">✕</Text>
+          <Icon name="x" size={14} tone="muted-foreground" />
         </Pressable>
       </View>
 
@@ -100,7 +101,7 @@ export function PreviewPanel({ url, onUrlChange, onClose }: Props) {
           )
         ) : (
           <View className="flex-1 items-center justify-center gap-3">
-            <Text className="text-3xl">🌐</Text>
+            <Icon name="globe" size={32} tone="muted-foreground" />
             <Text variant="caption" className="text-center text-muted-foreground">
               위 주소창에 URL 입력 후 Enter{'\n'}(예: localhost:8081)
             </Text>

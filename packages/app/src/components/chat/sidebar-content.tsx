@@ -1,6 +1,7 @@
 import { Pressable, View } from 'react-native';
 import { cn } from '../../lib/cn';
 import { Text } from '../ui/text';
+import { Icon } from '../ui/icon';
 import { ConversationList } from './conversation-list';
 import { UpdateBanner } from './update-banner';
 import { useUiStore, type ChatTab } from '../../store/ui-store';
@@ -90,7 +91,7 @@ export function SidebarContent({ onAfterSelect, onCollapse }: SidebarContentProp
             onPress={onCollapse}
             className="h-8 w-8 items-center justify-center rounded-lg cursor-pointer active:bg-secondary hover:bg-secondary"
           >
-            <Text className="text-lg text-muted-foreground">‹</Text>
+            <Icon name="chevron-left" size={18} tone="muted-foreground" />
           </Pressable>
         ) : null}
       </View>

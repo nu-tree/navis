@@ -13,6 +13,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { cn } from '../../lib/cn';
 import { Button } from '../ui/button';
 import { Text } from '../ui/text';
+import { Icon } from '../ui/icon';
 import { useSendMessage } from '../../hooks/use-send-message';
 import { useIsActiveTyping, useChatStore } from '../../store/chat-store';
 import { localAgent } from '../../lib/local-agent';
@@ -181,7 +182,7 @@ export function ChatInput({ placeholder = '메시지 입력…', className }: Ch
                 onPress={() => removeAttachment(a.uri)}
                 className="absolute -right-1.5 -top-1.5 h-6 w-6 items-center justify-center rounded-full bg-foreground"
               >
-                <Text className="text-xs font-bold text-background">✕</Text>
+                <Icon name="x" size={13} tone="background" />
               </Pressable>
             </View>
           ))}
@@ -196,7 +197,7 @@ export function ChatInput({ placeholder = '메시지 입력…', className }: Ch
           disabled={typing}
           onPress={pickImage}
         >
-          <Text className="text-xl text-foreground">＋</Text>
+          <Icon name="plus" size={20} tone="foreground" />
         </Button>
         {/* Input 래퍼(min-h-11 + py-2.5) 를 거치지 않고 TextInput 을 직접 사용.
             iOS 에서 wrapper className 의 minHeight/padding 이 인라인 style.height 와 충돌해
@@ -231,11 +232,11 @@ export function ChatInput({ placeholder = '메시지 입력…', className }: Ch
             className="rounded-full transition-colors hover:bg-destructive/20 active:bg-destructive/30"
             onPress={stop}
           >
-            <Text className="text-base text-foreground">⏹</Text>
+            <Icon name="square" size={16} tone="foreground" />
           </Button>
         ) : (
           <Button size="icon" className="rounded-full" disabled={!canSend} onPress={submit}>
-            <Text className="text-lg text-primary-foreground">↑</Text>
+            <Icon name="arrow-up" size={18} tone="primary-foreground" />
           </Button>
         )}
       </View>

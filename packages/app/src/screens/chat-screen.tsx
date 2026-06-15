@@ -7,6 +7,7 @@ import { BranchPicker } from '../components/chat/branch-picker';
 import { SidebarContent } from '../components/chat/sidebar-content';
 import { LocalAgentSheet } from '../components/local-agent-sheet';
 import { Text } from '../components/ui/text';
+import { Icon } from '../components/ui/icon';
 import { Button } from '../components/ui/button';
 import {
   useActiveConversation,
@@ -71,7 +72,7 @@ function CodeContextBar({
     <View className="flex-row items-center gap-2 px-3 pb-2 pt-1">
       {/* 항상 로컬 — 코드는 내 맥에서 돈다(별도 토글 없음). */}
       <View className="flex-row items-center gap-1 rounded-lg border border-border bg-secondary px-2.5 py-1.5">
-        <Text className="text-xs">🖥</Text>
+        <Icon name="monitor" size={13} tone="foreground" />
         <Text className="text-xs font-medium text-foreground">로컬</Text>
       </View>
       {/* 폴더(=namory 프로젝트) 칩 — 누르면 폴더 선택. 기억은 이 폴더로 자동 연결/생성. */}
@@ -79,7 +80,7 @@ function CodeContextBar({
         onPress={pickFolder}
         className="flex-row items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 cursor-pointer active:opacity-70 hover:bg-secondary"
       >
-        <Text className="text-xs">📁</Text>
+        <Icon name="folder" size={13} tone="foreground" />
         <Text numberOfLines={1} className="max-w-[180px] text-xs font-medium text-foreground">
           {folderName ?? '폴더 선택'}
         </Text>
@@ -91,9 +92,10 @@ function CodeContextBar({
       <Pressable
         onPress={pickFolder}
         hitSlop={6}
-        className="rounded-lg border border-border px-2 py-1.5 cursor-pointer active:opacity-70 hover:bg-secondary"
+        className="flex-row items-center gap-1 rounded-lg border border-border px-2 py-1.5 cursor-pointer active:opacity-70 hover:bg-secondary"
       >
-        <Text className="text-xs text-muted-foreground">＋폴더</Text>
+        <Icon name="plus" size={13} tone="muted-foreground" />
+        <Text className="text-xs text-muted-foreground">폴더</Text>
       </Pressable>
 
       {/* 브랜치 칩 — 폴더가 선택돼 있을 때만. git 저장소가 아니면 시트에서 안내. */}
@@ -111,10 +113,11 @@ function CodeContextBar({
       <Pressable
         onPress={onTogglePreview}
         hitSlop={6}
-        className={`rounded-lg border px-2 py-1.5 cursor-pointer active:opacity-70 hover:bg-secondary ${previewOpen ? 'border-primary bg-primary/10' : 'border-border'}`}
+        className={`flex-row items-center gap-1 rounded-lg border px-2 py-1.5 cursor-pointer active:opacity-70 hover:bg-secondary ${previewOpen ? 'border-primary bg-primary/10' : 'border-border'}`}
       >
+        <Icon name="globe" size={13} tone={previewOpen ? 'primary' : 'muted-foreground'} />
         <Text className={`text-xs font-medium ${previewOpen ? 'text-primary' : 'text-muted-foreground'}`}>
-          🌐 미리보기
+          미리보기
         </Text>
       </Pressable>
 
@@ -123,9 +126,10 @@ function CodeContextBar({
         <Pressable
           onPress={onOpenSettings}
           hitSlop={6}
-          className="rounded-lg border border-border px-2 py-1.5 cursor-pointer active:opacity-70 hover:bg-secondary"
+          className="flex-row items-center gap-1 rounded-lg border border-border px-2 py-1.5 cursor-pointer active:opacity-70 hover:bg-secondary"
         >
-          <Text className="text-xs text-muted-foreground">⚠️ 토큰</Text>
+          <Icon name="alert-triangle" size={13} tone="muted-foreground" />
+          <Text className="text-xs text-muted-foreground">토큰</Text>
         </Pressable>
       ) : generating ? (
         // 채팅 입력창의 중지 버튼과 동일한 모양(둥근 secondary + 빨간 호버).
@@ -135,7 +139,7 @@ function CodeContextBar({
           className="rounded-full transition-colors hover:bg-destructive/20 active:bg-destructive/30"
           onPress={onStop}
         >
-          <Text className="text-base text-foreground">⏹</Text>
+          <Icon name="square" size={16} tone="foreground" />
         </Button>
       ) : (
         <Pressable
@@ -143,7 +147,7 @@ function CodeContextBar({
           hitSlop={6}
           className="rounded-lg px-1.5 py-1.5 cursor-pointer active:opacity-70 hover:bg-secondary"
         >
-          <Text className="text-sm text-muted-foreground">⚙️</Text>
+          <Icon name="settings" size={15} tone="muted-foreground" />
         </Pressable>
       )}
     </View>

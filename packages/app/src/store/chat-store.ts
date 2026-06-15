@@ -155,7 +155,7 @@ const reportRoomId = (sourceId: string) => `report:${sourceId}`;
 // 크론 목록(/api/crons)·첫 보고 도착 시 동적으로 생성된다.
 const REPORT_DIGEST: Conversation = {
   id: reportRoomId('digest'),
-  title: '📋 주간 다이제스트',
+  title: '주간 다이제스트',
   kind: 'report',
   messages: [],
   createdAt: '2026-06-04T00:00:00.000Z',

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { FlatList, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '../components/ui/text';
+import { Icon } from '../components/ui/icon';
 import { Chip } from '../components/ui/chip';
 import { MemoryCard } from '../components/memory/memory-card';
 import { MemoryEditSheet } from '../components/memory/memory-edit-sheet';
@@ -63,7 +64,7 @@ export function MemoriesScreen() {
           onPress={() => setScreen('settings')}
           className="h-9 w-9 items-center justify-center rounded-lg cursor-pointer active:bg-secondary hover:bg-secondary"
         >
-          <Text className="text-2xl text-foreground">‹</Text>
+          <Icon name="chevron-left" size={24} tone="foreground" />
         </Pressable>
         <View className="flex-1">
           <Text variant="subtitle">내 기억</Text>

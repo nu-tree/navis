@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Modal, Pressable, ScrollView, View } from 'react-native';
 import { cn } from '../../lib/cn';
 import { Text } from '../ui/text';
+import { Icon, type IconName } from '../ui/icon';
 import { confirmDestructive } from '../../lib/confirm';
 import { deleteCron } from '../../api/crons';
 import { DraggableRows } from './draggable-rows';
@@ -21,6 +22,23 @@ const BUILTIN_REPORT_IDS = new Set(['report:digest', 'report:calendar']);
 const isCronRoom = (c: Conversation) =>
   c.kind === 'report' && c.id.startsWith('report:') && !BUILTIN_REPORT_IDS.has(c.id);
 const cronIdOf = (c: Conversation) => c.id.slice('report:'.length);
+
+// 방 종류별 앞 아이콘 — 예전에 제목 앞에 붙던 이모지(📋/⏰/📅) 역할을 대체한다.
+function roomIcon(conv: Conversation): IconName | null {
+  if (conv.kind === 'code') return 'terminal';
+  if (conv.kind !== 'report') return null;
+  if (conv.id === 'report:digest') return 'file-text';
+  if (conv.id === 'report:calendar') return 'calendar';
+  return 'clock'; // 크론 보고방
+}
+
+// 서버가 준 제목 앞에 이모지(⏰/📋/📅 등)가 남아 있을 수 있어, lead 아이콘과 겹치지
+// 않게 표시에서만 떼어낸다. Hermes 안전을 위해 \p 이스케이프 없이, BMP 기호 범위 +
+// 이모지 서러게이트 쌍 + 변이 선택자(FE0F)로 매칭한다(뒤따르는 공백까지 포함).
+const LEAD_EMOJI =
+  /^(?:[←-⇿⌀-➿⬀-⯿️]|[\uD800-\uDBFF][\uDC00-\uDFFF])+\s*/;
+const displayTitle = (conv: Conversation): string =>
+  roomIcon(conv) ? conv.title.replace(LEAD_EMOJI, '') : conv.title;
 
 function preview(conv: Conversation): string {
   const last = conv.messages[conv.messages.length - 1];
@@ -48,6 +66,7 @@ function Row({
 }) {
   const unread = conv.unread ?? 0;
   const hasUnread = unread > 0;
+  const leadIcon = roomIcon(conv);
   return (
     <Pressable
       onPress={onPress}
@@ -59,12 +78,17 @@ function Row({
     >
       {handle ? (
         <View {...handle} className="px-1 py-2 cursor-grab active:cursor-grabbing">
-          <Text className="text-base text-muted-foreground">≡</Text>
+          <Icon name="menu" size={15} tone="muted-foreground" />
+        </View>
+      ) : null}
+      {leadIcon ? (
+        <View className="w-5 items-center">
+          <Icon name={leadIcon} size={15} tone="muted-foreground" />
         </View>
       ) : null}
       <View className="flex-1">
         <Text numberOfLines={1} className={cn('text-sm', (active || hasUnread) && 'font-semibold')}>
-          {conv.title}
+          {displayTitle(conv)}
         </Text>
         <Text
           variant="caption"
@@ -86,7 +110,7 @@ function Row({
         onPress={onMenu}
         className="rounded-md px-1.5 py-1 cursor-pointer active:opacity-60 hover:bg-secondary"
       >
-        <Text className="text-base text-muted-foreground">⋯</Text>
+        <Icon name="more-horizontal" size={16} tone="muted-foreground" />
       </Pressable>
     </Pressable>
   );
@@ -168,10 +192,11 @@ export function ConversationList({ onAfterSelect }: ConversationListProps) {
               <Pressable
                 hitSlop={8}
                 onPress={handleNew}
-                className="rounded-md px-1.5 py-0.5 cursor-pointer active:opacity-60 hover:bg-secondary"
+                className="flex-row items-center gap-1 rounded-md px-1.5 py-0.5 cursor-pointer active:opacity-60 hover:bg-secondary"
               >
+                <Icon name="plus" size={12} tone="muted-foreground" />
                 <Text variant="caption" className="text-muted-foreground">
-                  + 새 대화
+                  새 대화
                 </Text>
               </Pressable>
             </View>
@@ -222,10 +247,15 @@ export function ConversationList({ onAfterSelect }: ConversationListProps) {
               <>
                 <Pressable
                   onPress={() => setShowHidden((v) => !v)}
-                  className="mt-1 px-3 py-2 cursor-pointer active:opacity-70"
+                  className="mt-1 flex-row items-center gap-1 px-3 py-2 cursor-pointer active:opacity-70"
                 >
+                  <Icon
+                    name={showHidden ? 'chevron-down' : 'chevron-right'}
+                    size={12}
+                    tone="muted-foreground"
+                  />
                   <Text variant="caption" className="text-muted-foreground">
-                    {showHidden ? '▾' : '▸'} 숨긴 보고방 {hiddenReports.length}
+                    숨긴 보고방 {hiddenReports.length}
                   </Text>
                 </Pressable>
                 {showHidden
@@ -256,10 +286,11 @@ export function ConversationList({ onAfterSelect }: ConversationListProps) {
               <Pressable
                 hitSlop={8}
                 onPress={handleNewCode}
-                className="rounded-md px-1.5 py-0.5 cursor-pointer active:opacity-60 hover:bg-secondary"
+                className="flex-row items-center gap-1 rounded-md px-1.5 py-0.5 cursor-pointer active:opacity-60 hover:bg-secondary"
               >
+                <Icon name="plus" size={12} tone="muted-foreground" />
                 <Text variant="caption" className="text-muted-foreground">
-                  + 새 코드 세션
+                  새 코드 세션
                 </Text>
               </Pressable>
             </View>

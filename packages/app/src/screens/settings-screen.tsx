@@ -3,6 +3,7 @@ import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { cn } from '../lib/cn';
 import { Text } from '../components/ui/text';
+import { Icon } from '../components/ui/icon';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
 import { LocalAgentSheet } from '../components/local-agent-sheet';
@@ -21,7 +22,7 @@ function NavRow({ label, onPress }: { label: string; onPress: () => void }) {
       className="flex-row items-center justify-between bg-secondary px-4 py-3 cursor-pointer active:opacity-80 hover:bg-muted"
     >
       <Text className="font-medium text-foreground">{label}</Text>
-      <Text className="text-lg text-muted-foreground">›</Text>
+      <Icon name="chevron-right" size={18} tone="muted-foreground" />
     </Pressable>
   );
 }
@@ -93,7 +94,7 @@ export function SettingsScreen() {
           onPress={() => setScreen('chat')}
           className="h-9 w-9 items-center justify-center rounded-lg cursor-pointer active:bg-secondary hover:bg-secondary"
         >
-          <Text className="text-2xl text-foreground">‹</Text>
+          <Icon name="chevron-left" size={24} tone="foreground" />
         </Pressable>
         <Text variant="subtitle">설정</Text>
       </View>

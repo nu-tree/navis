@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Modal, Pressable, View } from 'react-native';
 import { localAgent } from '../../lib/local-agent';
 import { Text } from '../ui/text';
+import { Icon } from '../ui/icon';
 import { Separator } from '../ui/separator';
 
 // 코드 세션의 git 브랜치 칩 + 선택 바텀시트. 폴더가 git 저장소일 때만 의미 있다.
@@ -66,11 +67,11 @@ export function BranchPicker({
         onPress={openSheet}
         className="flex-row items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 cursor-pointer active:opacity-70 hover:bg-secondary"
       >
-        <Text className="text-xs">🌿</Text>
+        <Icon name="git-branch" size={13} tone="foreground" />
         <Text numberOfLines={1} className="max-w-[140px] text-xs font-medium text-foreground">
           {shown}
         </Text>
-        <Text className="text-xs text-muted-foreground">⌄</Text>
+        <Icon name="chevron-down" size={13} tone="muted-foreground" />
       </Pressable>
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
@@ -109,7 +110,7 @@ export function BranchPicker({
                         <Text className={active ? 'font-semibold text-primary' : 'text-foreground'}>
                           {b}
                         </Text>
-                        {active ? <Text className="text-primary">✓</Text> : null}
+                        {active ? <Icon name="check" size={16} tone="primary" /> : null}
                       </Pressable>
                     </View>
                   );

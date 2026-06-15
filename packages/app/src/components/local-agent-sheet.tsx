@@ -83,7 +83,7 @@ export function LocalAgentSheet({ open, onClose }: { open: boolean; onClose: () 
           <Toggle
             on={allowWrite}
             onPress={() => setAllowWrite((v) => !v)}
-            label="⚠️ 전체 제어 허용"
+            label="전체 제어 허용"
           />
           <Text variant="caption" className="text-muted-foreground">
             켜면 클로드 코드처럼 확인 없이 파일 수정·터미널 명령·설치(brew/xcodebuild/simctl

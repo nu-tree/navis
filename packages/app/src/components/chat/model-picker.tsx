@@ -4,6 +4,7 @@ import { cn } from '../../lib/cn';
 import { CHAT_MODELS, modelLabel } from '../../lib/models';
 import { useChatModel, useChatStore } from '../../store/chat-store';
 import { Text } from '../ui/text';
+import { Icon } from '../ui/icon';
 import { Separator } from '../ui/separator';
 
 // 클로드 데스크톱식 모델 선택 — 헤더 우측 칩. 누르면 바텀시트로 모델 목록을 띄운다.
@@ -29,11 +30,11 @@ export function ModelPicker({ className }: { className?: string }) {
           className,
         )}
       >
-        <Text className="text-xs">🧠</Text>
+        <Icon name="cpu" size={13} tone="foreground" />
         <Text numberOfLines={1} className="max-w-[120px] text-xs font-medium text-foreground">
           {modelLabel(model)}
         </Text>
-        <Text className="text-xs text-muted-foreground">⌄</Text>
+        <Icon name="chevron-down" size={13} tone="muted-foreground" />
       </Pressable>
 
       {/* 바텀시트 — 모델 목록(라벨 + 설명 + ✓) */}
@@ -62,7 +63,11 @@ export function ModelPicker({ className }: { className?: string }) {
                       </Text>
                       <Text className="text-xs text-muted-foreground">{m.hint}</Text>
                     </View>
-                    {active ? <Text className="ml-3 text-primary">✓</Text> : null}
+                    {active ? (
+                      <View className="ml-3">
+                        <Icon name="check" size={16} tone="primary" />
+                      </View>
+                    ) : null}
                   </Pressable>
                 </View>
               );

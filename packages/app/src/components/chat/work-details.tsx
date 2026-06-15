@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import { cn } from '../../lib/cn';
 import { Text } from '../ui/text';
+import { Icon } from '../ui/icon';
 
 // 클로드 데스크탑식 접이식 '작업·생각 과정' 블록. 답변 본문 위에 회색 박스로 표시되고,
 // 누르면 모델의 생각 과정(thinking)과 단계별 작업 행을 펼친다. 둘 다 없으면 렌더 안 함.
@@ -79,9 +80,9 @@ export function WorkDetails({
                 {running ? (
                   <ActivityIndicator size={11} />
                 ) : (
-                  <Text className="w-[11px] text-center text-[10px] text-muted-foreground">
-                    ✓
-                  </Text>
+                  <View className="w-[11px] items-center">
+                    <Icon name="check" size={11} tone="muted-foreground" />
+                  </View>
                 )}
                 <Text
                   className={cn(
