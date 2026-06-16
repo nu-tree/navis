@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { AppState } from 'react-native';
 import { useChatStore } from '../store/chat-store';
 import {
   fetchConversations,
@@ -50,9 +51,16 @@ export function useConversationSync(): void {
     };
     void pull();
     const id = setInterval(pull, PULL_INTERVAL_MS);
+    // 앱이 백그라운드에서 다시 활성화되면(foreground 복귀) 즉시 한 번 pull 한다.
+    // 폰을 잠그거나 앱을 나간 사이 서버가 백그라운드로 완주·저장한 답변을, 다음 30초
+    // 주기를 기다리지 않고 곧바로 받아와 부분 답변("멈춤") 상태를 빠르게 해소한다.
+    const appStateSub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void pull();
+    });
     return () => {
       alive = false;
       clearInterval(id);
+      appStateSub.remove();
     };
   }, [merge]);
 
