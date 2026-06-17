@@ -103,11 +103,18 @@ export const config = {
   // namory 엔드포인트 보호 토큰 (namory의 NAMORY_TOKEN과 동일 값).
   namoryToken: required("NAMORY_TOKEN"),
 
-  // 모델 — 전부 Opus 4.8 로 통일(메인·큐레이터·검토). 최고 품질 우선.
+  // 모델 — 메인 응답·검토는 Opus 4.8(최고 품질), 사후 큐레이터만 경량 Haiku(아래).
   // 운영 튜닝 상수 — 바꾸려면 코드 수정(보안·환경 무관 값은 env로 빼지 않는다).
+  // 참고: 앱 채팅의 기본 모델은 클라이언트(packages/app, DEFAULT_MODEL=Sonnet 4.6)가
+  // body.model 로 보내고, 서버는 selectableModels 화이트리스트로만 검증한다. config.model
+  // 은 모델 미지정 경로(크론 보고·다이제스트·CLI)의 폴백이다.
   model: "claude-opus-4-8",
-  // 큐레이터(사후 저장 판단)도 Opus 4.8 (예전엔 경량 Haiku 였음).
-  curatorModel: "claude-opus-4-8",
+  // 큐레이터(사후 저장 판단) — 매 턴이 끝난 뒤 백그라운드로 한 번 더 도는 "그물"이다.
+  // 작은 인스턴스(Railway hobby)에선 이 호출이 메인 응답·바로 이어지는 다음 턴과
+  // CPU/동시성을 다퉈 체감 지연을 키운다. 저장 여부 판단은 가벼운 작업이므로 경량
+  // Haiku 로 둬 자원 점유·생성 시간을 최소화한다(속도·응답성 우선). 품질이 필요한
+  // 핵심 저장은 메인 턴의 save 너지가 이미 받쳐주므로 손실이 거의 없다.
+  curatorModel: "claude-haiku-4-5-20251001",
   reviewModel: process.env.NAVIS_REVIEW_MODEL ?? "claude-opus-4-8",
 
   // 앱에서 사용자가 고를 수 있는 모델 화이트리스트(클로드 데스크톱식 모델 선택).

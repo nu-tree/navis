@@ -25,12 +25,18 @@ import {
   type ChatSnapshot,
 } from "./chat-turns.js";
 
-// 연결이 끊긴 뒤(clientGone) 백그라운드 완주 의도(handoff 비콘)가 이 시간 안에 오지
-// 않으면, 그 생성은 "버려진 요청"(새로고침·포그라운드 단절·재시도로 버려짐)으로 보고
-// 끊어 자원을 회수한다. 비콘은 폰 백그라운드 시 즉시 오므로 넉넉히 잡아도(오탐=답 유실)
-// 안전하다. 이 가드가 없으면 버려진 생성들이 단일 이벤트 루프를 점유해 새 요청의 첫
-// 토큰을 수십 초 지연시킨다(누적→포화).
+// 스냅샷 없는 요청(진단 curl·새로고침·레거시 클라)이 끊긴 뒤(clientGone) 이 시간이
+// 지나면 "버려진 요청"으로 보고 생성을 끊어 자원을 회수한다. 진짜 앱 턴(turnId+대화+
+// 스냅샷)은 백그라운드 완주 대상이라 이 유예의 적용을 받지 않는다(아래 backgroundable).
+// 이 가드가 없으면 버려진 생성들이 단일 이벤트 루프를 점유해 새 요청의 첫 토큰을
+// 수십 초 지연시킨다(누적→포화).
 const ABANDON_GRACE_MS = 15_000;
+
+// 한 챗 턴의 wall-clock 상한. 백그라운드 완주 턴은 연결 종료로 끊지 않으므로(위), 어떤
+// 이유로든(모델 API 스톨 등) result 가 영영 안 오는 생성이 inflight 슬롯을 무한히
+// 점유하지 않도록 모든 챗 스트림 턴에 두는 안전 backstop. 정상 답변은 도구 루프를
+// 포함해도 여기 닿지 않게 넉넉히 잡는다(워밍 경로의 TURN_TIMEOUT_MS 와 동일 5분).
+const MAX_TURN_MS = 5 * 60_000;
 
 type ChatRequest = {
   text: string;
@@ -303,13 +309,32 @@ export async function handleChatStream(
   // 이 turnId 로 이 컨트롤러를 abort 할 때만 일어난다(토큰 절약은 그 경로로 유지).
   const abortController = new AbortController();
   if (parsed.turnId) registerTurn(parsed.turnId, abortController);
+
+  // 진짜 앱 턴인가 — turnId + 대화 + 스냅샷이 모두 있으면, 사용자가 "보내고 폰을
+  // 내려놔도 답이 끝나면 영속 + 푸시"되길 원하는 백그라운드 완주 대상 턴이다. 서버는
+  // 이 정보를 요청 본문에서 이미 받으므로, 완주 여부 판단에 핸드오프 비콘이 꼭 필요하진
+  // 않다. 이런 턴은 연결이 끊겨도(폰 백그라운드/잠금) 생성을 끊지 않는다:
+  //  - iOS 는 백그라운드 전환 시 JS 를 즉시 정지시켜 비콘이 늦거나 유실될 수 있고,
+  //  - 긴 답변은 생성에 15초 이상 걸려, 유예-후-abort 가 답을 다 만들기도 전에 죽인다.
+  // 둘 다 "백그라운드로 보내면 답이 멈춘다"의 직접 원인이었다. 실제 중지는 오직
+  // /api/chat/cancel(turnId) 만 — 토큰 절약 경로는 그대로 유지된다.
+  const backgroundable = !!(parsed.turnId && parsed.conversationId && parsed.snapshot);
   let clientGone = false;
   let abandonTimer: ReturnType<typeof setTimeout> | undefined;
+  // wall-clock 안전 backstop — 백그라운드 완주 턴은 연결 종료로 끊지 않으니, 생성이
+  // 영영 안 끝나는 병적 케이스(모델 API 스톨 등)가 슬롯을 무한 점유하지 않게 상한을 둔다.
+  const maxTurnTimer: ReturnType<typeof setTimeout> = setTimeout(() => {
+    if (!abortController.signal.aborted) abortController.abort();
+  }, MAX_TURN_MS);
   req.on("close", () => {
     stopHeartbeat();
     clientGone = true;
-    // 백그라운드 완주 의도(handoff 비콘)가 유예 시간 안에 오면 계속 생성(완주+영속+푸시),
-    // 안 오면 버려진 요청으로 보고 생성을 끊어 이벤트 루프를 비운다(누적→포화 방지).
+    // 백그라운드 완주 대상 턴은 끊지 않는다 — 완료 시 clientGone(또는 핸드오프)으로
+    // 영속 + 푸시 분기를 탄다(아래). 답을 잃지 않는 것이 최우선.
+    if (backgroundable) return;
+    // 스냅샷 없는 요청(진단 curl·새로고침·레거시 클라)만 "버려진 요청"으로 보고 유예
+    // 후 회수한다 — 버려진 생성이 단일 이벤트 루프를 점유해 새 요청의 첫 토큰을 수십 초
+    // 늦추는 누적→포화(death-spiral)를 막는 가드는 그대로 둔다.
     abandonTimer = setTimeout(() => {
       if (!(parsed.turnId && hasHandoff(parsed.turnId))) abortController.abort();
     }, ABANDON_GRACE_MS);
@@ -385,5 +410,6 @@ export async function handleChatStream(
   } finally {
     stopHeartbeat();
     if (abandonTimer) clearTimeout(abandonTimer);
+    clearTimeout(maxTurnTimer);
   }
 }
