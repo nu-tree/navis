@@ -82,13 +82,12 @@ function App() {
       }
 
       try {
-        const { text, sessionId, contextTokens, saved } = await askClaude(
-          trimmed,
-          resumeId,
-          [], // CLI는 이미지 첨부 없음
-          false, // profile_update는 항상 금지(대화 경로)
+        const { text, sessionId, contextTokens, saved } = await askClaude({
+          prompt: trimmed,
+          resumeSessionId: resumeId,
+          // CLI 는 이미지 첨부 없음, profile_update 항상 금지(대화 경로).
           projectContext,
-        );
+        });
         setSession({ sessionId, contextTokens });
         addTurn({ kind: "assistant", text, saved });
         void curateTurn({ userText: trimmed, assistantText: text, projectContext });

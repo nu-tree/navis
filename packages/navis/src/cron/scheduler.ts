@@ -57,7 +57,7 @@ async function runCron(c: CronRow): Promise<void> {
   // 크론마다 자기 보고방 — sourceId=크론 id, 제목=크론 DB 제목.
   const meta = { sourceId: c.id, sourceTitle: `⏰ ${c.title}` };
   try {
-    const { text } = await askClaude(c.prompt, undefined, []);
+    const { text } = await askClaude({ prompt: c.prompt });
     emitReport(text, "cron", meta);
     // 성공한 실행 시각을 기록 (lastRunAt 업데이트). 실패해도 흐름은 유지.
     void patchCronRemote(c.id, { lastRunAt: new Date().toISOString() });

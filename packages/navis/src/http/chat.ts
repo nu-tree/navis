@@ -170,18 +170,12 @@ export async function handleChat(req: IncomingMessage, res: ServerResponse): Pro
     const parsed = await parseChatRequest(req, res);
     if (!parsed) return;
 
-    const result = await askClaude(
-      parsed.text,
-      parsed.resume,
-      parsed.images,
-      false,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      parsed.model,
-    );
+    const result = await askClaude({
+      prompt: parsed.text,
+      resumeSessionId: parsed.resume,
+      images: parsed.images,
+      modelOverride: parsed.model,
+    });
     const contextFull = result.contextTokens >= config.contextTokenLimit;
 
     sendJson(res, 200, {
@@ -274,20 +268,17 @@ export async function handleChatStream(
       warmEnabled() && !!parsed.conversationId && parsed.images.length === 0 && !parsed.thinking;
 
     const askCold = (): Promise<AskResult> =>
-      askClaude(
-        parsed.text,
-        parsed.resume,
-        parsed.images,
-        false,
-        undefined,
-        undefined,
-        onDelta,
+      askClaude({
+        prompt: parsed.text,
+        resumeSessionId: parsed.resume,
+        images: parsed.images,
+        onTextDelta: onDelta,
         onStatus,
-        onTool,
-        parsed.model,
-        onThinking,
+        onToolComplete: onTool,
+        modelOverride: parsed.model,
+        onThinkingDelta: onThinking,
         abortController,
-      );
+      });
 
     let result: AskResult;
     if (canWarm) {
