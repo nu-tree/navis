@@ -11,6 +11,7 @@ import {
   safeParse,
   requireAppAuth,
   sendJson,
+  sendInternalError,
 } from "./respond.js";
 import {
   registerTurn,
@@ -130,29 +131,40 @@ async function parseChatRequest(
 
 // 명시적 중지 — 진행 중인 챗 턴 생성을 실제로 끊는다(토큰 절약). 단순 연결 종료
 // (폰 백그라운드)는 생성을 끊지 않으므로, 중지 버튼은 이 엔드포인트를 따로 부른다.
+// readBody 가 413(페이로드 초과)으로 reject 할 수 있어 try/catch 로 감싼다 — 라우터의
+// void 호출에서 unhandledRejection 으로 흘러나가지 않게.
 export async function handleChatCancel(
   req: IncomingMessage,
   res: ServerResponse,
 ): Promise<void> {
   if (!requireAppAuth(req, res)) return;
-  const body = safeParse(await readBody(req, res));
-  const turnId = typeof body?.turnId === "string" ? body.turnId : "";
-  const ok = turnId ? cancelTurn(turnId) : false;
-  sendJson(res, 200, { ok });
+  try {
+    const body = safeParse(await readBody(req, res));
+    const turnId = typeof body?.turnId === "string" ? body.turnId : "";
+    const ok = turnId ? cancelTurn(turnId) : false;
+    sendJson(res, 200, { ok });
+  } catch (err) {
+    sendInternalError(res, "[chat/cancel] 처리 실패:", err);
+  }
 }
 
 // 핸드오프 — 앱이 백그라운드로 전환될 때 진행 중인 턴을 알린다. Railway 프록시 뒤에선
 // 연결 종료(req 'close')가 서버까지 안 닿을 수 있어, 이 명시 신호로 "클라가 떠남"을
 // 확실히 표시한다 → 완료 시 서버가 응답을 영속하고 폰으로 푸시한다. fire-and-forget.
+// readBody/safeParse 경로의 예외(413 등)를 흘려보내지 않게 try/catch.
 export async function handleChatHandoff(
   req: IncomingMessage,
   res: ServerResponse,
 ): Promise<void> {
   if (!requireAppAuth(req, res)) return;
-  const body = safeParse(await readBody(req, res));
-  const turnId = typeof body?.turnId === "string" ? body.turnId : "";
-  if (turnId) markHandoff(turnId);
-  sendJson(res, 200, { ok: !!turnId });
+  try {
+    const body = safeParse(await readBody(req, res));
+    const turnId = typeof body?.turnId === "string" ? body.turnId : "";
+    if (turnId) markHandoff(turnId);
+    sendJson(res, 200, { ok: !!turnId });
+  } catch (err) {
+    sendInternalError(res, "[chat/handoff] 처리 실패:", err);
+  }
 }
 
 // 사후 큐레이터(A) — 응답을 보낸 뒤 백그라운드로 한 번 더 평가해 저장 누락을 메운다.
@@ -188,8 +200,7 @@ export async function handleChat(req: IncomingMessage, res: ServerResponse): Pro
 
     curate(parsed.text, result.text);
   } catch (err) {
-    console.error("[chat] 처리 실패:", err);
-    if (!res.headersSent) sendJson(res, 500, { error: "internal error" });
+    sendInternalError(res, "[chat] 처리 실패:", err);
   }
 }
 

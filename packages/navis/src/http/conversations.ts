@@ -1,5 +1,11 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { requireAppAuth, sendJson, readBody, safeParse } from "./respond.js";
+import {
+  requireAppAuth,
+  sendJson,
+  readBody,
+  safeParse,
+  sendUpstreamError,
+} from "./respond.js";
 import {
   listConversationsRemote,
   upsertConversationRemote,
@@ -57,8 +63,7 @@ export async function handleGetConversations(
   try {
     sendJson(res, 200, { conversations: await getConversationsCached() });
   } catch (err) {
-    console.error("[conversations] 조회 실패:", err);
-    sendJson(res, 502, { error: "upstream error" });
+    sendUpstreamError(res, "[conversations] 조회 실패:", err);
   }
 }
 
@@ -74,8 +79,7 @@ export async function handlePutConversation(
     invalidateList(); // 내 쓰기가 다음 조회에 즉시 반영되게
     sendJson(res, 200, { ok: true, id });
   } catch (err) {
-    console.error("[conversations] 저장 실패:", err);
-    sendJson(res, 502, { error: "upstream error" });
+    sendUpstreamError(res, "[conversations] 저장 실패:", err);
   }
 }
 
@@ -90,7 +94,6 @@ export async function handleDeleteConversation(
     invalidateList();
     sendJson(res, 200, { ok: true, id });
   } catch (err) {
-    console.error("[conversations] 삭제 실패:", err);
-    sendJson(res, 502, { error: "upstream error" });
+    sendUpstreamError(res, "[conversations] 삭제 실패:", err);
   }
 }

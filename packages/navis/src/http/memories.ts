@@ -1,6 +1,12 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { fetchMemories, patchMemory, deleteMemory } from "../memories/api.js";
-import { readBody, safeParse, requireAppAuth, sendJson } from "./respond.js";
+import {
+  readBody,
+  safeParse,
+  requireAppAuth,
+  sendJson,
+  sendUpstreamError,
+} from "./respond.js";
 
 // 앱 기억 페이지 — namory 기억 REST 프록시. GET 목록 / PATCH 수정 / DELETE 삭제.
 export async function handleMemories(
@@ -14,7 +20,12 @@ export async function handleMemories(
 
   try {
     if (req.method === "GET" && url.pathname === "/api/memories") {
-      const limit = Number(url.searchParams.get("limit")) || undefined;
+      // limit 은 양의 정수만 허용 — 음수/0/소수/NaN 은 모두 무시(undefined → 서버 기본값).
+      // Number("...")||undefined 만 쓰면 limit=-5 같은 음수가 그대로 통과해 namory 가
+      // 0 행을 반환하거나(우호적) 잘못된 페이지를 만들 수 있다.
+      const rawLimit = url.searchParams.get("limit");
+      const n = rawLimit != null ? Number(rawLimit) : NaN;
+      const limit = Number.isInteger(n) && n > 0 ? n : undefined;
       const project = url.searchParams.get("project") ?? undefined;
       const memories = await fetchMemories(limit, project);
       sendJson(res, 200, { memories });
@@ -34,7 +45,6 @@ export async function handleMemories(
     }
     sendJson(res, 404, { error: "not found" });
   } catch (err) {
-    console.error("[memories] proxy 실패:", err);
-    sendJson(res, 502, { error: "upstream error" });
+    sendUpstreamError(res, "[memories] proxy 실패:", err);
   }
 }

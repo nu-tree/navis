@@ -30,162 +30,280 @@ import {
 import { handleGithubWebhook } from "./webhook.js";
 import { handleIosUpload, handleIosSource, handleIosFile, handleIosPrune } from "../ios/serve.js";
 
+// ── 라우트 테이블 ───────────────────────────────────────────────────────
+// 메서드 + 경로 매처 + 핸들러의 배열. route() 가 위→아래로 순회하며 첫 매치를 실행.
+// 모든 경로 매칭은 URL.pathname 기준이라 쿼리스트링(`/api/chat?x=1`)이 붙어도 깨지지 않는다.
+// 메서드 미스매치는 다음 라우트로 넘어가, 끝까지 미스면 404 폴백(기존 동작 보존).
+
+type Matcher = (pathname: string) => Match;
+type Match = { ok: true; id?: string } | { ok: false };
+type Handler = (
+  req: IncomingMessage,
+  res: ServerResponse,
+  url: URL,
+  match: { id?: string },
+) => void | Promise<void>;
+
+// 정확 일치 — pathname 이 path 와 같을 때만 매치.
+const exact =
+  (path: string): Matcher =>
+  (pathname) =>
+    pathname === path ? { ok: true } : { ok: false };
+
+// startsWith — 옛 `req.url?.startsWith(...)` 블록을 그대로 보존하기 위함.
+const prefix =
+  (p: string): Matcher =>
+  (pathname) =>
+    pathname.startsWith(p) ? { ok: true } : { ok: false };
+
+// /api/foo/:id 형태 — prefix 로 시작하고 그 뒤에 비어있지 않은 꼬리가 있을 때 매치.
+// id 는 decodeURIComponent 로 복원해 핸들러로 넘긴다. 슬래시 포함 여부는 검사하지
+// 않는다(기존 동작 보존: 잘못된 형식은 핸들러의 검증 단계에서 4xx 로 거른다).
+const param =
+  (p: string): Matcher =>
+  (pathname) => {
+    if (!pathname.startsWith(p)) return { ok: false };
+    const id = decodeURIComponent(pathname.slice(p.length));
+    if (!id) return { ok: false };
+    return { ok: true, id };
+  };
+
+// "*" 는 메서드 와일드카드(메모리스 핸들러는 내부에서 GET/PATCH/DELETE 라우팅).
+interface Route {
+  method: string;
+  match: Matcher;
+  handler: Handler;
+}
+
+const preflight: Handler = (_req, res) => handlePreflight(res);
+
+const routes: Route[] = [
+  // /health — JSON 헬스체크. 메서드 무관(기존 동작 보존).
+  {
+    method: "*",
+    match: exact("/health"),
+    handler: (_req, res) => {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: true }));
+    },
+  },
+
+  // GitHub webhook — POST 만 받는다.
+  {
+    method: "POST",
+    match: exact("/webhook/github"),
+    handler: (req, res) => void handleGithubWebhook(req, res),
+  },
+
+  // /api/chat — 동기 응답.
+  { method: "OPTIONS", match: exact("/api/chat"), handler: preflight },
+  { method: "POST", match: exact("/api/chat"), handler: (req, res) => void handleChat(req, res) },
+
+  // /api/chat/stream — SSE 스트리밍.
+  { method: "OPTIONS", match: exact("/api/chat/stream"), handler: preflight },
+  {
+    method: "POST",
+    match: exact("/api/chat/stream"),
+    handler: (req, res) => void handleChatStream(req, res),
+  },
+
+  // /api/chat/cancel — turnId 로 진행 중인 턴을 명시 중지.
+  { method: "OPTIONS", match: exact("/api/chat/cancel"), handler: preflight },
+  {
+    method: "POST",
+    match: exact("/api/chat/cancel"),
+    handler: (req, res) => void handleChatCancel(req, res),
+  },
+
+  // /api/chat/handoff — 백그라운드 완주/푸시 명시 신호.
+  { method: "OPTIONS", match: exact("/api/chat/handoff"), handler: preflight },
+  {
+    method: "POST",
+    match: exact("/api/chat/handoff"),
+    handler: (req, res) => void handleChatHandoff(req, res),
+  },
+
+  // /api/reports — 선제 보고 폴링(GET) / 주입(POST). 기존 동작 보존을 위해 prefix 매치 유지.
+  { method: "OPTIONS", match: prefix("/api/reports"), handler: preflight },
+  {
+    method: "GET",
+    match: prefix("/api/reports"),
+    handler: (req, res) => handleReports(req, res),
+  },
+  {
+    method: "POST",
+    match: prefix("/api/reports"),
+    handler: (req, res) => void handlePostReport(req, res),
+  },
+
+  // /api/crons — 목록(GET) / 삭제(DELETE :id).
+  { method: "OPTIONS", match: prefix("/api/crons"), handler: preflight },
+  {
+    method: "GET",
+    match: exact("/api/crons"),
+    handler: (req, res) => void handleCrons(req, res),
+  },
+  {
+    method: "DELETE",
+    match: param("/api/crons/"),
+    handler: (req, res, _url, m) => void handleDeleteCron(req, res, m.id!),
+  },
+
+  // /api/memories — 메서드 라우팅은 핸들러 내부에서. OPTIONS 만 따로 잡고 나머지 위임.
+  { method: "OPTIONS", match: prefix("/api/memories"), handler: preflight },
+  {
+    method: "*",
+    match: prefix("/api/memories"),
+    handler: (req, res) => void handleMemories(req, res),
+  },
+
+  // /api/agent/namory — 데스크톱이 namory MCP 좌표를 받음.
+  { method: "OPTIONS", match: prefix("/api/agent/namory"), handler: preflight },
+  {
+    method: "GET",
+    match: prefix("/api/agent/namory"),
+    handler: (req, res) => handleAgentNamory(req, res),
+  },
+
+  // /api/settings/system-prompt — 시스템 프롬프트 조회/저장.
+  { method: "OPTIONS", match: prefix("/api/settings/system-prompt"), handler: preflight },
+  {
+    method: "GET",
+    match: prefix("/api/settings/system-prompt"),
+    handler: (req, res) => void handleGetSystemPrompt(req, res),
+  },
+  {
+    method: "PUT",
+    match: prefix("/api/settings/system-prompt"),
+    handler: (req, res) => void handlePutSystemPrompt(req, res),
+  },
+
+  // /api/connectors — OAuth 콜백은 브라우저가 직접 여는 경로라 프리플라이트/인증 없이 먼저 매치.
+  {
+    method: "GET",
+    match: exact("/api/connectors/oauth/callback"),
+    handler: (req, res, url) => void handleOAuthCallback(req, res, url),
+  },
+  { method: "OPTIONS", match: prefix("/api/connectors"), handler: preflight },
+  {
+    method: "GET",
+    match: exact("/api/connectors/providers"),
+    handler: (req, res) => void handleGetProviders(req, res),
+  },
+  {
+    method: "POST",
+    match: exact("/api/connectors/oauth/start"),
+    handler: (req, res) => void handleOAuthStart(req, res),
+  },
+  {
+    method: "GET",
+    match: exact("/api/connectors"),
+    handler: (req, res) => void handleGetConnectors(req, res),
+  },
+  {
+    method: "PUT",
+    match: param("/api/connectors/"),
+    handler: (req, res, _url, m) => void handlePutConnector(req, res, m.id!),
+  },
+  {
+    method: "DELETE",
+    match: param("/api/connectors/"),
+    handler: (req, res, _url, m) => void handleDeleteConnector(req, res, m.id!),
+  },
+
+  // /api/conversations — 동기화 프록시.
+  { method: "OPTIONS", match: prefix("/api/conversations"), handler: preflight },
+  {
+    method: "GET",
+    match: exact("/api/conversations"),
+    handler: (req, res) => void handleGetConversations(req, res),
+  },
+  {
+    method: "PUT",
+    match: param("/api/conversations/"),
+    handler: (req, res, _url, m) => void handlePutConversation(req, res, m.id!),
+  },
+  {
+    method: "DELETE",
+    match: param("/api/conversations/"),
+    handler: (req, res, _url, m) => void handleDeleteConversation(req, res, m.id!),
+  },
+
+  // /download — 데스크톱 배포 페이지. 메서드 무관(기존 동작 보존).
+  { method: "*", match: exact("/download"), handler: (_req, res) => handleDownloadPage(res) },
+
+  // /api/desktop — 데스크톱 배포 API. 데스크톱 렌더러가 authorization 헤더로 호출 → 프리플라이트 필요.
+  { method: "OPTIONS", match: prefix("/api/desktop/"), handler: preflight },
+  {
+    method: "PUT",
+    match: exact("/api/desktop/upload"),
+    handler: (req, res, url) => void handleDesktopUpload(req, res, url),
+  },
+  {
+    method: "POST",
+    match: exact("/api/desktop/upload"),
+    handler: (req, res, url) => void handleDesktopUpload(req, res, url),
+  },
+  {
+    method: "GET",
+    match: exact("/api/desktop/list"),
+    handler: (req, res, url) => void handleDesktopList(req, res, url),
+  },
+  {
+    method: "GET",
+    match: exact("/api/desktop/latest"),
+    handler: (req, res, url) => void handleDesktopLatest(req, res, url),
+  },
+  {
+    method: "POST",
+    match: exact("/api/desktop/prune"),
+    handler: (req, res, url) => void handleDesktopPrune(req, res, url),
+  },
+  {
+    method: "GET",
+    match: prefix("/api/desktop/file/"),
+    handler: (req, res, url) => void handleDesktopFile(req, res, url),
+  },
+
+  // /api/ios — 사이드로드 배포. 기존 코드와 동일하게 OPTIONS 핸들러는 두지 않는다(현 동작 보존).
+  {
+    method: "GET",
+    match: exact("/api/ios/source.json"),
+    handler: (req, res, url) => void handleIosSource(req, res, url),
+  },
+  {
+    method: "PUT",
+    match: exact("/api/ios/upload"),
+    handler: (req, res, url) => void handleIosUpload(req, res, url),
+  },
+  {
+    method: "POST",
+    match: exact("/api/ios/upload"),
+    handler: (req, res, url) => void handleIosUpload(req, res, url),
+  },
+  {
+    method: "POST",
+    match: exact("/api/ios/prune"),
+    handler: (req, res, url) => void handleIosPrune(req, res, url),
+  },
+  {
+    method: "GET",
+    match: prefix("/api/ios/file/"),
+    handler: (req, res, url) => void handleIosFile(req, res, url),
+  },
+];
+
 // HTTP 요청 1건을 적절한 핸들러로 라우팅한다. createServer 콜백에서 호출.
 export function route(req: IncomingMessage, res: ServerResponse): void {
-  if (req.url === "/health") {
-    res.writeHead(200, { "content-type": "application/json" });
-    res.end(JSON.stringify({ ok: true }));
+  const url = new URL(req.url ?? "/", "http://localhost");
+  const method = req.method ?? "GET";
+  for (const r of routes) {
+    if (r.method !== "*" && r.method !== method) continue;
+    const m = r.match(url.pathname);
+    if (!m.ok) continue;
+    r.handler(req, res, url, { id: m.id });
     return;
   }
-
-  if (req.url === "/webhook/github" && req.method === "POST") {
-    void handleGithubWebhook(req, res);
-    return;
-  }
-
-  if (req.url === "/api/chat") {
-    if (req.method === "OPTIONS") return handlePreflight(res);
-    if (req.method === "POST") return void handleChat(req, res);
-  }
-
-  // 스트리밍(SSE) 채팅 — 토큰 단위로 응답을 흘려보내 체감 지연을 줄인다(앱 우선 경로).
-  if (req.url === "/api/chat/stream") {
-    if (req.method === "OPTIONS") return handlePreflight(res);
-    if (req.method === "POST") return void handleChatStream(req, res);
-  }
-
-  // 챗 중지 — 진행 중인 턴 생성을 turnId 로 실제 끊는다(연결 종료와 구분).
-  if (req.url === "/api/chat/cancel") {
-    if (req.method === "OPTIONS") return handlePreflight(res);
-    if (req.method === "POST") return void handleChatCancel(req, res);
-  }
-
-  // 챗 핸드오프 — 앱이 백그라운드로 갈 때 진행 중인 턴을 알린다. 서버가 백그라운드
-  // 완주 + 영속 + 폰 푸시를 확실히 타게 하는 명시 신호(프록시가 끊김을 가려도 안전).
-  if (req.url === "/api/chat/handoff") {
-    if (req.method === "OPTIONS") return handlePreflight(res);
-    if (req.method === "POST") return void handleChatHandoff(req, res);
-  }
-
-  if (req.url?.startsWith("/api/reports")) {
-    if (req.method === "OPTIONS") return handlePreflight(res);
-    if (req.method === "GET") return handleReports(req, res);
-    // 외부(개발 머신의 Claude Code 등)가 보고를 주입 → 앱/데스크톱이 알림으로 받음.
-    if (req.method === "POST") return void handlePostReport(req, res);
-  }
-
-  if (req.url?.startsWith("/api/crons")) {
-    if (req.method === "OPTIONS") return handlePreflight(res);
-    const curl = new URL(req.url, "http://localhost");
-    if (req.method === "GET" && curl.pathname === "/api/crons") {
-      return void handleCrons(req, res);
-    }
-    // DELETE /api/crons/:id — 크론 삭제(앱 "크론 보고방 나가기")
-    if (req.method === "DELETE" && curl.pathname.startsWith("/api/crons/")) {
-      const id = decodeURIComponent(curl.pathname.slice("/api/crons/".length));
-      return void handleDeleteCron(req, res, id);
-    }
-  }
-
-  if (req.url?.startsWith("/api/memories")) {
-    if (req.method === "OPTIONS") return handlePreflight(res);
-    return void handleMemories(req, res);
-  }
-
-  // 코드 탭(데스크톱 로컬 에이전트)이 namory 를 직접 MCP 로 붙이게 좌표를 내려줌.
-  if (req.url?.startsWith("/api/agent/namory")) {
-    if (req.method === "OPTIONS") return handlePreflight(res);
-    if (req.method === "GET") return handleAgentNamory(req, res);
-  }
-
-  // 설정 — 시스템 프롬프트 조회/저장(앱 설정 화면)
-  if (req.url?.startsWith("/api/settings/system-prompt")) {
-    if (req.method === "OPTIONS") return handlePreflight(res);
-    if (req.method === "GET") return void handleGetSystemPrompt(req, res);
-    if (req.method === "PUT") return void handlePutSystemPrompt(req, res);
-  }
-
-  // 동적 MCP 커넥터 — 코드 수정 없이 외부 MCP 서버 등록/삭제 + OAuth 연결.
-  if (req.url?.startsWith("/api/connectors")) {
-    const curl = new URL(req.url, "http://localhost");
-    // OAuth 콜백은 제공자가 브라우저로 직접 여는 경로 — 프리플라이트/인증 없이 먼저 처리.
-    if (curl.pathname === "/api/connectors/oauth/callback" && req.method === "GET") {
-      return void handleOAuthCallback(req, res, curl);
-    }
-    if (req.method === "OPTIONS") return handlePreflight(res);
-    if (curl.pathname === "/api/connectors/providers" && req.method === "GET") {
-      return void handleGetProviders(req, res);
-    }
-    if (curl.pathname === "/api/connectors/oauth/start" && req.method === "POST") {
-      return void handleOAuthStart(req, res);
-    }
-    if (curl.pathname === "/api/connectors" && req.method === "GET") {
-      return void handleGetConnectors(req, res);
-    }
-    if (curl.pathname.startsWith("/api/connectors/")) {
-      const id = decodeURIComponent(curl.pathname.slice("/api/connectors/".length));
-      if (req.method === "PUT") return void handlePutConnector(req, res, id);
-      if (req.method === "DELETE") return void handleDeleteConnector(req, res, id);
-    }
-  }
-
-  // 대화 동기화 — GET(pull 전체) / PUT(방 upsert) / DELETE(툼스톤)
-  if (req.url?.startsWith("/api/conversations")) {
-    if (req.method === "OPTIONS") return handlePreflight(res);
-    const curl = new URL(req.url, "http://localhost");
-    if (req.method === "GET" && curl.pathname === "/api/conversations") {
-      return void handleGetConversations(req, res);
-    }
-    if (curl.pathname.startsWith("/api/conversations/")) {
-      const id = decodeURIComponent(curl.pathname.slice("/api/conversations/".length));
-      if (req.method === "PUT") return void handlePutConversation(req, res, id);
-      if (req.method === "DELETE") return void handleDeleteConversation(req, res, id);
-    }
-  }
-
-  // 데스크톱 설치파일 배포(다운로드 페이지 + 업로드 + 자동업데이트 피드).
-  if (req.url === "/download") {
-    handleDownloadPage(res);
-    return;
-  }
-  if (req.url?.startsWith("/api/desktop/")) {
-    const durl = new URL(req.url, "http://localhost");
-    // 데스크톱 렌더러(127.0.0.1)에서 authorization 헤더로 호출 → 브라우저 프리플라이트 발생.
-    if (req.method === "OPTIONS") return handlePreflight(res);
-    if (durl.pathname === "/api/desktop/upload" && (req.method === "PUT" || req.method === "POST")) {
-      return void handleDesktopUpload(req, res, durl);
-    }
-    if (durl.pathname === "/api/desktop/list" && req.method === "GET") {
-      return void handleDesktopList(req, res, durl);
-    }
-    if (durl.pathname === "/api/desktop/latest" && req.method === "GET") {
-      return void handleDesktopLatest(req, res, durl);
-    }
-    if (durl.pathname === "/api/desktop/prune" && req.method === "POST") {
-      return void handleDesktopPrune(req, res, durl);
-    }
-    if (durl.pathname.startsWith("/api/desktop/file/") && req.method === "GET") {
-      return void handleDesktopFile(req, res, durl);
-    }
-  }
-
-  // iOS 사이드로드 배포(SideStore source 피드 + .ipa). 토큰은 Bearer 또는 ?token= 쿼리.
-  if (req.url?.startsWith("/api/ios/")) {
-    const iurl = new URL(req.url, "http://localhost");
-    if (iurl.pathname === "/api/ios/source.json" && req.method === "GET") {
-      return void handleIosSource(req, res, iurl);
-    }
-    if (iurl.pathname === "/api/ios/upload" && (req.method === "PUT" || req.method === "POST")) {
-      return void handleIosUpload(req, res, iurl);
-    }
-    if (iurl.pathname === "/api/ios/prune" && req.method === "POST") {
-      return void handleIosPrune(req, res, iurl);
-    }
-    if (iurl.pathname.startsWith("/api/ios/file/") && req.method === "GET") {
-      return void handleIosFile(req, res, iurl);
-    }
-  }
-
   res.writeHead(404);
   res.end();
 }
