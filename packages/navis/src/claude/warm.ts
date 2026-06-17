@@ -8,6 +8,7 @@ import {
   buildChatAllowedTools,
   newTurnAccumulator,
   processChatMessage,
+  ResultFailureError,
   type TurnCallbacks,
 } from "./ask.js";
 import type { AskResult } from "./types.js";
@@ -108,6 +109,14 @@ function createInput(): {
     for (;;) {
       while (queue.length === 0 && !closed) {
         await new Promise<void>((resolve) => {
+          // lost-wakeup 방지: wake 등록 직전(=Promise executor 내부의 동기 구간) 큐를
+          // 한 번 더 확인하고, 비어있지 않거나 이미 닫혔으면 즉시 resolve 해서 다음
+          // 루프로 진행. 큐 확인과 wake 등록 사이에 비동기 경계가 없어야 push 가
+          // wake=null 인 사이에 들어와 큐에 쌓이고 영영 yield 되지 않는 경우를 막는다.
+          if (queue.length > 0 || closed) {
+            resolve();
+            return;
+          }
           wake = resolve;
         });
       }
@@ -291,6 +300,10 @@ export async function runWarmTurn(opts: {
     session.busy = false;
     dropSession(conversationId);
     if (err instanceof WarmFallback) throw err;
+    // result 단계 실패(ResultFailureError) — 도구 호출이 다 끝난 뒤의 turn-level 실패라
+    // 콜드 재실행하면 같은 도구가 또 호출돼 중복/이중 과금이 난다. 폴백 변환 대상에서
+    // 제외하고 그대로 전파(상위는 일반 에러로 사용자에게 보고).
+    if (err instanceof ResultFailureError) throw err;
     // 클라이언트로 출력을 아직 안 흘렸으면(emitted=false) 콜드 폴백이 안전(델타 중복 없음).
     // 이미 흘린 뒤면 폴백 불가 — 일반 에러로 전파.
     throw !acc.emitted
