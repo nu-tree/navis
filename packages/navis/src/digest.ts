@@ -32,12 +32,11 @@ function buildDigestPrompt(days: number): string {
 export async function runDigest(): Promise<void> {
   console.log("[digest] 발동");
   try {
-    const { text } = await askClaude(
-      buildDigestPrompt(config.digestDays),
-      undefined, // 새 세션 (이전 대화 맥락과 분리)
-      [],
-      true, // profile_update 허용 (신뢰된 자동화 경로)
-    );
+    const { text } = await askClaude({
+      prompt: buildDigestPrompt(config.digestDays),
+      // 새 세션(이전 대화 맥락과 분리), profile_update 허용(신뢰된 자동화 경로).
+      allowProfileUpdate: true,
+    });
     // 보고로 기록 — 앱이 /api/reports 로 받아 보고방에 표시.
     emitReport(`**주간 기억 다이제스트**\n\n${text}`, "digest");
   } catch (err) {

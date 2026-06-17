@@ -38,13 +38,31 @@ function refresh(): Promise<ChatPrefetch> {
   return p;
 }
 
+// 캐시가 아예 없을 때 namory 가 죽어 있으면 첫 채팅이 영영 실패하는 걸 막기 위한
+// 안전 폴백. 빈 커넥터·기본 시스템 프롬프트·빈 가이드로 채팅을 진행시킨다(MCP 의 동적
+// 커넥터는 없지만 in-process 도구·namory MCP 는 그대로 동작 — askClaude 호출 시
+// 메시지가 흐른다). 다음 TTL 만료 때 다시 시도.
+const FALLBACK_PREFETCH: ChatPrefetch = [
+  { servers: {}, allowedTools: [] },
+  // 기본 시스템 프롬프트가 비어도 SDK 는 빈 문자열로 도는 데 문제가 없다. 사용자 캐릭터
+  // 톤만 잠깐 빠질 뿐 채팅 자체는 작동.
+  "",
+  "",
+];
+
 // 캐시가 유효하면 즉시 반환. 만료/없음이면 갱신을 트리거하되, 이전(stale) 캐시가 있으면
 // 그걸 즉시 반환하고 갱신은 백그라운드로 둔다 → 턴이 namory 지연에 묶이지 않는다.
-// 캐시가 아예 없을 때(최초)만 갱신을 await 한다(이때 namory 실패는 호출부로 전파).
+// 캐시가 아예 없을 때(최초)는 갱신을 await 하되, 실패 시 호출부로 reject 를 전파하지
+// 않고 안전한 빈 폴백을 돌려준다 → 핫패스(askClaude)가 namory 다운으로 전부 실패하지 않게.
 export async function getChatPrefetch(): Promise<ChatPrefetch> {
   const now = Date.now();
   if (cached && now - cached.at < TTL_MS) return cached.value;
   const p = inflight ?? refresh();
   if (cached) return cached.value;
-  return p;
+  try {
+    return await p;
+  } catch (err) {
+    console.error("[prefetch] 최초 로드 실패 — 폴백 사용:", err);
+    return FALLBACK_PREFETCH;
+  }
 }

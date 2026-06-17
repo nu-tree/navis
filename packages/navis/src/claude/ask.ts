@@ -10,6 +10,7 @@ import { buildRepoTools, REPO_TOOL_NAMES } from "../repo/mcp.js";
 import { buildSelfModifyTools, SELF_MODIFY_TOOL_NAMES } from "../self-modify/mcp.js";
 import { buildSettingsTools, SETTINGS_TOOL_NAMES } from "../settings/mcp.js";
 import { type BuiltConnectors } from "../connectors/mcp.js";
+import { httpMcp } from "./mcp.js";
 import { getChatPrefetch } from "./prefetch.js";
 import { buildGoogleTools, GOOGLE_TOOL_NAMES } from "../google/mcp.js";
 import { isCalendarEnabled } from "../google/auth.js";
@@ -19,7 +20,7 @@ import {
   NAMORY_TOOLS,
 } from "./allowed-tools.js";
 import { applySaveNudge } from "./nudge.js";
-import type { AskResult, InputImage } from "./types.js";
+import type { AskClaudeOptions, AskResult, InputImage } from "./types.js";
 
 // in-process MCP 서버 빌더들 — 상태가 변하지 않아 매 요청마다 다시 짜지 않는다.
 // 빌더 호출은 도구 메타 등록만 하지 외부 I/O 가 없어 모듈 로드 시 만들어도 안전.
@@ -64,13 +65,8 @@ export function buildChatMcpServers(
     // DB 등록 커넥터들(있을 때만)을 먼저 펼친다 — 내장 서버 키(namory/cron/...)가
     // 항상 이기도록(같은 id 면 아래 내장 정의가 덮음). 등록 단계에서도 예약어를 거부한다.
     ...connectors.servers,
-    namory: {
-      type: "http",
-      url: config.namoryMcpUrl,
-      headers: { Authorization: `Bearer ${config.namoryToken}` },
-      // 도구가 tool-search 뒤로 deferred 되지 않게 항상 로드.
-      alwaysLoad: true,
-    },
+    // namory MCP — 공유 헬퍼(httpMcp)로 alwaysLoad+Bearer 헤더를 단일 출처에서 만든다.
+    namory: httpMcp({ url: config.namoryMcpUrl, token: config.namoryToken }),
     cron: cronServer,
     repo: repoServer,
     self_modify: selfModifyServer,
@@ -195,43 +191,26 @@ export function processChatMessage(
 }
 
 // 프롬프트 한 개를 Claude에 넣고 답변 + 세션 정보를 받는다.
-// resumeSessionId 가 있으면 그 대화를 이어받는다(멀티턴). 없으면 새 대화.
-// images 가 있으면 텍스트+이미지 content block을 가진 user 메시지로 넘긴다
-// (문자열 prompt로는 이미지를 못 실어서 streaming-input 형태를 쓴다).
+// 옵션의 세부 의미는 AskClaudeOptions(./types.ts) 주석 참조 — 단일 옵션 객체로
+// 통일해 호출부에서 undefined 6연속 같은 위치 인자 노이즈를 없앴다.
 //
 // 두뇌는 Claude Code 구독 OAuth 토큰(SDK가 process.env.CLAUDE_CODE_OAUTH_TOKEN을
 // 자동 사용)으로 돌고, namory를 외부 MCP 서버로 붙여 recall/save 도구를 쥐여준다.
-export async function askClaude(
-  prompt: string,
-  resumeSessionId?: string,
-  images: InputImage[] = [],
-  // 신뢰된 자동화(주간 다이제스트)에서만 true. profile_update를 일시 허용해
-  // 자기이해 프로필을 자동 갱신한다. 사용자 대화 경로에선 항상 false(인젝션 방어).
-  allowProfileUpdate = false,
-  // CLI에서 감지된 프로젝트명(있으면). 시스템 프롬프트에 부속문을 붙여
-  // 이 대화에서 발생하는 save 호출이 자동으로 project 태그를 부착하게 한다.
-  projectContext?: string,
-  // 새 세션 시작 시 채널 직전 메시지들을 텍스트로 묶어 넘기는 맥락 보강.
-  // 크론/자율 루틴이 보낸 보고 메시지가 sessionId 매핑 밖이라 그 직후 사용자
-  // 질문이 "맥락 없음" 으로 보이던 버그를 메운다. 이미 진행 중 세션은 빈 값.
-  historyContext?: string,
-  // 토큰 단위 스트리밍 콜백(있으면). 주면 includePartialMessages 를 켜고 응답 text_delta 를
-  // 그때그때 흘려보낸다(앱 SSE 스트리밍용). 없으면 기존처럼 완성 후 한 번에 반환.
-  onTextDelta?: (delta: string) => void,
-  // 도구 호출 시작 시 콜백 — typing indicator용 기본 레이블(tool name 수준).
-  onStatus?: (toolName: string) => void,
-  // 도구 인풋이 확정된 시점(assistant 메시지) 콜백 — 말풍선에 실시간으로 한 줄 추가.
-  onToolComplete?: (label: string) => void,
-  // 사용자가 앱에서 고른 모델(클로드 데스크톱식 모델 선택). 호출부가 화이트리스트
-  // (config.selectableModels) 로 이미 검증한 값만 넘긴다. 없으면 config.model 폴백.
-  modelOverride?: string,
-  // 확장 사고(extended thinking) 델타 콜백 — 모델의 생각 과정을 그때그때 흘려보낸다
-  // (앱에서 접이식 '생각 과정' 블록에 표시). adaptive thinking 이라 간단한 질문엔 안 올 수도.
-  onThinkingDelta?: (delta: string) => void,
-  // 중지 전파 — 클라이언트가 스트림을 끊으면(중지 버튼) 이 컨트롤러를 abort 해 SDK query
-  // 생성을 실제로 멈춘다. 없으면 끝까지 생성(크론/다이제스트 등 신뢰 자동화 경로).
-  abortController?: AbortController,
-): Promise<AskResult> {
+export async function askClaude(opts: AskClaudeOptions): Promise<AskResult> {
+  const {
+    prompt,
+    resumeSessionId,
+    images = [],
+    allowProfileUpdate = false,
+    projectContext,
+    historyContext,
+    onTextDelta,
+    onThinkingDelta,
+    onStatus,
+    onToolComplete,
+    modelOverride,
+    abortController,
+  } = opts;
   // 지연 계측 — 채팅 속도 진단. 전 구간 시작점.
   const t0 = Date.now();
 
@@ -273,38 +252,61 @@ export async function askClaude(
   const tQuery = Date.now();
   const acc = newTurnAccumulator(tQuery);
   const cb: TurnCallbacks = { onTextDelta, onThinkingDelta, onStatus, onToolComplete };
-  for await (const message of query({
-    prompt: promptInput,
-    options: {
-      model: modelOverride ?? config.model,
-      // 확장 사고(adaptive) — 모델이 필요하다고 판단할 때만 스스로 생각한다. 생각 과정은
-      // 스트리밍 콜백이 있을 때(앱 채팅)만 켜서 접이식 '생각 과정' 블록으로 보여준다.
-      // 콜백 없는 경로(크론/다이제스트/CLI)는 기본 동작 유지(불필요한 지연·비용 회피).
-      // effort 기본값(high)은 '안녕' 같은 인사에도 첫 토큰을 ~1.5초 늦춘다(실측:
-      // high 4.0s → medium 2.6s). 채팅은 응답성이 우선이라 medium 으로 고정 —
-      // adaptive 라 어려운 질문엔 여전히 생각 블록이 붙는다.
-      ...(onThinkingDelta
-        ? { thinking: { type: "adaptive" as const }, effort: "medium" as const }
-        : {}),
-      // 중지 버튼 → 서버 생성도 실제로 끊기게 컨트롤러 연결(토큰 낭비 방지).
-      ...(abortController ? { abortController } : {}),
-      systemPrompt: systemPromptFinal,
-      // namory(항상 로드) + 동적 커넥터 + 내장 in-process 서버 — 공유 빌더.
-      mcpServers: buildChatMcpServers(connectors),
-      // 자동 승인 도구 — 공유 빌더(./allowed-tools.ts 가 단일 출처).
-      allowedTools: buildChatAllowedTools(connectors, allowProfileUpdate),
-      // 로컬 설정(CLAUDE.md, settings.json) 무시.
-      settingSources: [],
-      // 도구 호출 루프 여유.
-      maxTurns: 16,
-      // 스트리밍 콜백이 있으면 부분 메시지(text_delta)를 받기 위해 켠다.
-      ...(onTextDelta ? { includePartialMessages: true } : {}),
-      // 이전 대화 이어받기 (있을 때만).
-      ...(resumeSessionId ? { resume: resumeSessionId } : {}),
-    },
-  })) {
-    // 메시지 처리(델타·도구·result)는 콜드/워밍 공유 처리기로.
-    processChatMessage(message, acc, cb);
+  // query() for-await 실행 구간 — SDK·CLI·MCP 트랜스포트 어느 층에서 던지든 여기서
+  // 한 번에 잡아 명시적으로 처리한다. abort 면 그대로 전파(상위에서 의도적 중지로 다룸),
+  // 그 외에는 부분 출력 이후라면 사용자 메시지 정합성을 위해 '말풍선 끊김' 마커를
+  // 흘려보낸 뒤 의미 있는 에러로 다시 던진다(상위 SSE 에러 이벤트로 변환됨).
+  try {
+    for await (const message of query({
+      prompt: promptInput,
+      options: {
+        model: modelOverride ?? config.model,
+        // 확장 사고(adaptive) — 모델이 필요하다고 판단할 때만 스스로 생각한다. 생각 과정은
+        // 스트리밍 콜백이 있을 때(앱 채팅)만 켜서 접이식 '생각 과정' 블록으로 보여준다.
+        // 콜백 없는 경로(크론/다이제스트/CLI)는 기본 동작 유지(불필요한 지연·비용 회피).
+        // effort 기본값(high)은 '안녕' 같은 인사에도 첫 토큰을 ~1.5초 늦춘다(실측:
+        // high 4.0s → medium 2.6s). 채팅은 응답성이 우선이라 medium 으로 고정 —
+        // adaptive 라 어려운 질문엔 여전히 생각 블록이 붙는다.
+        ...(onThinkingDelta
+          ? { thinking: { type: "adaptive" as const }, effort: "medium" as const }
+          : {}),
+        // 중지 버튼 → 서버 생성도 실제로 끊기게 컨트롤러 연결(토큰 낭비 방지).
+        ...(abortController ? { abortController } : {}),
+        systemPrompt: systemPromptFinal,
+        // namory(항상 로드) + 동적 커넥터 + 내장 in-process 서버 — 공유 빌더.
+        mcpServers: buildChatMcpServers(connectors),
+        // 자동 승인 도구 — 공유 빌더(./allowed-tools.ts 가 단일 출처).
+        allowedTools: buildChatAllowedTools(connectors, allowProfileUpdate),
+        // 로컬 설정(CLAUDE.md, settings.json) 무시.
+        settingSources: [],
+        // 도구 호출 루프 여유.
+        maxTurns: 16,
+        // 스트리밍 콜백이 있으면 부분 메시지(text_delta)를 받기 위해 켠다.
+        ...(onTextDelta ? { includePartialMessages: true } : {}),
+        // 이전 대화 이어받기 (있을 때만).
+        ...(resumeSessionId ? { resume: resumeSessionId } : {}),
+      },
+    })) {
+      // 메시지 처리(델타·도구·result)는 콜드/워밍 공유 처리기로.
+      processChatMessage(message, acc, cb);
+    }
+  } catch (err) {
+    // 사용자가 중지 버튼을 누른 경우 — 의도된 종료, 상위로 그대로 전파(SSE 가 조용히 닫음).
+    if (abortController?.signal.aborted) throw err;
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(
+      `[chat] query 실패 model=${modelOverride ?? config.model} emitted=${acc.emitted}: ${msg}`,
+    );
+    // 부분 출력 이후 실패 — 사용자가 잘린 답변을 진짜 응답으로 오해하지 않도록 짧은
+    // 마커를 한 번 더 흘려보낸다. 스트리밍 콜백이 있을 때만(콜드 스트림 경로).
+    if (acc.emitted && onTextDelta) {
+      try {
+        onTextDelta("\n\n⚠️ (응답 도중 오류로 끊겼어요)");
+      } catch {
+        /* 콜백 자체가 죽으면 무시 — 어차피 throw 로 상위가 처리 */
+      }
+    }
+    throw new Error(`Claude 응답 실패: ${msg}`);
   }
 
   const totalMs = Date.now() - t0;

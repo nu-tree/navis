@@ -1,6 +1,7 @@
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import { config } from "../config.js";
 import { projectGuidance } from "../projects.js";
+import { httpMcp } from "./mcp.js";
 
 // 사후 큐레이터(post-turn curator) — 메인 턴이 끝난 뒤 별도 LLM 호출이 "방금 턴에서
 // 뭘 저장할지"만 판단·실행한다. 시스템 프롬프트로만 저장을 유도할 때 누락되던
@@ -91,12 +92,8 @@ export async function curateTurn(input: CurateInput): Promise<boolean> {
         model: config.curatorModel,
         systemPrompt,
         mcpServers: {
-          namory: {
-            type: "http",
-            url: config.namoryMcpUrl,
-            headers: { Authorization: `Bearer ${config.namoryToken}` },
-            alwaysLoad: true,
-          },
+          // namory MCP — 공유 헬퍼(httpMcp)로 메인 턴/큐레이터가 같은 설정을 쓰게 한다.
+          namory: httpMcp({ url: config.namoryMcpUrl, token: config.namoryToken }),
         },
         // 권한 최소화: save + recall만. profile_update/update/delete는 절대 X.
         allowedTools: ["mcp__namory__save", "mcp__namory__recall"],

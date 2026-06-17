@@ -84,6 +84,17 @@ async function acquireNewSession(
   return pending;
 }
 
+// LRU 폐기 후보가 없을 때(상한에 도달했고 모든 세션이 busy) createSession 이 던지는
+// 신호. 호출부(runWarmTurn)가 받아서 WarmFallback 으로 변환해 콜드 askClaude 로 폴백한다.
+// 예전에는 후보가 없으면 그냥 sessions.set 으로 진행해 MAX_SESSIONS 를 초과한 채
+// Claude CLI 서브프로세스가 무제한 상주하던 버그가 있었음.
+class WarmCapacity extends Error {
+  constructor() {
+    super("warm-capacity: all sessions busy, cannot evict");
+    this.name = "WarmCapacity";
+  }
+}
+
 // 입력 채널 — push 된 사용자 메시지를 query() 가 소비할 async iterable 로 흘린다.
 function createInput(): {
   stream: AsyncGenerator<SDKUserMessage>;
@@ -161,6 +172,23 @@ async function createSession(
   model: string,
   resume: string | undefined,
 ): Promise<WarmSession> {
+  // 상한 초과 시 가장 오래 안 쓴 세션부터 폐기. 폐기 가능 후보(=busy 아님)가 하나도
+  // 없으면(모든 세션이 동시에 busy) WarmCapacity 를 던져 호출부가 콜드로 폴백하게
+  // 한다. 옛 버전은 후보가 없어도 sessions.set 으로 새 세션을 만들어 MAX_SESSIONS 를
+  // 초과한 채 Claude CLI 서브프로세스가 무제한 상주하던 버그가 있었음.
+  // → query() 를 띄우기 전에 용량 체크를 먼저 해서 실패 시 SDK 프로세스 스폰 자체를 피한다.
+  if (sessions.size >= MAX_SESSIONS) {
+    let oldestId: string | undefined;
+    let oldest = Infinity;
+    for (const [id, s] of sessions) {
+      if (!s.busy && s.lastUsed < oldest) {
+        oldest = s.lastUsed;
+        oldestId = id;
+      }
+    }
+    if (!oldestId) throw new WarmCapacity();
+    dropSession(oldestId);
+  }
   const [connectors, baseSystemPrompt, guidance] = await getChatPrefetch();
   const input = createInput();
   const abort = new AbortController();
@@ -181,18 +209,6 @@ async function createSession(
       ...(resume ? { resume } : {}),
     },
   });
-  // 상한 초과 시 가장 오래 안 쓴 세션부터 폐기.
-  if (sessions.size >= MAX_SESSIONS) {
-    let oldestId: string | undefined;
-    let oldest = Infinity;
-    for (const [id, s] of sessions) {
-      if (!s.busy && s.lastUsed < oldest) {
-        oldest = s.lastUsed;
-        oldestId = id;
-      }
-    }
-    if (oldestId) dropSession(oldestId);
-  }
   // 갓 만든 세션은 첫 턴을 claim 하기 전까진 busy=false 이고 lastUsed 가 "현재"라
   // 동시 acquire 가 들어와도 가장 최근이라 LRU 의 타깃이 되지 않는다. 그래도 한 틱이라도
   // 보수적으로 보호하기 위해 lastUsed 를 충분히 미래로(=now + IDLE_MS) 놓는다.
@@ -240,6 +256,10 @@ export async function runWarmTurn(opts: {
       session = await acquireNewSession(conversationId, model, resume);
     } catch (err) {
       dropSession(conversationId);
+      // 용량 초과(모든 세션이 busy) — 새 세션을 강제로 만들면 상한이 무너진다. 콜드 폴백.
+      if (err instanceof WarmCapacity) {
+        throw new WarmFallback("capacity-full");
+      }
       throw new WarmFallback(`create-failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
