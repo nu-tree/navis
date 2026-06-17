@@ -1,5 +1,12 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { requireAppAuth, sendJson, readBody, safeParse, CORS_HEADERS } from "./respond.js";
+import {
+  requireAppAuth,
+  sendJson,
+  readBody,
+  safeParse,
+  CORS_HEADERS,
+  sendUpstreamError,
+} from "./respond.js";
 import {
   listConnectors,
   upsertConnector,
@@ -50,8 +57,7 @@ export async function handleGetConnectors(
     const list = await listConnectors();
     sendJson(res, 200, { connectors: list.map(redact) });
   } catch (err) {
-    console.error("[connectors] 목록 조회 실패:", err);
-    sendJson(res, 502, { error: "upstream error" });
+    sendUpstreamError(res, "[connectors] 목록 조회 실패:", err);
   }
 }
 
@@ -89,8 +95,7 @@ export async function handleDeleteConnector(
     if (!ok) return sendJson(res, 404, { error: "not found" });
     sendJson(res, 200, { ok: true });
   } catch (err) {
-    console.error("[connectors] 삭제 실패:", err);
-    sendJson(res, 502, { error: "upstream error" });
+    sendUpstreamError(res, "[connectors] 삭제 실패:", err);
   }
 }
 

@@ -88,6 +88,20 @@ export function verifyBearer(token: string, header: string): boolean {
   return timingSafeEqual(a, b);
 }
 
+// 공통 에러 응답 헬퍼 — http/* 핸들러의 catch 블록을 통일한다.
+//  - sendUpstreamError: namory 등 업스트림 의존(프록시) 실패 → 502 "upstream error".
+//  - sendInternalError: navis 내부 처리 실패(SDK 호출/스트림 등) → 500 "internal error".
+// 둘 다 console.error 로그 + JSON 1회 응답. 이미 헤더가 나간 뒤(SSE 도중 등)면 본문만 생략한다.
+export function sendUpstreamError(res: ServerResponse, tag: string, err: unknown): void {
+  console.error(tag, err);
+  if (!res.headersSent) sendJson(res, 502, { error: "upstream error" });
+}
+
+export function sendInternalError(res: ServerResponse, tag: string, err: unknown): void {
+  console.error(tag, err);
+  if (!res.headersSent) sendJson(res, 500, { error: "internal error" });
+}
+
 // 앱 API 인증 가드 — APP_API_TOKEN 설정 + Bearer 일치 검사.
 // 통과 못하면 503/401 응답을 직접 쓰고 false 를 반환한다(호출 측은 즉시 return).
 export function requireAppAuth(req: IncomingMessage, res: ServerResponse): boolean {
