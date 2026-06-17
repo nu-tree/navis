@@ -40,6 +40,18 @@ interface RawEvent {
 
 const isAllDay = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
 
+// Google API raw 에러를 모델에 그대로 노출하지 않도록 한 줄 요약으로 변환한다.
+// invalid_grant 등 알려진 인증 에러는 사용자가 무엇을 해야 할지 짧게 명시.
+function calErr(op: string, e: unknown): string {
+  const raw = e instanceof Error ? e.message : String(e);
+  const isAuth = /invalid_grant|invalid_client|unauthorized|invalid_token|token/i.test(raw);
+  const cause = isAuth
+    ? "구글 인증 토큰 만료/취소 — GOOGLE_REFRESH_TOKEN 재발급 필요"
+    : raw.slice(0, 300);
+  console.error(`[google/mcp] ${op} 실패:`, e);
+  return `캘린더 ${op} 실패: ${cause}`;
+}
+
 function compactEvent(e: RawEvent): CompactEvent {
   return {
     id: e.id ?? "",
@@ -88,24 +100,28 @@ export function buildGoogleTools(): McpSdkServerConfigWithInstance {
         },
         async (args) => {
           if (!isCalendarEnabled()) return err("Google 캘린더 비활성 — env 미설정");
-          const { cal } = getCalendar();
-          const now = new Date();
-          const timeMin = args.timeMin ?? now.toISOString();
-          const timeMax =
-            args.timeMax ?? new Date(now.getTime() + 7 * 86400_000).toISOString();
-          const res = await cal.events.list(
-            {
-              calendarId: "primary",
-              timeMin,
-              timeMax,
-              singleEvents: true,
-              orderBy: "startTime",
-              maxResults: args.maxResults ?? 30,
-            },
-            { signal: AbortSignal.timeout(15_000) },
-          );
-          const events = (res.data.items ?? []).map(compactEvent);
-          return ok(JSON.stringify({ count: events.length, events }, null, 2));
+          try {
+            const { cal } = getCalendar();
+            const now = new Date();
+            const timeMin = args.timeMin ?? now.toISOString();
+            const timeMax =
+              args.timeMax ?? new Date(now.getTime() + 7 * 86400_000).toISOString();
+            const res = await cal.events.list(
+              {
+                calendarId: "primary",
+                timeMin,
+                timeMax,
+                singleEvents: true,
+                orderBy: "startTime",
+                maxResults: args.maxResults ?? 30,
+              },
+              { signal: AbortSignal.timeout(15_000) },
+            );
+            const events = (res.data.items ?? []).map(compactEvent);
+            return ok(JSON.stringify({ count: events.length, events }, null, 2));
+          } catch (e) {
+            return err(calErr("일정 조회", e));
+          }
         },
       ),
       tool(
@@ -123,19 +139,23 @@ export function buildGoogleTools(): McpSdkServerConfigWithInstance {
         },
         async (args) => {
           if (!isCalendarEnabled()) return err("Google 캘린더 비활성 — env 미설정");
-          const { cal } = getCalendar();
-          const res = await cal.events.list(
-            {
-              calendarId: "primary",
-              q: args.query,
-              singleEvents: true,
-              orderBy: "startTime",
-              maxResults: args.maxResults ?? 20,
-            },
-            { signal: AbortSignal.timeout(15_000) },
-          );
-          const events = (res.data.items ?? []).map(compactEvent);
-          return ok(JSON.stringify({ count: events.length, events }, null, 2));
+          try {
+            const { cal } = getCalendar();
+            const res = await cal.events.list(
+              {
+                calendarId: "primary",
+                q: args.query,
+                singleEvents: true,
+                orderBy: "startTime",
+                maxResults: args.maxResults ?? 20,
+              },
+              { signal: AbortSignal.timeout(15_000) },
+            );
+            const events = (res.data.items ?? []).map(compactEvent);
+            return ok(JSON.stringify({ count: events.length, events }, null, 2));
+          } catch (e) {
+            return err(calErr("일정 검색", e));
+          }
         },
       ),
       tool(
@@ -155,29 +175,33 @@ export function buildGoogleTools(): McpSdkServerConfigWithInstance {
         },
         async (args) => {
           if (!isCalendarEnabled()) return err("Google 캘린더 비활성 — env 미설정");
-          const { cal } = getCalendar();
-          const startField = isAllDay(args.start)
-            ? { date: args.start }
-            : { dateTime: args.start };
-          const endField = isAllDay(args.end)
-            ? { date: args.end }
-            : { dateTime: args.end };
-          const res = await cal.events.insert(
-            {
-              calendarId: "primary",
-              requestBody: {
-                summary: args.summary,
-                description: args.description,
-                location: args.location,
-                start: startField,
-                end: endField,
-                attendees: args.attendees?.map((email) => ({ email })),
-                recurrence: args.recurrence,
+          try {
+            const { cal } = getCalendar();
+            const startField = isAllDay(args.start)
+              ? { date: args.start }
+              : { dateTime: args.start };
+            const endField = isAllDay(args.end)
+              ? { date: args.end }
+              : { dateTime: args.end };
+            const res = await cal.events.insert(
+              {
+                calendarId: "primary",
+                requestBody: {
+                  summary: args.summary,
+                  description: args.description,
+                  location: args.location,
+                  start: startField,
+                  end: endField,
+                  attendees: args.attendees?.map((email) => ({ email })),
+                  recurrence: args.recurrence,
+                },
               },
-            },
-            { signal: AbortSignal.timeout(15_000) },
-          );
-          return ok(JSON.stringify(compactEvent(res.data), null, 2));
+              { signal: AbortSignal.timeout(15_000) },
+            );
+            return ok(JSON.stringify(compactEvent(res.data), null, 2));
+          } catch (e) {
+            return err(calErr("일정 생성", e));
+          }
         },
       ),
       tool(
@@ -195,34 +219,38 @@ export function buildGoogleTools(): McpSdkServerConfigWithInstance {
         },
         async (args) => {
           if (!isCalendarEnabled()) return err("Google 캘린더 비활성 — env 미설정");
-          const { cal } = getCalendar();
-          const body: Record<string, unknown> = {};
-          if (args.summary !== undefined) body.summary = args.summary;
-          if (args.description !== undefined) body.description = args.description;
-          if (args.location !== undefined) body.location = args.location;
-          if (args.start !== undefined) {
-            body.start = isAllDay(args.start)
-              ? { date: args.start }
-              : { dateTime: args.start };
+          try {
+            const { cal } = getCalendar();
+            const body: Record<string, unknown> = {};
+            if (args.summary !== undefined) body.summary = args.summary;
+            if (args.description !== undefined) body.description = args.description;
+            if (args.location !== undefined) body.location = args.location;
+            if (args.start !== undefined) {
+              body.start = isAllDay(args.start)
+                ? { date: args.start }
+                : { dateTime: args.start };
+            }
+            if (args.end !== undefined) {
+              body.end = isAllDay(args.end)
+                ? { date: args.end }
+                : { dateTime: args.end };
+            }
+            if (args.attendees !== undefined) {
+              body.attendees = args.attendees.map((email) => ({ email }));
+            }
+            if (args.recurrence !== undefined) body.recurrence = args.recurrence;
+            const res = await cal.events.patch(
+              {
+                calendarId: "primary",
+                eventId: args.eventId,
+                requestBody: body,
+              },
+              { signal: AbortSignal.timeout(15_000) },
+            );
+            return ok(JSON.stringify(compactEvent(res.data), null, 2));
+          } catch (e) {
+            return err(calErr("일정 수정", e));
           }
-          if (args.end !== undefined) {
-            body.end = isAllDay(args.end)
-              ? { date: args.end }
-              : { dateTime: args.end };
-          }
-          if (args.attendees !== undefined) {
-            body.attendees = args.attendees.map((email) => ({ email }));
-          }
-          if (args.recurrence !== undefined) body.recurrence = args.recurrence;
-          const res = await cal.events.patch(
-            {
-              calendarId: "primary",
-              eventId: args.eventId,
-              requestBody: body,
-            },
-            { signal: AbortSignal.timeout(15_000) },
-          );
-          return ok(JSON.stringify(compactEvent(res.data), null, 2));
         },
       ),
       tool(
@@ -233,15 +261,19 @@ export function buildGoogleTools(): McpSdkServerConfigWithInstance {
         },
         async (args) => {
           if (!isCalendarEnabled()) return err("Google 캘린더 비활성 — env 미설정");
-          const { cal } = getCalendar();
-          await cal.events.delete(
-            {
-              calendarId: "primary",
-              eventId: args.eventId,
-            },
-            { signal: AbortSignal.timeout(15_000) },
-          );
-          return ok(`삭제 완료 — ${args.eventId}`);
+          try {
+            const { cal } = getCalendar();
+            await cal.events.delete(
+              {
+                calendarId: "primary",
+                eventId: args.eventId,
+              },
+              { signal: AbortSignal.timeout(15_000) },
+            );
+            return ok(`삭제 완료 — ${args.eventId}`);
+          } catch (e) {
+            return err(calErr("일정 삭제", e));
+          }
         },
       ),
     ],

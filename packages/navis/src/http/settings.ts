@@ -22,7 +22,7 @@ export async function handlePutSystemPrompt(
 ): Promise<void> {
   if (!requireAppAuth(req, res)) return;
   try {
-    const body = safeParse(await readBody(req)) ?? {};
+    const body = safeParse(await readBody(req, res)) ?? {};
     const value = typeof body.value === "string" ? body.value : "";
     if (!value.trim()) return sendJson(res, 400, { error: "value required" });
     await setSystemPrompt(value);

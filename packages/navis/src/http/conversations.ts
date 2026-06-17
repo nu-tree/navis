@@ -69,7 +69,7 @@ export async function handlePutConversation(
 ): Promise<void> {
   if (!requireAppAuth(req, res)) return;
   try {
-    const body = safeParse(await readBody(req)) ?? {};
+    const body = safeParse(await readBody(req, res)) ?? {};
     await upsertConversationRemote(id, body);
     invalidateList(); // 내 쓰기가 다음 조회에 즉시 반영되게
     sendJson(res, 200, { ok: true, id });

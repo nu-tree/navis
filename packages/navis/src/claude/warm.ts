@@ -130,7 +130,12 @@ function teardown(session: WarmSession): void {
     /* ignore */
   }
   try {
-    void session.q.return(undefined);
+    // return() 자체가 동기적이지만 SDK 가 Promise 를 돌려주는 경우가 있어 catch 부착 —
+    // 폐기 경로에서 unhandled rejection 이 새지 않게.
+    const ret = session.q.return(undefined);
+    if (ret && typeof (ret as Promise<unknown>).catch === "function") {
+      (ret as Promise<unknown>).catch(() => {});
+    }
   } catch {
     /* ignore */
   }
@@ -188,6 +193,10 @@ async function createSession(
     }
     if (oldestId) dropSession(oldestId);
   }
+  // 갓 만든 세션은 첫 턴을 claim 하기 전까진 busy=false 이고 lastUsed 가 "현재"라
+  // 동시 acquire 가 들어와도 가장 최근이라 LRU 의 타깃이 되지 않는다. 그래도 한 틱이라도
+  // 보수적으로 보호하기 위해 lastUsed 를 충분히 미래로(=now + IDLE_MS) 놓는다.
+  // 첫 runWarmTurn 종료 시 정상 lastUsed = Date.now() 로 되돌린다.
   const session: WarmSession = {
     q,
     push: input.push,
@@ -195,7 +204,7 @@ async function createSession(
     abort,
     model,
     busy: false,
-    lastUsed: Date.now(),
+    lastUsed: Date.now() + IDLE_MS,
     sdkSessionId: "",
   };
   sessions.set(conversationId, session);
@@ -250,7 +259,11 @@ export async function runWarmTurn(opts: {
   try {
     session.push(userMessage(applySaveNudge(prompt)));
     for (;;) {
-      const next = await Promise.race([session.q.next(), timeout]);
+      // Promise.race 의 패자 쪽(주로 next())이 나중에 reject 하면 unhandled rejection 이
+      // 되므로 미리 .catch 부착. 결과 자체는 racer 가 본다.
+      const nextPromise = session.q.next();
+      nextPromise.catch(() => {});
+      const next = await Promise.race([nextPromise, timeout]);
       if (next.done) throw new Error("워밍 세션 조기 종료");
       if (processChatMessage(next.value, acc, callbacks)) break; // result 도달 → 턴 종료
     }

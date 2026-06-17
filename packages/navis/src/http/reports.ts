@@ -19,7 +19,7 @@ export async function handlePostReport(
   res: ServerResponse,
 ): Promise<void> {
   if (!requireAppAuth(req, res)) return;
-  const raw = await readBody(req);
+  const raw = await readBody(req, res);
   const body = safeParse(raw);
   const text = typeof body?.text === "string" ? body.text.trim() : "";
   if (!text) {
