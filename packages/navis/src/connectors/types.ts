@@ -26,15 +26,25 @@ export type ConnectorAuth =
       refreshToken?: string;
       tokenUrl?: string;
       clientId?: string;
+      // 공개 클라이언트(DCR + token_endpoint_auth_method=none)는 clientSecret 을 절대
+      // 저장하지 않는다(clientAuth: "none" 이 그 신호). 기밀 클라이언트(classic OAuth)
+      // 에서만 비어 있지 않은 값으로 들어온다.
       clientSecret?: string;
       // RFC 8707 resource — 이 토큰이 가리키는 MCP 서버 URI(refresh 요청에 동봉).
       resource?: string;
-      // 토큰 엔드포인트에 자격을 싣는 방식. basic=Authorization: Basic, body=요청 본문.
-      clientAuth?: "basic" | "body";
+      // 토큰 엔드포인트에 자격을 싣는 방식.
+      //   basic: Authorization: Basic base64(id:secret) (기밀 클라이언트 표준)
+      //   body : 본문에 client_id + client_secret (기밀 클라이언트 대안)
+      //   none : 본문에 client_id 만(공개 클라이언트 + PKCE — secret 자체가 없음)
+      clientAuth?: "basic" | "body" | "none";
       // 토큰 엔드포인트 본문 형식. form=x-www-form-urlencoded, json=application/json.
       bodyFormat?: "form" | "json";
       // epoch ms. access token 만료 시각 — 임박하면 refresh 로 선제 갱신.
       expiresAt?: number;
+      // refresh 가 영구 실패(invalid_grant / Grant not found 등) 한 뒤 켜진다. 사용자가
+      // 앱에서 다시 OAuth 동의를 거치기 전엔 mcp 측에서 이 커넥터를 자동 제외해서
+      // 매 턴 무용한 401 재시도와 알림 폭주를 막는다. completeOAuth 가 성공하면 자동 해제.
+      needsReauth?: boolean;
     };
 
 export interface Connector {

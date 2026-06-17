@@ -52,6 +52,13 @@ export async function buildEnabledConnectors(): Promise<BuiltConnectors> {
   const servers: Record<string, McpHttpServerConfig> = {};
   const allowedTools: string[] = [];
   for (const c of refreshed) {
+    // 영구 실패 후 재인증이 필요한 커넥터는 사용자가 앱에서 다시 동의를 거치기 전까지
+    // 매 턴 무용한 401 로 핸드셰이크가 깨진다 → 첫 토큰 전 수 초 지연. needsReauth 플래그가
+    // 켜져 있으면 그냥 제외한다(앱 UI 가 배지로 재연결을 유도).
+    if (c.auth.type === "oauth" && c.auth.needsReauth) {
+      console.warn(`[connectors] ${c.id} 재인증 필요 — 이번 턴 제외`);
+      continue;
+    }
     // 만료된 토큰을 갱신도 못 한 커넥터는 이번 턴에서 제외 — 어차피 MCP 연결이
     // 401 로 실패하는데, 그 핸드셰이크 시도가 query 시작(첫 토큰 전)을 수 초
     // 지연시킨다. 갱신이 살아나면(또는 재연결하면) 다음 턴부터 자동 복귀.

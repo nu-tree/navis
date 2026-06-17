@@ -80,17 +80,28 @@ function normalizeAuth(raw: unknown): Connector["auth"] | undefined {
   if (a.type === "oauth") {
     const token = typeof a.token === "string" ? a.token : "";
     if (!token) return undefined;
+    const clientAuth =
+      a.clientAuth === "basic" || a.clientAuth === "body" || a.clientAuth === "none"
+        ? a.clientAuth
+        : undefined;
+    // 공개 클라이언트(clientAuth === "none") 는 정의상 clientSecret 이 없어야 한다.
+    // 잘못 저장됐거나 토큰 응답에 우연히 섞여 들어온 비밀값은 여기서 일관되게 떨어뜨려
+    // refresh 요청 본문에도 절대 실리지 않게 한다(DCR 공개 클라이언트 secret 영속 차단).
+    const acceptSecret = clientAuth !== "none";
     return {
       type: "oauth",
       token,
       ...(typeof a.refreshToken === "string" ? { refreshToken: a.refreshToken } : {}),
       ...(typeof a.tokenUrl === "string" ? { tokenUrl: a.tokenUrl } : {}),
       ...(typeof a.clientId === "string" ? { clientId: a.clientId } : {}),
-      ...(typeof a.clientSecret === "string" ? { clientSecret: a.clientSecret } : {}),
+      ...(acceptSecret && typeof a.clientSecret === "string"
+        ? { clientSecret: a.clientSecret }
+        : {}),
       ...(typeof a.resource === "string" ? { resource: a.resource } : {}),
-      ...(a.clientAuth === "basic" || a.clientAuth === "body" ? { clientAuth: a.clientAuth } : {}),
+      ...(clientAuth ? { clientAuth } : {}),
       ...(a.bodyFormat === "form" || a.bodyFormat === "json" ? { bodyFormat: a.bodyFormat } : {}),
       ...(typeof a.expiresAt === "number" ? { expiresAt: a.expiresAt } : {}),
+      ...(a.needsReauth === true ? { needsReauth: true } : {}),
     };
   }
   return undefined;
