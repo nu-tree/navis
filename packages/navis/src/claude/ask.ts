@@ -9,8 +9,8 @@ import { buildCronTools, CRON_TOOL_NAMES } from "../cron/mcp.js";
 import { buildRepoTools, REPO_TOOL_NAMES } from "../repo/mcp.js";
 import { buildSelfModifyTools, SELF_MODIFY_TOOL_NAMES } from "../self-modify/mcp.js";
 import { buildSettingsTools, SETTINGS_TOOL_NAMES } from "../settings/mcp.js";
-import { buildEnabledConnectors, type BuiltConnectors } from "../connectors/mcp.js";
-import { getSystemPrompt } from "../system-prompt.js";
+import { type BuiltConnectors } from "../connectors/mcp.js";
+import { getChatPrefetch } from "./prefetch.js";
 import { buildGoogleTools, GOOGLE_TOOL_NAMES } from "../google/mcp.js";
 import { isCalendarEnabled } from "../google/auth.js";
 import {
@@ -19,7 +19,6 @@ import {
   NAMORY_TOOLS,
 } from "./allowed-tools.js";
 import { applySaveNudge } from "./nudge.js";
-import { projectGuidance } from "../projects.js";
 import type { AskResult, InputImage } from "./types.js";
 
 // in-process MCP 서버 빌더들 — 상태가 변하지 않아 매 요청마다 다시 짜지 않는다.
@@ -260,13 +259,11 @@ export async function askClaude(
   // 동적 MCP 커넥터(claude.ai 스타일). namory DB 에 등록된 외부 HTTP MCP 서버들을
   // 코드 수정 없이 이 query 에 주입한다. 인증(none/apikey/oauth)은 store/mcp 에서 처리.
   // 조회 실패 시 빈 결과라 연동 없이 안전 동작.
-  // 세 준비 작업을 병렬로 실행해 왕복 지연을 줄인다(직렬이면 namory 3번 직렬 호출).
+  // 커넥터/시스템프롬프트/프로젝트가이드 — TTL 캐시(prefetch.ts)로 가져온다. 매 턴
+  // namory 3회 왕복을 핫패스에서 없애, 버스트 시 namory 지연이 이벤트 루프를 압박해
+  // 생기는 death-spiral 을 막는다(설정 변경은 TTL 내 반영).
   const tPrefetch = Date.now();
-  const [connectors, baseSystemPrompt, guidance] = await Promise.all([
-    buildEnabledConnectors(),
-    getSystemPrompt(),
-    projectGuidance(),
-  ]);
+  const [connectors, baseSystemPrompt, guidance] = await getChatPrefetch();
   const prefetchMs = Date.now() - tPrefetch;
 
   // 시스템 프롬프트 + MCP/도구 — 콜드/워밍 공유 빌더로 동일 설정 보장.

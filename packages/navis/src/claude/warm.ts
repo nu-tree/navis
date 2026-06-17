@@ -1,8 +1,6 @@
 import { query, type SDKUserMessage, type Query } from "@anthropic-ai/claude-agent-sdk";
 import { config } from "../config.js";
-import { buildEnabledConnectors } from "../connectors/mcp.js";
-import { getSystemPrompt } from "../system-prompt.js";
-import { projectGuidance } from "../projects.js";
+import { getChatPrefetch } from "./prefetch.js";
 import { applySaveNudge } from "./nudge.js";
 import {
   buildChatSystemPrompt,
@@ -158,11 +156,7 @@ async function createSession(
   model: string,
   resume: string | undefined,
 ): Promise<WarmSession> {
-  const [connectors, baseSystemPrompt, guidance] = await Promise.all([
-    buildEnabledConnectors(),
-    getSystemPrompt(),
-    projectGuidance(),
-  ]);
+  const [connectors, baseSystemPrompt, guidance] = await getChatPrefetch();
   const input = createInput();
   const abort = new AbortController();
   const q = query({
