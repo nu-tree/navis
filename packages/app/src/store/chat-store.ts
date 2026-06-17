@@ -68,6 +68,10 @@ type ChatStore = {
   // 진행 중인 턴의 서버측 취소 함수(방별). 서버는 연결 종료를 "백그라운드"로 보고
   // 생성을 계속하므로, 중지 버튼은 abort 와 함께 이 함수로 /api/chat/cancel 도 부른다. 휘발성.
   cancelers: Record<string, () => void>;
+  // 진행 중인 턴의 서버 turnId(방별). 앱이 백그라운드로 갈 때 이 turnId 들로 서버에
+  // 핸드오프를 알려, 프록시가 연결 끊김을 가려도 서버가 백그라운드 완주+푸시를 타게 한다.
+  // 휘발성(persist 제외).
+  inflightTurns: Record<string, string>;
   // 사용자가 고른 채팅 모델(클로드 데스크톱식). 전역 1개 — 모든 대화방에 적용되고
   // persist 로 유지된다. 일반 채팅(kind==='chat')에서만 의미 있다(코드 세션은
   // 로컬 에이전트, 보고방은 읽기 전용).
@@ -92,6 +96,8 @@ type ChatStore = {
   setAborter: (conversationId: string, controller?: AbortController) => void;
   // 진행 중인 턴의 서버측 취소 함수 등록/해제(undefined 면 해제).
   setCanceler: (conversationId: string, cancel?: () => void) => void;
+  // 진행 중인 턴의 서버 turnId 등록/해제(undefined 면 해제). 백그라운드 핸드오프용.
+  setInflightTurn: (conversationId: string, turnId?: string) => void;
   stopGenerating: (conversationId: string) => void;
   setSessionId: (conversationId: string, sessionId?: string) => void;
   // 코드 세션의 작업 폴더 설정(+폴더 선택 시). 폴더가 바뀌면 namory 세션(sessionId)도
@@ -173,6 +179,7 @@ export const useChatStore = create<ChatStore>()(
   streamingId: {},
   aborters: {},
   cancelers: {},
+  inflightTurns: {},
   model: DEFAULT_MODEL,
 
   setModel: (model) => set({ model }),
@@ -332,6 +339,14 @@ export const useChatStore = create<ChatStore>()(
       if (cancel) cancelers[conversationId] = cancel;
       else delete cancelers[conversationId];
       return { cancelers };
+    }),
+
+  setInflightTurn: (conversationId, turnId) =>
+    set((s) => {
+      const inflightTurns = { ...s.inflightTurns };
+      if (turnId) inflightTurns[conversationId] = turnId;
+      else delete inflightTurns[conversationId];
+      return { inflightTurns };
     }),
 
   stopGenerating: (conversationId) => {

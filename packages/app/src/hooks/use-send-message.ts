@@ -153,6 +153,8 @@ export function useSendMessage() {
       };
       // 중지 버튼이 서버에도 취소를 보내도록 등록 — 연결 종료만으론 서버가 안 멈춘다.
       useChatStore.getState().setCanceler(conversationId, () => void cancelChat(turnId));
+      // 백그라운드 핸드오프용 — 앱이 백그라운드로 가면 이 turnId 로 서버에 완주를 알린다.
+      useChatStore.getState().setInflightTurn(conversationId, turnId);
 
       const MAX_ATTEMPTS = 3;
       let result: Awaited<ReturnType<typeof sendMessageStream>> | undefined;
@@ -298,10 +300,13 @@ export function useSendMessage() {
       });
     },
     onSettled: (_data, _err, { conversationId }) => {
-      const { setTyping, setAborter, setCanceler, setStreamingId } = useChatStore.getState();
+      const { setTyping, setAborter, setCanceler, setInflightTurn, setStreamingId } =
+        useChatStore.getState();
       setTyping(conversationId, false);
       setAborter(conversationId, undefined);
       setCanceler(conversationId, undefined);
+      // 턴 종료 → 백그라운드 핸드오프 대상에서 제거.
+      setInflightTurn(conversationId, undefined);
       // 스트리밍 종료(완료/중지/에러) — 작업/생각 블록 자동 접힘.
       setStreamingId(conversationId, undefined);
     },

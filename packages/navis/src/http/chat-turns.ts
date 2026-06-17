@@ -13,6 +13,13 @@ const inflight = new Map<string, AbortController>();
 const cancelled = new Set<string>();
 const CANCEL_TTL_MS = 60_000;
 
+// 앱이 백그라운드로 전환되며 명시적으로 핸드오프를 알린 turnId 들(긴 TTL — 한 턴이
+// 끝날 때까지 살아 있어야 한다). Railway 프록시 뒤에선 폰이 끊겨도 req 'close'
+// (clientGone)가 안 뜨는 경우가 있어, TCP 끊김 감지만으로는 백그라운드 완주가 안 탄다.
+// 앱이 AppState 'background' 에서 이 신호를 보내, 완료 분기가 영속+푸시를 확실히 타게 한다.
+const handoff = new Set<string>();
+const HANDOFF_TTL_MS = 10 * 60_000;
+
 export function registerTurn(turnId: string, ctrl: AbortController): void {
   if (turnId) inflight.set(turnId, ctrl);
 }
@@ -39,6 +46,21 @@ export function cancelTurn(turnId: string): boolean {
 export function consumeCancelled(turnId: string): boolean {
   if (!turnId || !cancelled.has(turnId)) return false;
   cancelled.delete(turnId);
+  return true;
+}
+
+// 앱이 "백그라운드로 떠난다"고 명시적으로 알림 — 완료 분기가 clientGone 과 동등하게
+// 취급해 영속+푸시를 타게 한다(프록시가 끊김을 가려도 안전). TTL 로 자동 청소.
+export function markHandoff(turnId: string): void {
+  if (!turnId) return;
+  handoff.add(turnId);
+  setTimeout(() => handoff.delete(turnId), HANDOFF_TTL_MS);
+}
+
+// 이 턴이 핸드오프됐는지 확인하고 표시를 소거한다(1회성). 완료 분기에서 호출.
+export function consumeHandoff(turnId: string): boolean {
+  if (!turnId || !handoff.has(turnId)) return false;
+  handoff.delete(turnId);
   return true;
 }
 

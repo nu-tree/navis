@@ -8,7 +8,7 @@ import {
   handleDownloadPage,
 } from "../desktop/serve.js";
 import { handlePreflight } from "./respond.js";
-import { handleChat, handleChatStream, handleChatCancel } from "./chat.js";
+import { handleChat, handleChatStream, handleChatCancel, handleChatHandoff } from "./chat.js";
 import { handleReports, handlePostReport } from "./reports.js";
 import { handleCrons, handleDeleteCron } from "./crons.js";
 import { handleMemories } from "./memories.js";
@@ -58,6 +58,13 @@ export function route(req: IncomingMessage, res: ServerResponse): void {
   if (req.url === "/api/chat/cancel") {
     if (req.method === "OPTIONS") return handlePreflight(res);
     if (req.method === "POST") return void handleChatCancel(req, res);
+  }
+
+  // 챗 핸드오프 — 앱이 백그라운드로 갈 때 진행 중인 턴을 알린다. 서버가 백그라운드
+  // 완주 + 영속 + 폰 푸시를 확실히 타게 하는 명시 신호(프록시가 끊김을 가려도 안전).
+  if (req.url === "/api/chat/handoff") {
+    if (req.method === "OPTIONS") return handlePreflight(res);
+    if (req.method === "POST") return void handleChatHandoff(req, res);
   }
 
   if (req.url?.startsWith("/api/reports")) {

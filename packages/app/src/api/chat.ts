@@ -227,6 +227,23 @@ export async function cancelChat(turnId: string): Promise<void> {
   }
 }
 
+// 백그라운드 핸드오프 — 앱이 백그라운드로 전환될 때(AppState 'background') 진행 중인
+// 턴을 서버에 알린다. 연결이 끊겨도(또는 프록시가 끊김을 가려도) 서버가 응답을 끝까지
+// 만들어 대화에 영속 + 폰 푸시하도록 하는 명시 신호. fire-and-forget(실패해도 무방 —
+// 연결 종료 감지(clientGone)가 폴백으로 남는다).
+export async function handoffChat(turnId: string): Promise<void> {
+  if (!IS_BACKEND_CONFIGURED || !turnId) return;
+  try {
+    await fetch(apiUrl('/api/chat/handoff'), {
+      method: 'POST',
+      headers: jsonHeaders(),
+      body: JSON.stringify({ turnId }),
+    });
+  } catch {
+    /* 무시 */
+  }
+}
+
 async function mockReply(text: string): Promise<SendResult> {
   await new Promise((resolve) => setTimeout(resolve, 600));
   return {

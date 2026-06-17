@@ -6,6 +6,7 @@ import {
   pushConversation,
   deleteConversationRemote,
 } from '../api/conversations';
+import { handoffChat } from '../api/navis';
 import { IS_BACKEND_CONFIGURED } from '../lib/config';
 
 const PULL_INTERVAL_MS = 30_000;
@@ -55,7 +56,15 @@ export function useConversationSync(): void {
     // 폰을 잠그거나 앱을 나간 사이 서버가 백그라운드로 완주·저장한 답변을, 다음 30초
     // 주기를 기다리지 않고 곧바로 받아와 부분 답변("멈춤") 상태를 빠르게 해소한다.
     const appStateSub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') void pull();
+      if (state === 'active') {
+        void pull();
+      } else if (state === 'background') {
+        // 앱이 백그라운드로 감(홈/앱전환/잠금) → 진행 중인 모든 턴을 서버에 핸드오프한다.
+        // 이러면 연결 끊김 감지(clientGone)에 의존하지 않고도 서버가 응답을 끝까지
+        // 만들어 영속 + 폰 푸시한다 → 복귀 시 위 'active' pull 로 답이 내려온다.
+        const turns = useChatStore.getState().inflightTurns;
+        for (const turnId of Object.values(turns)) void handoffChat(turnId);
+      }
     });
     return () => {
       alive = false;

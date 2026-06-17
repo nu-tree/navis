@@ -17,6 +17,8 @@ import {
   clearTurn,
   cancelTurn,
   consumeCancelled,
+  markHandoff,
+  consumeHandoff,
   persistAndNotify,
   type ChatSnapshot,
 } from "./chat-turns.js";
@@ -99,6 +101,20 @@ export async function handleChatCancel(
   const turnId = typeof body?.turnId === "string" ? body.turnId : "";
   const ok = turnId ? cancelTurn(turnId) : false;
   sendJson(res, 200, { ok });
+}
+
+// 핸드오프 — 앱이 백그라운드로 전환될 때 진행 중인 턴을 알린다. Railway 프록시 뒤에선
+// 연결 종료(req 'close')가 서버까지 안 닿을 수 있어, 이 명시 신호로 "클라가 떠남"을
+// 확실히 표시한다 → 완료 시 서버가 응답을 영속하고 폰으로 푸시한다. fire-and-forget.
+export async function handleChatHandoff(
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<void> {
+  if (!requireAppAuth(req, res)) return;
+  const body = safeParse(await readBody(req));
+  const turnId = typeof body?.turnId === "string" ? body.turnId : "";
+  if (turnId) markHandoff(turnId);
+  sendJson(res, 200, { ok: !!turnId });
 }
 
 // 사후 큐레이터(A) — 응답을 보낸 뒤 백그라운드로 한 번 더 평가해 저장 누락을 메운다.
@@ -259,11 +275,15 @@ export async function handleChatStream(
     if (parsed.turnId) clearTurn(parsed.turnId);
     const contextFull = result.contextTokens >= config.contextTokenLimit;
 
-    if (clientGone) {
+    // 클라가 응답 전에 떠났는가? 두 신호를 함께 본다:
+    //  - clientGone: req 'close'(연결 종료). 프록시 뒤에선 안 뜰 수 있어 단독으론 불충분.
+    //  - handedOff: 앱이 AppState 'background' 에서 보낸 명시적 핸드오프(신뢰 가능한 신호).
+    const handedOff = parsed.turnId ? consumeHandoff(parsed.turnId) : false;
+    if (clientGone || handedOff) {
       // 클라가 응답 전에 떠남 → 서버가 대신 대화에 답변을 써넣고(동기화로 복원) 폰 푸시.
-      // 포그라운드(연결 유지)였다면 클라가 받은 응답을 스스로 동기화하므로 생략(중복 방지).
-      // 단, 완료 직후 도착한 중지 신호가 있으면(consumeCancelled) 사용자가 멈춘 것이므로
-      // 영속/푸시하지 않는다.
+      // 포그라운드(연결 유지·핸드오프 없음)였다면 클라가 받은 응답을 스스로 동기화하므로
+      // 생략(중복 방지). 단, 완료 직후 도착한 중지 신호가 있으면(consumeCancelled)
+      // 사용자가 멈춘 것이므로 영속/푸시하지 않는다.
       const stopped = parsed.turnId ? consumeCancelled(parsed.turnId) : false;
       if (!stopped && parsed.conversationId && parsed.snapshot) {
         await persistAndNotify(parsed.conversationId, parsed.snapshot, {
@@ -272,6 +292,9 @@ export async function handleChatStream(
           sessionId: result.sessionId,
         });
       }
+      // 핸드오프인데 연결이 아직 열려 있을 수 있다(프록시가 끊김을 안 알림) → 정리.
+      // done 은 보내지 않는다: 앱은 다음 동기화 pull 로 권위 응답을 받는다(중복 방지).
+      if (!res.writableEnded) res.end();
     } else {
       // 권위 있는 최종 텍스트도 함께 보내 클라가 누적분을 보정하게 한다.
       sse("done", {
