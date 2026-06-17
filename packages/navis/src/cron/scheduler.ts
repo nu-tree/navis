@@ -11,6 +11,10 @@ const jobs = new Map<string, { task: ScheduledTask; sig: string }>();
 
 const sigOf = (c: CronRow) => `${c.schedule}|${c.timezone}|${c.enabled}`;
 
+// 잡별 "실행 중" 플래그 — 직전 발동이 아직 안 끝났는데 다음 틱이 들어오면 그 틱은
+// 스킵한다. 같은 잡이 동시에 askClaude 로 돌아 중복 보고·토큰 낭비가 나는 걸 막는다.
+const running = new Set<string>();
+
 // 잡 하나를 등록(또는 갱신). enabled=false거나 식이 틀리면 등록하지 않는다.
 export function scheduleCron(c: CronRow): void {
   const existing = jobs.get(c.id);
@@ -37,10 +41,18 @@ export function unscheduleCron(id: string): void {
     j.task.stop();
     jobs.delete(id);
   }
+  // 진행 플래그도 정리 — 잡이 사라졌으니 남겨두면 재등록 시 첫 발동이 스킵될 수 있다.
+  running.delete(id);
 }
 
 // 발동 시: 프롬프트를 새 세션으로 실행하고 결과를 등록 채널로 보낸다.
 async function runCron(c: CronRow): Promise<void> {
+  // 직전 발동이 아직 안 끝났으면 이번 틱은 스킵(중복 실행 방지).
+  if (running.has(c.id)) {
+    console.log(`[cron] '${c.title}' 직전 실행이 아직 진행 중 — 이번 틱 스킵`);
+    return;
+  }
+  running.add(c.id);
   console.log(`[cron] 발동: '${c.title}'`);
   // 크론마다 자기 보고방 — sourceId=크론 id, 제목=크론 DB 제목.
   const meta = { sourceId: c.id, sourceTitle: `⏰ ${c.title}` };
@@ -57,6 +69,8 @@ async function runCron(c: CronRow): Promise<void> {
       "cron",
       meta,
     );
+  } finally {
+    running.delete(c.id);
   }
 }
 

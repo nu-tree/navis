@@ -48,25 +48,39 @@ export function buildSelfModifyTools(): McpSdkServerConfigWithInstance {
 
           const dispatchId = randomUUID();
           const url = `https://api.github.com/repos/${config.githubRepo}/dispatches`;
-          const res = await fetch(url, {
-            method: "POST",
-            headers: {
-              accept: "application/vnd.github+json",
-              "x-github-api-version": "2022-11-28",
-              authorization: `Bearer ${config.githubToken}`,
-              "content-type": "application/json",
-            },
-            body: JSON.stringify({
-              event_type: "self-improve",
-              client_payload: {
-                instruction: args.instruction,
-                dispatch_id: dispatchId,
+          // 다른 모듈(reports/store, google/mcp 등)과 동일하게 10초 타임아웃.
+          // 네트워크 행에 모델 턴이 통째로 묶이는 걸 막는다.
+          let res: Response;
+          try {
+            res = await fetch(url, {
+              method: "POST",
+              headers: {
+                accept: "application/vnd.github+json",
+                "x-github-api-version": "2022-11-28",
+                authorization: `Bearer ${config.githubToken}`,
+                "content-type": "application/json",
               },
-            }),
-          });
+              body: JSON.stringify({
+                event_type: "self-improve",
+                client_payload: {
+                  instruction: args.instruction,
+                  dispatch_id: dispatchId,
+                },
+              }),
+              signal: AbortSignal.timeout(10_000),
+            });
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            console.error(
+              `[self-modify] dispatch 네트워크 실패 repo=${config.githubRepo}: ${msg}`,
+            );
+            return err(
+              `GitHub dispatch 네트워크 실패: ${msg}. 잠시 후 다시 시도해주세요.`,
+            );
+          }
 
           if (!res.ok) {
-            const body = await res.text();
+            const body = await res.text().catch(() => "");
             console.error(
               `[self-modify] dispatch 실패 status=${res.status} body=${body} repo=${config.githubRepo}`,
             );

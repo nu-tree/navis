@@ -41,7 +41,7 @@ export async function handleGithubWebhook(
       return;
     }
 
-    const raw = await readBody(req);
+    const raw = await readBody(req, res);
     const signature = req.headers["x-hub-signature-256"];
     if (typeof signature !== "string" || !verifySignature(secret, raw, signature)) {
       res.writeHead(401);

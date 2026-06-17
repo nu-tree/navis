@@ -56,14 +56,46 @@ function markNotified(id: string): void {
   }
 }
 
+// 잡별 "실행 중" 플래그 — 직전 발동이 안 끝났는데 다음 틱이 들어오면 그 틱은 스킵.
+// LLM 평가가 오래 걸려 한 틱(30분)을 넘기는 경우 같은 이벤트가 두 번 평가돼 중복
+// 알림/토큰 낭비가 날 수 있다.
+let upcomingRunning = false;
+let followupRunning = false;
+
 export function startCalendarScheduler(): void {
   if (!isCalendarEnabled()) {
     console.log("[calendar] 비활성 (GOOGLE_* env 미설정) — 스케줄러 미시작");
     return;
   }
   // 알림은 앱(/api/reports)으로 간다.
-  cron.schedule(UPCOMING_CHECK_CRON, () => void runUpcomingCheck(), { timezone: TIMEZONE });
-  cron.schedule(FOLLOWUP_CRON, () => void runDailyFollowup(), { timezone: TIMEZONE });
+  cron.schedule(
+    UPCOMING_CHECK_CRON,
+    () => {
+      if (upcomingRunning) {
+        console.log("[calendar] upcoming 직전 실행이 아직 진행 중 — 이번 틱 스킵");
+        return;
+      }
+      upcomingRunning = true;
+      void runUpcomingCheck().finally(() => {
+        upcomingRunning = false;
+      });
+    },
+    { timezone: TIMEZONE },
+  );
+  cron.schedule(
+    FOLLOWUP_CRON,
+    () => {
+      if (followupRunning) {
+        console.log("[calendar] follow-up 직전 실행이 아직 진행 중 — 이번 틱 스킵");
+        return;
+      }
+      followupRunning = true;
+      void runDailyFollowup().finally(() => {
+        followupRunning = false;
+      });
+    },
+    { timezone: TIMEZONE },
+  );
   console.log(
     `[calendar] 스케줄러 시작 — upcoming '${UPCOMING_CHECK_CRON}', followup '${FOLLOWUP_CRON}' (${TIMEZONE})`,
   );

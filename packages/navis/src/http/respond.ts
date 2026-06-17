@@ -27,12 +27,46 @@ export function sendJson(res: ServerResponse, status: number, body: unknown): vo
   res.end(JSON.stringify(body));
 }
 
-export function readBody(req: IncomingMessage): Promise<string> {
+// 요청 본문 누적 상한(10MB). 인증 전 webhook 경로(connectors OAuth 등)도 이 함수를
+// 거치므로, 큰 페이로드로 메모리/이벤트루프를 뭉개려는 시도를 끊는다. 초과 시 413 으로
+// 즉시 응답하고 Promise 는 reject — 라우터가 별도 처리할 필요 없이 throw 가 전파된다.
+export const MAX_BODY_BYTES = 10 * 1024 * 1024;
+
+export function readBody(req: IncomingMessage, res?: ServerResponse): Promise<string> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    req.on("data", (c: Buffer) => chunks.push(c));
-    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
-    req.on("error", reject);
+    let total = 0;
+    let aborted = false;
+    req.on("data", (c: Buffer) => {
+      if (aborted) return;
+      total += c.length;
+      if (total > MAX_BODY_BYTES) {
+        aborted = true;
+        // 413 으로 끊는다. 호출자가 res 를 안 넘기면 헤더는 못 쓰고 reject 만.
+        try {
+          if (res && !res.headersSent) {
+            res.writeHead(413, JSON_HEADERS);
+            res.end(JSON.stringify({ error: "payload too large" }));
+          }
+        } catch {
+          /* ignore */
+        }
+        try {
+          req.destroy();
+        } catch {
+          /* ignore */
+        }
+        reject(new Error("payload too large"));
+        return;
+      }
+      chunks.push(c);
+    });
+    req.on("end", () => {
+      if (!aborted) resolve(Buffer.concat(chunks).toString("utf8"));
+    });
+    req.on("error", (e) => {
+      if (!aborted) reject(e);
+    });
   });
 }
 

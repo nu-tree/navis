@@ -21,7 +21,7 @@ export async function handleMemories(
       return;
     }
     if (req.method === "PATCH" && idMatch) {
-      const raw = await readBody(req);
+      const raw = await readBody(req, res);
       const body = (safeParse(raw) ?? {}) as Record<string, unknown>;
       const result = await patchMemory(idMatch[1], body);
       sendJson(res, result.ok ? 200 : result.status, { ok: result.ok });

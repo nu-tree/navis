@@ -63,7 +63,7 @@ export async function handlePutConnector(
     return sendJson(res, 400, { error: "invalid id (소문자/숫자/_, 예약어 불가)" });
   }
   try {
-    const body = safeParse(await readBody(req)) ?? {};
+    const body = safeParse(await readBody(req, res)) ?? {};
     // URL 의 id 가 정본 — body 에 id 가 있어도 덮어쓴다.
     const saved = await upsertConnector({ ...body, id });
     sendJson(res, 200, { connector: redact(saved) });
@@ -128,7 +128,7 @@ export async function handleOAuthStart(
 ): Promise<void> {
   if (!requireAppAuth(req, res)) return;
   try {
-    const body = safeParse(await readBody(req)) ?? {};
+    const body = safeParse(await readBody(req, res)) ?? {};
     const provider = typeof body.provider === "string" ? body.provider : "";
     if (!provider) return sendJson(res, 400, { error: "provider required" });
     const { authUrl } = await startOAuth(provider, publicBaseUrl(req));

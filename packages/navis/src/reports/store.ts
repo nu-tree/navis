@@ -5,6 +5,7 @@
 //
 // sourceId/sourceTitle 로 "출처별 방"을 만든다. 크론은 크론마다 방 1개(sourceId=크론 id,
 // sourceTitle=크론 DB 제목), 다이제스트/캘린더는 각각 고정 방.
+import { randomUUID } from "node:crypto";
 import { config } from "../config.js";
 import { publishToNtfy } from "./ntfy.js";
 
@@ -75,7 +76,9 @@ export async function loadReports(): Promise<void> {
         for (const r of stored) if (!seen.has(r.id)) BUFFER.push(r);
         BUFFER.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
         if (BUFFER.length > MAX) BUFFER.splice(0, BUFFER.length - MAX);
-        seq.n = BUFFER.length;
+        // 복원 도중 recordReport 가 먼저 발동했을 수 있어 seq.n 을 무작정 덮어쓰면
+        // 이미 발급된 카운터가 되감겨 id 충돌이 난다. 더 큰 값을 유지.
+        seq.n = Math.max(seq.n, BUFFER.length);
       }
     }
   } catch (err) {
@@ -126,8 +129,10 @@ async function saveReports(): Promise<void> {
 
 export function recordReport(input: RecordReportInput): void {
   seq.n += 1;
+  // id 는 randomUUID 기반 — Date.now() 만으론 같은 ms 안에서 충돌 가능. seq 까지 같이
+  // 묶어 디버그 시 발생 순서를 식별 가능하게 한다.
   BUFFER.push({
-    id: `r${Date.now()}-${seq.n}`,
+    id: `r${seq.n}-${randomUUID()}`,
     ...input,
     createdAt: new Date().toISOString(),
   });
