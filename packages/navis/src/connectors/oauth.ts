@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { getProvider } from "./providers.js";
-import { upsertConnector } from "./store.js";
+import { isValidConnectorId, upsertConnector } from "./store.js";
 import type { Connector } from "./types.js";
 
 // MCP-스펙 OAuth (메타데이터 발견 + Dynamic Client Registration + PKCE).
@@ -155,6 +155,14 @@ export async function startOAuth(
 ): Promise<{ authUrl: string }> {
   const provider = getProvider(providerKey);
   if (!provider) throw new Error(`알 수 없는 제공자: ${providerKey}`);
+  // preset.key 는 그대로 connector.id 가 되므로 슬러그 규칙/예약어 충돌을 먼저 검증한다.
+  // 여기서 막지 않으면 브라우저 동의·토큰 교환을 마친 뒤 upsertConnector 의 normalize
+  // 가 throw 해서 사용자가 받아놓은 access/refresh 토큰이 그대로 폐기된다.
+  if (!isValidConnectorId(provider.key)) {
+    throw new Error(
+      `잘못된 제공자 키 "${provider.key}" — 커넥터 id 규칙(소문자/숫자/_, 예약어 제외)에 맞지 않습니다. providers.ts 의 preset 을 고치세요.`,
+    );
+  }
   if (!baseUrl) throw new Error("공개 URL 을 알 수 없어 redirect_uri 를 만들 수 없습니다.");
   sweep();
 

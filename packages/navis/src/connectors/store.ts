@@ -65,6 +65,25 @@ export function normalize(item: unknown): Connector | undefined {
   };
 }
 
+// apikey 인증의 헤더/값 규칙을 한 곳에서 정한다 — store(저장 정규화)와 mcp(요청 헤더 생성)
+// 양쪽이 이 함수만 호출하게 해서 두 경로의 기본값/포맷이 절대 갈라지지 않게 한다.
+//   - 기본 헤더: Authorization (입력에서 비었거나 공백이면 채워 넣는다)
+//   - 값에 스킴(Bearer/Basic/...)이 이미 있으면 원문 보존(예: "Bearer xxx" 그대로)
+//   - Authorization 헤더에 스킴 없는 원문 키만 들어오면 "Bearer " 프리픽스를 자동 보정해
+//     사용자가 raw 키만 넣어도 401 로 조용히 실패하지 않게 한다. 커스텀 헤더(예: X-API-Key)
+//     에는 손대지 않는다 — 그쪽은 값 형식이 제공자마다 달라 일률적 보정이 위험.
+export function resolveApikeyAuth(auth: { header?: string; value: string }): {
+  header: string;
+  value: string;
+} {
+  const header = auth.header?.trim() || "Authorization";
+  let value = auth.value;
+  if (header.toLowerCase() === "authorization" && !/^[A-Za-z][A-Za-z0-9-]*\s+\S/.test(value)) {
+    value = `Bearer ${value}`;
+  }
+  return { header, value };
+}
+
 function normalizeAuth(raw: unknown): Connector["auth"] | undefined {
   if (!raw || typeof raw !== "object") return undefined;
   const a = raw as Record<string, unknown>;
