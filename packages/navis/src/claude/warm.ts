@@ -28,7 +28,14 @@ import type { AskResult } from "./types.js";
 //  - 이미지/확장사고(thinking) 턴은 워밍 대상에서 제외(호출부가 콜드로 보냄).
 
 const IDLE_MS = 10 * 60_000; // 10분 유휴 시 세션 폐기
-const MAX_SESSIONS = 40; // 동시 워밍 세션 상한(초과 시 LRU 폐기)
+// 동시 워밍 세션 상한(초과 시 LRU 폐기). 워밍 세션 하나당 Claude CLI 서브프로세스가
+// 상주하므로, 작은 인스턴스(Railway hobby)에선 이 값이 크면 CPU/메모리가 고갈돼 이벤트
+// 루프가 굶고 응답이 분 단위로 느려질 수 있다. NAVIS_WARM_MAX_SESSIONS 로 인스턴스
+// 크기에 맞춰 조절(미설정 시 40). 단일 사용자/작은 플랜은 2~3 권장.
+const MAX_SESSIONS = (() => {
+  const n = Number.parseInt(process.env.NAVIS_WARM_MAX_SESSIONS ?? "", 10);
+  return Number.isFinite(n) && n > 0 ? n : 40;
+})();
 // 한 턴 wall-clock 상한. streaming-input 가정(턴마다 result 1개)이 틀려 result 가 영영
 // 안 와도 무한 행을 막는 안전 backstop — 정상 턴엔 안 닿게 넉넉히(도구 루프 포함).
 const TURN_TIMEOUT_MS = 5 * 60_000;
