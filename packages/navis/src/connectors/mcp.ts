@@ -1,5 +1,5 @@
 import type { McpHttpServerConfig } from "@anthropic-ai/claude-agent-sdk";
-import { listConnectors } from "./store.js";
+import { listConnectors, resolveApikeyAuth } from "./store.js";
 import { refreshIfNeeded } from "./oauth.js";
 import type { Connector } from "./types.js";
 
@@ -15,12 +15,16 @@ export interface BuiltConnectors {
 }
 
 // 인증 타입 → HTTP 헤더. none 이면 빈 객체.
+// apikey 의 기본 헤더/스킴 보정은 store.resolveApikeyAuth 한 곳에서만 결정한다
+// (저장 시점과 사용 시점의 규칙이 갈라지지 않게).
 function authHeaders(auth: Connector["auth"]): Record<string, string> {
   switch (auth.type) {
     case "none":
       return {};
-    case "apikey":
-      return { [auth.header ?? "Authorization"]: auth.value };
+    case "apikey": {
+      const { header, value } = resolveApikeyAuth(auth);
+      return { [header]: value };
+    }
     case "oauth":
       return { Authorization: `Bearer ${auth.token}` };
   }
