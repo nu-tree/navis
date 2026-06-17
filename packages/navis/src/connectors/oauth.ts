@@ -19,13 +19,20 @@ interface Discovered {
   registrationEndpoint?: string;
 }
 
+type ClientAuth = "basic" | "body" | "none";
+type BodyFormat = "form" | "json";
+
 interface Pending {
   connectorId: string;
   label: string;
   mcpUrl: string;
   tokenEndpoint: string;
   clientId: string;
+  // 공개 클라이언트(DCR token_endpoint_auth_method=none) 는 항상 undefined.
+  // 토큰 응답이 우연히 client_secret 을 돌려줘도 여기엔 절대 들어가지 않는다.
   clientSecret?: string;
+  clientAuth: ClientAuth;
+  bodyFormat: BodyFormat;
   codeVerifier: string;
   redirectUri: string;
   createdAt: number;
@@ -38,6 +45,13 @@ function sweep(): void {
   const now = Date.now();
   for (const [k, v] of pending) if (now - v.createdAt > PENDING_TTL_MS) pending.delete(k);
 }
+
+// startOAuth / completeOAuth 외에도, 둘 다 안 불리는 잔잔한 상태에서 TTL 넘긴 항목이
+// codeVerifier/clientSecret 자격과 함께 메모리에 잔존하지 않도록 주기 타이머도 돌린다.
+// 인터벌은 PENDING_TTL_MS 의 절반 — 최악의 경우 TTL+절반 만큼만 잔존.
+const sweepTimer = setInterval(sweep, PENDING_TTL_MS / 2);
+// 테스트/배포 셧다운에서 프로세스를 잡지 않게.
+if (typeof sweepTimer.unref === "function") sweepTimer.unref();
 
 const b64url = (b: Buffer): string =>
   b.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -101,10 +115,12 @@ async function discover(mcpUrl: string): Promise<Discovered> {
 }
 
 // Dynamic Client Registration(RFC 7591) — client_id 런타임 자동 발급(공개 클라이언트+PKCE).
+// 서버가 응답에 client_secret 을 끼워 돌려줘도(스펙상 "none" 일 때 의미 없음) 절대 받아쓰지
+// 않는다 — 공개 클라이언트가 비밀값을 들고 있으면 그 자체로 위협 모델 위반.
 async function registerClient(
   registrationEndpoint: string,
   redirectUri: string,
-): Promise<{ clientId: string; clientSecret?: string }> {
+): Promise<{ clientId: string }> {
   const res = await fetch(registrationEndpoint, {
     method: "POST",
     headers: { "content-type": "application/json", accept: "application/json" },
@@ -129,7 +145,7 @@ async function registerClient(
       `클라이언트 등록 실패(${res.status}): ${data.error_description || data.error || "no client_id"}`,
     );
   }
-  return { clientId: data.client_id, clientSecret: data.client_secret };
+  return { clientId: data.client_id };
 }
 
 // 동의 URL 생성 — 발견 + DCR 후 PKCE authorize URL 을 만든다. baseUrl 은 콜백을 구성할 공개 주소.
@@ -146,16 +162,21 @@ export async function startOAuth(
   const disco = await discover(provider.mcpUrl);
 
   // client 자격 확보 — 하이브리드:
-  //   ① 서버가 DCR 지원 → 런타임 자동 등록(Notion).
-  //   ② 미지원이지만 등록된 client 자격 있음 → 그걸 사용(Google, config.google 재활용).
+  //   ① 서버가 DCR 지원 → 런타임 자동 등록(Notion). 공개 클라이언트 → clientAuth=none.
+  //   ② 미지원이지만 등록된 client 자격 있음 → 그걸 사용(Google). 기밀 클라이언트 → body.
   //   ③ 둘 다 없음 → 명확한 에러.
   let clientId: string;
   let clientSecret: string | undefined;
+  let clientAuth: ClientAuth;
   if (disco.registrationEndpoint) {
-    ({ clientId, clientSecret } = await registerClient(disco.registrationEndpoint, redirectUri));
+    ({ clientId } = await registerClient(disco.registrationEndpoint, redirectUri));
+    clientSecret = undefined;
+    clientAuth = "none";
   } else if (provider.clientId) {
     clientId = provider.clientId;
     clientSecret = provider.clientSecret;
+    // classic 제공자에 secret 이 있으면 기밀 클라이언트(body 로 전송), 없으면 공개(none).
+    clientAuth = clientSecret ? "body" : "none";
   } else {
     throw new Error(
       `${provider.label}: 인가서버가 DCR(자동 등록)을 지원하지 않고, 등록된 client_id 도 없어요. ` +
@@ -171,7 +192,9 @@ export async function startOAuth(
     mcpUrl: provider.mcpUrl,
     tokenEndpoint: disco.tokenEndpoint,
     clientId,
-    clientSecret,
+    ...(clientSecret ? { clientSecret } : {}),
+    clientAuth,
+    bodyFormat: "form",
     codeVerifier,
     redirectUri,
     createdAt: Date.now(),
@@ -202,42 +225,105 @@ interface TokenResponse {
   error_description?: string;
 }
 
-// 토큰 엔드포인트 호출(인가코드 교환/refresh 공용). 공개 클라이언트 → client_id 를 본문에, PKCE.
+// 토큰 엔드포인트 응답 오류를 영구/일시로 분류해 던지는 전용 에러 — refreshIfNeeded 가
+// 이 정보로 "재인증 필요" 신호를 결정한다.
+class TokenError extends Error {
+  constructor(
+    public readonly permanent: boolean,
+    public readonly oauthError: string | undefined,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+// RFC 6749 §5.2 영구 실패 코드 — refresh_token 이 무효해진 상태.
+const PERMANENT_OAUTH_ERRORS = new Set([
+  "invalid_grant",
+  "invalid_client",
+  "unauthorized_client",
+  "unsupported_grant_type",
+]);
+
+function classifyTokenError(
+  status: number,
+  data: TokenResponse,
+): { permanent: boolean; message: string } {
+  const err = data.error;
+  const desc = data.error_description;
+  const text = desc || err || `HTTP ${status}`;
+  if (err && PERMANENT_OAUTH_ERRORS.has(err)) return { permanent: true, message: text };
+  // 일부 제공자(노션 포함) 는 error 코드 없이 description 에 사유를 넣는다.
+  if (desc && /grant\s+not\s+found|revoked|expired|reauth/i.test(desc)) {
+    return { permanent: true, message: text };
+  }
+  return { permanent: false, message: text };
+}
+
+// 토큰 엔드포인트 호출(인가코드 교환/refresh 공용).
+// clientAuth/bodyFormat 를 honor 한다:
+//   - basic: Authorization: Basic base64(id:secret), 본문에는 client_id 미동봉
+//   - body : 본문에 client_id + client_secret(있으면)
+//   - none : 본문에 client_id 만 — 공개 클라이언트(PKCE), client_secret 자체가 없음
+//   - bodyFormat=json: application/json, 그 외엔 form-urlencoded
 async function tokenRequest(
   tokenEndpoint: string,
   clientId: string,
   clientSecret: string | undefined,
+  clientAuth: ClientAuth,
+  bodyFormat: BodyFormat,
   fields: Record<string, string>,
 ): Promise<TokenResponse> {
-  // 자격은 본문에 싣는다(form). 공개 클라이언트(DCR none)는 client_id 만, 기밀
-  // 클라이언트(구글 웹앱)는 client_secret 까지. 구글·표준 OAuth2 토큰 엔드포인트 호환.
-  const body: Record<string, string> = { client_id: clientId, ...fields };
-  if (clientSecret) body.client_secret = clientSecret;
+  const body: Record<string, string> = { ...fields };
+  const headers: Record<string, string> = { accept: "application/json" };
+
+  if (clientAuth === "basic") {
+    if (!clientSecret) {
+      throw new TokenError(
+        true,
+        undefined,
+        "clientAuth=basic 이지만 clientSecret 이 없습니다 — 설정 불일치",
+      );
+    }
+    headers["authorization"] = `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`;
+  } else {
+    // body / none 둘 다 client_id 는 본문에. secret 은 기밀 클라이언트(body) 에서만.
+    body.client_id = clientId;
+    if (clientAuth === "body" && clientSecret) body.client_secret = clientSecret;
+  }
+
+  let payload: string;
+  if (bodyFormat === "json") {
+    headers["content-type"] = "application/json";
+    payload = JSON.stringify(body);
+  } else {
+    headers["content-type"] = "application/x-www-form-urlencoded";
+    payload = new URLSearchParams(body).toString();
+  }
+
   const res = await fetch(tokenEndpoint, {
     method: "POST",
-    headers: {
-      "content-type": "application/x-www-form-urlencoded",
-      accept: "application/json",
-    },
-    body: new URLSearchParams(body).toString(),
+    headers,
+    body: payload,
     signal: AbortSignal.timeout(15_000),
   });
   const data = (await res.json().catch(() => ({}))) as TokenResponse;
   if (!res.ok || data.error || !data.access_token) {
-    throw new Error(
-      `토큰 교환 실패(${res.status}): ${data.error_description || data.error || "no access_token"}`,
-    );
+    const { permanent, message } = classifyTokenError(res.status, data);
+    throw new TokenError(permanent, data.error, `토큰 교환 실패(${res.status}): ${message}`);
   }
   return data;
 }
 
 // 콜백 — code+state 로 토큰 교환 후 커넥터 저장(enabled). 갱신에 필요한 좌표도 함께 보관.
 export async function completeOAuth(code: string, state: string): Promise<Connector> {
+  // 콜백은 사용자가 동의를 완료한 경로 — 다른 만료된 pending 항목도 함께 청소한다.
+  sweep();
   const p = pending.get(state);
   if (!p) throw new Error("state 불일치/만료 — 다시 시도하세요.");
   pending.delete(state);
 
-  const tok = await tokenRequest(p.tokenEndpoint, p.clientId, p.clientSecret, {
+  const tok = await tokenRequest(p.tokenEndpoint, p.clientId, p.clientSecret, p.clientAuth, p.bodyFormat, {
     grant_type: "authorization_code",
     code,
     redirect_uri: p.redirectUri,
@@ -257,11 +343,15 @@ export async function completeOAuth(code: string, state: string): Promise<Connec
       ...(tok.refresh_token ? { refreshToken: tok.refresh_token } : {}),
       tokenUrl: p.tokenEndpoint,
       clientId: p.clientId,
-      ...(p.clientSecret ? { clientSecret: p.clientSecret } : {}),
+      // 공개 클라이언트(clientAuth: "none") 는 절대 secret 을 영속하지 않는다 —
+      // p.clientSecret 자체가 undefined 라 이 분기는 자동으로 빈 객체가 된다.
+      ...(p.clientAuth !== "none" && p.clientSecret ? { clientSecret: p.clientSecret } : {}),
       resource: p.mcpUrl,
-      clientAuth: "body",
-      bodyFormat: "form",
+      clientAuth: p.clientAuth,
+      bodyFormat: p.bodyFormat,
       ...(tok.expires_in ? { expiresAt: Date.now() + tok.expires_in * 1000 } : {}),
+      // 새 토큰을 받았으므로 이전 영구 실패 플래그는 명시적으로 해제.
+      needsReauth: false,
     },
   };
   return upsertConnector(connector);
@@ -269,9 +359,14 @@ export async function completeOAuth(code: string, state: string): Promise<Connec
 
 // refresh 실패 백오프 — "Grant not found" 처럼 영구 실패하는 토큰을 매 채팅 요청마다
 // 다시 시도하면 토큰 엔드포인트 왕복(수백 ms~수 초)이 모든 응답 앞에 끼어든다.
-// 실패한 커넥터는 일정 시간 재시도를 건너뛴다(성공하면 해제).
+// 일시 네트워크 오류는 짧게 backoff, 영구 실패는 needsReauth 플래그로 사용자에게 신호.
 const refreshFailedAt = new Map<string, number>();
 const REFRESH_BACKOFF_MS = 5 * 60_000;
+
+// 동시 refresh 합치기 — 같은 커넥터에 대해 동시에 들어오는 refresh 호출은 하나의 in-flight
+// Promise 를 공유한다. refresh_token 을 회전(노션 등)하는 서버에서 두 요청이 동시에 들어가면
+// 한쪽이 막 받은 새 refresh_token 을 다른 쪽이 옛 값으로 무효화시키는 race 가 발생한다.
+const refreshInflight = new Map<string, Promise<Connector>>();
 
 // 사용 직전 — access token 만료 임박(60초 이내)이면 refresh 로 갱신·영속하고 갱신된 커넥터 반환.
 export async function refreshIfNeeded(c: Connector): Promise<Connector> {
@@ -279,16 +374,42 @@ export async function refreshIfNeeded(c: Connector): Promise<Connector> {
   const a = c.auth;
   if (!a.expiresAt || !a.refreshToken || !a.tokenUrl || !a.clientId) return c;
   if (Date.now() < a.expiresAt - 60_000) return c;
+  // 영구 실패로 재인증이 필요한 상태에서는 더 이상 자동 갱신 시도조차 하지 않는다 —
+  // 사용자가 앱에서 다시 동의를 거치면 completeOAuth 가 플래그를 풀어준다.
+  if (a.needsReauth) return c;
+
+  const inflight = refreshInflight.get(c.id);
+  if (inflight) return inflight;
 
   const failedAt = refreshFailedAt.get(c.id);
   if (failedAt && Date.now() - failedAt < REFRESH_BACKOFF_MS) return c;
 
+  const promise = doRefresh(c).finally(() => {
+    refreshInflight.delete(c.id);
+  });
+  refreshInflight.set(c.id, promise);
+  return promise;
+}
+
+async function doRefresh(c: Connector): Promise<Connector> {
+  if (c.auth.type !== "oauth") return c;
+  const a = c.auth;
+  if (!a.refreshToken || !a.tokenUrl || !a.clientId) return c;
+
   try {
-    const tok = await tokenRequest(a.tokenUrl, a.clientId, a.clientSecret, {
-      grant_type: "refresh_token",
-      refresh_token: a.refreshToken,
-      ...(a.resource ? { resource: a.resource } : {}),
-    });
+    const tok = await tokenRequest(
+      a.tokenUrl,
+      a.clientId,
+      // 공개 클라이언트는 정의상 secret 이 없어서 undefined — body 에도 안 실린다.
+      a.clientAuth === "none" ? undefined : a.clientSecret,
+      a.clientAuth ?? "body",
+      a.bodyFormat ?? "form",
+      {
+        grant_type: "refresh_token",
+        refresh_token: a.refreshToken,
+        ...(a.resource ? { resource: a.resource } : {}),
+      },
+    );
     const updated: Connector = {
       ...c,
       auth: {
@@ -296,11 +417,25 @@ export async function refreshIfNeeded(c: Connector): Promise<Connector> {
         token: tok.access_token!,
         ...(tok.refresh_token ? { refreshToken: tok.refresh_token } : {}),
         ...(tok.expires_in ? { expiresAt: Date.now() + tok.expires_in * 1000 } : {}),
+        needsReauth: false,
       },
     };
     refreshFailedAt.delete(c.id);
     return upsertConnector(updated);
   } catch (err) {
+    if (err instanceof TokenError && err.permanent) {
+      // 영구 실패 — 다음 턴부터 자동 제외되고, 앱 UI 에 재인증 배지를 띄울 수 있도록 영속.
+      console.error(
+        `[connectors] ${c.id} 영구 토큰 실패(재인증 필요): ${err.message}`,
+      );
+      try {
+        return await upsertConnector({ ...c, auth: { ...a, needsReauth: true } });
+      } catch (saveErr) {
+        console.error(`[connectors] ${c.id} 재인증 플래그 저장 실패:`, saveErr);
+        return c;
+      }
+    }
+    // 일시 실패(네트워크/5xx/타임아웃) — 짧은 backoff 후 다시 시도.
     refreshFailedAt.set(c.id, Date.now());
     console.error(`[connectors] ${c.id} 토큰 갱신 실패(기존 토큰으로 진행):`, err);
     return c;
