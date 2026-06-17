@@ -85,6 +85,11 @@ export async function reconcile(): Promise<void> {
 // 부팅 시 호출. 초기 로드 + 1분마다 동기화(직접 DB 변경/다중 인스턴스 대비).
 export async function startCronScheduler(): Promise<void> {
   await reconcile().catch((err) => console.error("[cron] 초기 로드 실패:", err));
-  cron.schedule("* * * * *", () => void reconcile().catch(() => {}));
+  // namory(잡 소스)가 장기 불통이면 동기화가 조용히 멈춘다 — 최소한 로그는 남겨
+  // 진단 가능하게. 한 번의 실패가 다음 틱을 막진 않는다(노드-크론은 다음 틱에 다시 호출).
+  cron.schedule(
+    "* * * * *",
+    () => void reconcile().catch((err) => console.error("[cron] reconcile 실패:", err)),
+  );
   console.log(`[cron] 스케줄러 시작 (등록 ${jobs.size}건)`);
 }
