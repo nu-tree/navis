@@ -6,13 +6,13 @@ import { curateTurn } from "../claude/curator.js";
 import { collectImagesFromDataUrls } from "../claude/images.js";
 import type { AskResult, InputImage } from "../claude/types.js";
 import {
-  CORS_HEADERS,
   readBody,
   safeParse,
   requireAppAuth,
   sendJson,
   sendInternalError,
 } from "./respond.js";
+import { writeSseHead, sseEvent, startHeartbeat } from "./sse.js";
 import {
   registerTurn,
   clearTurn,
@@ -129,6 +129,20 @@ async function parseChatRequest(
   return { text, images, resume, model, thinking, conversationId, turnId, snapshot };
 }
 
+// chat / chat-stream 공통 — 응답 메타(contextFull, 실제 사용 모델) 계산.
+// contextFull 은 다음 턴에 세션 리셋 신호로 클라가 쓰고, model 은 앱이 모델 선택 반영
+// 여부를 표시하는 데 쓴다. modelOverride 가 화이트리스트로 걸러진 값 또는 undefined
+// 라는 전제 — undefined 면 askClaude 가 config.model 로 돈다.
+function turnMeta(
+  result: AskResult,
+  modelOverride: string | undefined,
+): { contextFull: boolean; model: string } {
+  return {
+    contextFull: result.contextTokens >= config.contextTokenLimit,
+    model: modelOverride ?? config.model,
+  };
+}
+
 // 명시적 중지 — 진행 중인 챗 턴 생성을 실제로 끊는다(토큰 절약). 단순 연결 종료
 // (폰 백그라운드)는 생성을 끊지 않으므로, 중지 버튼은 이 엔드포인트를 따로 부른다.
 // readBody 가 413(페이로드 초과)으로 reject 할 수 있어 try/catch 로 감싼다 — 라우터의
@@ -188,7 +202,7 @@ export async function handleChat(req: IncomingMessage, res: ServerResponse): Pro
       images: parsed.images,
       modelOverride: parsed.model,
     });
-    const contextFull = result.contextTokens >= config.contextTokenLimit;
+    const { contextFull } = turnMeta(result, parsed.model);
 
     sendJson(res, 200, {
       text: result.text,
@@ -201,6 +215,69 @@ export async function handleChat(req: IncomingMessage, res: ServerResponse): Pro
     curate(parsed.text, result.text);
   } catch (err) {
     sendInternalError(res, "[chat] 처리 실패:", err);
+  }
+}
+
+// 스트리밍 콜백 묶음. 워밍/콜드 경로 양쪽에서 동일하게 쓴다(thinking 은 콜드 전용).
+type StreamCallbacks = {
+  onTextDelta: (delta: string) => void;
+  onStatus: (toolName: string) => void;
+  onToolComplete: (label: string) => void;
+  onThinkingDelta?: (delta: string) => void;
+};
+
+// 워밍/콜드 선택 — 워밍 가능하면 warm 시도, WarmFallback(스트리밍 시작 전 신호)이면
+// 콜드로 같은 턴 재실행. 콜드 폴백은 사용자가 멈추지 않은 경우에만(abort 후엔 던진다).
+// 워밍 경로는 중지(/api/chat/cancel → abort)에 대응해 워밍 세션을 폐기한다.
+// 호출부(handleChatStream) 는 워밍/콜드 분기 자체를 모르게 한다.
+async function runChatTurn(
+  parsed: ChatRequest,
+  callbacks: StreamCallbacks,
+  abortController: AbortController,
+): Promise<AskResult> {
+  const askCold = (): Promise<AskResult> =>
+    askClaude({
+      prompt: parsed.text,
+      resumeSessionId: parsed.resume,
+      images: parsed.images,
+      onTextDelta: callbacks.onTextDelta,
+      onStatus: callbacks.onStatus,
+      onToolComplete: callbacks.onToolComplete,
+      modelOverride: parsed.model,
+      onThinkingDelta: callbacks.onThinkingDelta,
+      abortController,
+    });
+
+  // 워밍 경로 조건: 켜짐 + 대화 id 있음 + 이미지/확장사고 아님(이 둘은 턴마다 세션
+  // 옵션이 달라 콜드로 처리). 워밍이 폴백을 던지면(스트리밍 시작 전) 콜드로 재시도.
+  const canWarm =
+    warmEnabled() && !!parsed.conversationId && parsed.images.length === 0 && !parsed.thinking;
+  if (!canWarm) return askCold();
+
+  const convId = parsed.conversationId as string;
+  // 중지(/api/chat/cancel → abort) 시 워밍 세션을 폐기해 SDK 생성을 끊는다.
+  const onAbort = () => dropWarmSession(convId);
+  abortController.signal.addEventListener("abort", onAbort);
+  try {
+    return await runWarmTurn({
+      conversationId: convId,
+      prompt: parsed.text,
+      model: parsed.model ?? config.model,
+      resume: parsed.resume,
+      callbacks: {
+        onTextDelta: callbacks.onTextDelta,
+        onStatus: callbacks.onStatus,
+        onToolComplete: callbacks.onToolComplete,
+      },
+    });
+  } catch (err) {
+    // 스트리밍 시작 전 폴백 신호이고 사용자가 멈춘 게 아니면 콜드로 같은 턴 재실행.
+    if (err instanceof WarmFallback && !abortController.signal.aborted) {
+      return askCold();
+    }
+    throw err;
+  } finally {
+    abortController.signal.removeEventListener("abort", onAbort);
   }
 }
 
@@ -217,34 +294,9 @@ export async function handleChatStream(
   const parsed = await parseChatRequest(req, res);
   if (!parsed) return;
 
-  // SSE 헤더. 프록시(Railway) 버퍼링 방지 위해 x-accel-buffering 도 끈다.
-  res.writeHead(200, {
-    ...CORS_HEADERS,
-    "content-type": "text/event-stream; charset=utf-8",
-    "cache-control": "no-cache, no-transform",
-    connection: "keep-alive",
-    "x-accel-buffering": "no",
-  });
-
-  // 연결이 끊긴 뒤(클라가 떠남) 쓰면 EPIPE 가 나므로 항상 가드한다.
-  const sse = (event: string, data: unknown) => {
-    if (!res.writableEnded) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-  };
-
-  // 도구 호출이 길게 이어지는 동안 바이트가 안 흐르면 Railway 프록시·클라가 idle
-  // 로 보고 끊어버린다. SSE 주석 핑을 응답이 완전히 끝날 때까지 흘려 연결을 유지.
-  // 주석(`:`)은 SSE 파서가 무시한다. 첫 토큰 이후에도 도구 호출이 이어질 수 있어서
-  // 첫 delta에 핑을 끄지 않고 finally 블록에서만 정리한다.
-  res.write(": open\n\n");
-  let heartbeat: ReturnType<typeof setInterval> | undefined = setInterval(() => {
-    if (!res.writableEnded) res.write(": ping\n\n");
-  }, 5_000);
-  const stopHeartbeat = () => {
-    if (heartbeat) {
-      clearInterval(heartbeat);
-      heartbeat = undefined;
-    }
-  };
+  writeSseHead(res);
+  const sse = (event: string, data: unknown) => sseEvent(res, event, data);
+  const stopHeartbeat = startHeartbeat(res);
 
   // 연결 종료 != 중지. 폰을 잠그거나 앱을 나가면 연결이 끊기지만(clientGone) 생성은
   // 계속 돌려 완료 후 서버가 응답을 영속 + 폰 푸시한다. 실제 중지는 /api/chat/cancel
@@ -264,62 +316,19 @@ export async function handleChatStream(
   });
 
   try {
-    // 스트리밍 콜백 — 워밍/콜드 경로 공통.
-    const onDelta = (delta: string) => sse("delta", { text: delta });
-    const onStatus = (toolName: string) => sse("status", { tool: toolName });
-    const onTool = (label: string) => sse("tool", { label });
-    // 확장 사고는 opt-in — body.thinking:true 일 때만 델타를 흘려보낸다(콜드 경로 전용).
-    const onThinking = parsed.thinking
-      ? (delta: string) => sse("thinking", { text: delta })
-      : undefined;
+    const callbacks: StreamCallbacks = {
+      onTextDelta: (delta) => sse("delta", { text: delta }),
+      onStatus: (toolName) => sse("status", { tool: toolName }),
+      onToolComplete: (label) => sse("tool", { label }),
+      // 확장 사고는 opt-in — body.thinking:true 일 때만 델타를 흘려보낸다(콜드 경로 전용).
+      onThinkingDelta: parsed.thinking
+        ? (delta) => sse("thinking", { text: delta })
+        : undefined,
+    };
 
-    // 워밍 경로 조건: 켜짐 + 대화 id 있음 + 이미지/확장사고 아님(이 둘은 턴마다 세션
-    // 옵션이 달라 콜드로 처리). 워밍이 폴백을 던지면(스트리밍 시작 전) 콜드로 재시도.
-    const canWarm =
-      warmEnabled() && !!parsed.conversationId && parsed.images.length === 0 && !parsed.thinking;
-
-    const askCold = (): Promise<AskResult> =>
-      askClaude({
-        prompt: parsed.text,
-        resumeSessionId: parsed.resume,
-        images: parsed.images,
-        onTextDelta: onDelta,
-        onStatus,
-        onToolComplete: onTool,
-        modelOverride: parsed.model,
-        onThinkingDelta: onThinking,
-        abortController,
-      });
-
-    let result: AskResult;
-    if (canWarm) {
-      const convId = parsed.conversationId as string;
-      // 중지(/api/chat/cancel → abort) 시 워밍 세션을 폐기해 SDK 생성을 끊는다.
-      const onAbort = () => dropWarmSession(convId);
-      abortController.signal.addEventListener("abort", onAbort);
-      try {
-        result = await runWarmTurn({
-          conversationId: convId,
-          prompt: parsed.text,
-          model: parsed.model ?? config.model,
-          resume: parsed.resume,
-          callbacks: { onTextDelta: onDelta, onStatus, onToolComplete: onTool },
-        });
-      } catch (err) {
-        // 스트리밍 시작 전 폴백 신호이고 사용자가 멈춘 게 아니면 콜드로 같은 턴 재실행.
-        if (err instanceof WarmFallback && !abortController.signal.aborted) {
-          result = await askCold();
-        } else {
-          throw err;
-        }
-      } finally {
-        abortController.signal.removeEventListener("abort", onAbort);
-      }
-    } else {
-      result = await askCold();
-    }
+    const result = await runChatTurn(parsed, callbacks, abortController);
     if (parsed.turnId) clearTurn(parsed.turnId);
-    const contextFull = result.contextTokens >= config.contextTokenLimit;
+    const { contextFull, model } = turnMeta(result, parsed.model);
 
     // 클라가 응답 전에 떠났는가? 두 신호를 함께 본다:
     //  - clientGone: req 'close'(연결 종료). 프록시 뒤에선 안 뜰 수 있어 단독으론 불충분.
@@ -352,7 +361,7 @@ export async function handleChatStream(
         // 지연 계측(ms) — 앱/디버그에서 응답 속도 분해 확인용.
         timing: result.timing,
         // 이 턴에 실제로 사용된 모델 — 앱이 모델 선택이 반영됐는지 확인/표시.
-        model: parsed.model ?? config.model,
+        model,
       });
       if (!res.writableEnded) res.end();
     }
