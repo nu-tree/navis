@@ -19,9 +19,17 @@ import {
   consumeCancelled,
   markHandoff,
   consumeHandoff,
+  hasHandoff,
   persistAndNotify,
   type ChatSnapshot,
 } from "./chat-turns.js";
+
+// 연결이 끊긴 뒤(clientGone) 백그라운드 완주 의도(handoff 비콘)가 이 시간 안에 오지
+// 않으면, 그 생성은 "버려진 요청"(새로고침·포그라운드 단절·재시도로 버려짐)으로 보고
+// 끊어 자원을 회수한다. 비콘은 폰 백그라운드 시 즉시 오므로 넉넉히 잡아도(오탐=답 유실)
+// 안전하다. 이 가드가 없으면 버려진 생성들이 단일 이벤트 루프를 점유해 새 요청의 첫
+// 토큰을 수십 초 지연시킨다(누적→포화).
+const ABANDON_GRACE_MS = 15_000;
 
 type ChatRequest = {
   text: string;
@@ -209,9 +217,15 @@ export async function handleChatStream(
   const abortController = new AbortController();
   if (parsed.turnId) registerTurn(parsed.turnId, abortController);
   let clientGone = false;
+  let abandonTimer: ReturnType<typeof setTimeout> | undefined;
   req.on("close", () => {
     stopHeartbeat();
     clientGone = true;
+    // 백그라운드 완주 의도(handoff 비콘)가 유예 시간 안에 오면 계속 생성(완주+영속+푸시),
+    // 안 오면 버려진 요청으로 보고 생성을 끊어 이벤트 루프를 비운다(누적→포화 방지).
+    abandonTimer = setTimeout(() => {
+      if (!(parsed.turnId && hasHandoff(parsed.turnId))) abortController.abort();
+    }, ABANDON_GRACE_MS);
   });
 
   try {
@@ -329,5 +343,6 @@ export async function handleChatStream(
     }
   } finally {
     stopHeartbeat();
+    if (abandonTimer) clearTimeout(abandonTimer);
   }
 }

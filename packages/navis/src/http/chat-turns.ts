@@ -64,6 +64,12 @@ export function consumeHandoff(turnId: string): boolean {
   return true;
 }
 
+// 소거 없이 핸드오프 여부만 확인(peek). 연결 종료 후 "버려진 요청 vs 백그라운드 의도"를
+// 가르는 데 쓴다 — 완료 분기의 consumeHandoff 와 별개라 레이스가 없다.
+export function hasHandoff(turnId: string): boolean {
+  return !!turnId && handoff.has(turnId);
+}
+
 export type ChatSnapshot = {
   title: string;
   messages: unknown[];
