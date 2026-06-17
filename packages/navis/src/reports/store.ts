@@ -127,11 +127,14 @@ async function saveReports(): Promise<void> {
   // 복원 전엔 저장 보류 — 빈/부분 버퍼로 DB 의 기존 보고를 덮어쓰지 않게.
   if (!ready) return;
   // 직렬화: 이미 PUT 이 진행 중이면 dirty 만 세우고 진행 중 사이클의 종료를 기다린다.
-  // 진행 중인 PUT 의 do/while 루프가 dirty 를 다시 보고 최신 BUFFER 로 한 번 더 저장하므로
-  // 호출부(특히 flushReports)는 inflight 가 끝나면 더는 기다릴 필요가 없다.
+  // 진행 중인 PUT 의 do/while 루프가 보통은 dirty 를 소진하지만, inflight 캡처와
+  // 진행 루프의 dirty 리셋 사이 타이밍 창에서 마지막 변경분이 남을 수 있다 —
+  // inflight 가 끝난 뒤 dirty 가 여전히 true 면 한 번 더 저장을 보장한다. 두 번째
+  // 호출은 saving=false 상태로 진입해 정상 경로(IIFE)를 타므로 직렬화 락은 유지된다.
   if (saving) {
     dirty = true;
     if (inflight) await inflight;
+    if (dirty) await saveReports();
     return;
   }
   saving = true;
