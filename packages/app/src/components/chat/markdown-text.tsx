@@ -12,10 +12,11 @@ import { Text } from '../ui/text';
 // 한 줄(또는 단락) 안의 인라인 서식을 Text 조각으로.
 function renderInline(text: string, keyPrefix: string): ReactNode[] {
   const nodes: ReactNode[] = [];
-  // 순서 주의: **굵게** 를 *기울임* 보다 먼저 매칭.
+  // 순서 주의: **굵게** 를 *기울임* 보다 먼저 매칭. 마크다운 링크는 평문 URL 자동링크
+  // 보다 먼저 — `[txt](http://...)` 의 url 부분을 평문 URL 로 이중 매칭하지 않게.
   // 밑줄(_) 기울임은 일부러 빼둔다 — CLAUDE_CODE_OAUTH_TOKEN 같은 snake_case 식별자의
   // 밑줄이 기울임으로 오인돼 글자가 깨지기 때문. 기울임은 *별표*만 지원한다.
-  const re = /(\*\*([^*\n]+)\*\*|`([^`\n]+)`|\*([^*\n]+)\*|\[([^\]\n]+)\]\(([^)\s]+)\))/g;
+  const re = /(\*\*([^*\n]+)\*\*|`([^`\n]+)`|\*([^*\n]+)\*|\[([^\]\n]+)\]\(([^)\s]+)\)|(https?:\/\/[^\s<>]+))/g;
   let last = 0;
   let m: RegExpExecArray | null;
   let i = 0;
@@ -42,6 +43,25 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
           {m[5]}
         </Text>,
       );
+    } else if (m[7] != null) {
+      // 평문 URL — 끝에 붙은 문장부호는 URL에서 떼어내 본문 텍스트로 되돌린다.
+      // ) 는 URL 경로에 자주 들어가므로(예: Wikipedia) URL 안에 ( 가 있으면 보존.
+      let url = m[7];
+      const trailRe = url.includes('(') ? /[.,;:!?\]}'"]+$/ : /[.,;:!?)\]}'"]+$/;
+      const trailMatch = trailRe.exec(url);
+      const trailing = trailMatch ? trailMatch[0] : '';
+      if (trailing) url = url.slice(0, url.length - trailing.length);
+      const href = url;
+      nodes.push(
+        <Text
+          key={`${keyPrefix}u${i}`}
+          className="text-primary underline"
+          onPress={() => void Linking.openURL(href).catch(() => {})}
+        >
+          {url}
+        </Text>,
+      );
+      if (trailing) nodes.push(<Fragment key={`${keyPrefix}ut${i}`}>{trailing}</Fragment>);
     }
     last = m.index + m[0].length;
     i++;
