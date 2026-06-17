@@ -95,6 +95,18 @@ export function buildChatAllowedTools(
   ];
 }
 
+// result 단계에서 subtype != "success" 로 떨어지는 turn-level 실패. 도구 호출이 이미
+// 모두 끝난 뒤의 실패라, 워밍 경로에서 콜드로 재실행하면 같은 도구가 다시 호출되어
+// 중복/이중 과금이 생긴다. 별도 타입으로 구분해 워밍 폴백 변환 대상에서 제외한다.
+export class ResultFailureError extends Error {
+  readonly subtype: string;
+  constructor(subtype: string) {
+    super(`Claude 응답 실패: ${subtype}`);
+    this.name = "ResultFailureError";
+    this.subtype = subtype;
+  }
+}
+
 // 한 턴의 누적 상태. 콜드/워밍 공통.
 export interface TurnAccumulator {
   text: string;
@@ -183,7 +195,7 @@ export function processChatMessage(
     if (message.subtype === "success") {
       acc.text = message.result;
     } else {
-      throw new Error(`Claude 응답 실패: ${message.subtype}`);
+      throw new ResultFailureError(message.subtype);
     }
     return true;
   }

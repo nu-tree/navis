@@ -5,9 +5,9 @@
 // ── namory MCP ───────────────────────────────────────────────
 // 읽기(recall/recent/profile_show/pattern/todos) + 추가(save) + 수정(update).
 // update는 todo 완료 처리·기억 수정용이며, 시스템 프롬프트에서 "사용자가 명시적으로
-// 요청할 때만" 쓰도록 가드한다. profile_update는 미허용 — 삭제(delete)는 사용자가
-// 명시적으로 요청할 때만 허용 — navis는 인젝션 위험 surface라 프로필을 자동으로
-// 덮어쓰지 못하게 한다.
+// 요청할 때만" 쓰도록 가드한다. profile_update / delete 는 자동 승인하지 않는다 —
+// navis 는 프롬프트 인젝션 위험 surface 라, 기억을 영구 삭제하거나 프로필을 덮어쓰는
+// 되돌릴 수 없는 동작은 기본적으로 사용자 확인 경로(권한 프롬프트)로 보낸다.
 export const NAMORY_TOOLS = [
   "mcp__namory__recall",
   "mcp__namory__recent",
@@ -16,7 +16,6 @@ export const NAMORY_TOOLS = [
   "mcp__namory__todos",
   "mcp__namory__save",
   "mcp__namory__update",
-  "mcp__namory__delete",
 ];
 
 // 신뢰된 다이제스트 경로(allowProfileUpdate)에서만 추가로 풀어주는 도구.
