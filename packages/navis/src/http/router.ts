@@ -7,7 +7,7 @@ import {
   handleDesktopPrune,
   handleDownloadPage,
 } from "../desktop/serve.js";
-import { handlePreflight } from "./respond.js";
+import { handlePreflight, sendInternalError } from "./respond.js";
 import { handleChat, handleChatStream, handleChatCancel, handleChatHandoff } from "./chat.js";
 import { handleReports, handlePostReport } from "./reports.js";
 import { handleCrons, handleDeleteCron } from "./crons.js";
@@ -301,7 +301,17 @@ export function route(req: IncomingMessage, res: ServerResponse): void {
     if (r.method !== "*" && r.method !== method) continue;
     const m = r.match(url.pathname);
     if (!m.ok) continue;
-    r.handler(req, res, url, { id: m.id });
+    // 최후 방어선: 핸들러가 동기 throw 하거나 반환한 Promise 가 reject 돼도
+    // 연결이 응답 없이 매달리지 않도록 500 으로 닫는다. 개별 핸들러의 자체 catch 가
+    // 우선이고, 여기는 거기서 빠져나간 예외만 잡는다(이미 헤더가 나갔으면 본문은 생략).
+    try {
+      const result = r.handler(req, res, url, { id: m.id });
+      if (result instanceof Promise) {
+        result.catch((err) => sendInternalError(res, "[router] handler rejected:", err));
+      }
+    } catch (err) {
+      sendInternalError(res, "[router] handler threw:", err);
+    }
     return;
   }
   res.writeHead(404);

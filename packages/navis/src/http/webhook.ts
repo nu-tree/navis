@@ -4,14 +4,16 @@ import { config } from "../config.js";
 import { reviewPullRequest } from "../self-modify/review.js";
 import { readBody } from "./respond.js";
 
+// 실제 GitHub webhook 은 pull_request 외의 이벤트 형태로도 도착할 수 있어
+// (예: 잘못된 이벤트 헤더 설정), 중첩 필드는 모두 옵셔널로 본다.
 interface PullRequestEvent {
-  action: string;
-  pull_request: {
+  action?: string;
+  pull_request?: {
     number: number;
     title: string;
     body: string | null;
     html_url: string;
-    head: { ref: string };
+    head?: { ref?: string };
   };
 }
 
@@ -49,31 +51,44 @@ export async function handleGithubWebhook(
       return;
     }
 
+    // 파싱은 ACK 이전에 — 실패 시 400 으로 응답해 silent drop 을 막는다.
+    // (이전에는 202 ACK 후에 parse 했기 때문에 깨진 payload 가 흔적도 없이 사라졌다.)
+    let payload: PullRequestEvent;
+    try {
+      payload = JSON.parse(raw) as PullRequestEvent;
+    } catch (err) {
+      console.error("[webhook] JSON parse 실패:", err);
+      res.writeHead(400);
+      res.end("invalid json");
+      return;
+    }
+
     // 빠른 ACK — GitHub 은 10초 안에 응답 안 오면 실패로 본다.
     res.writeHead(202);
     res.end("ok");
 
     const event = req.headers["x-github-event"];
     if (event !== "pull_request") return;
-
-    const payload = JSON.parse(raw) as PullRequestEvent;
-    if (payload.action !== "opened" && payload.action !== "reopened") return;
+    if (payload?.action !== "opened" && payload?.action !== "reopened") return;
 
     // self-improve PR 인지 판별: 브랜치 prefix 로 확인 (워크플로에서 `navis/self-improve/*`)
-    const head = payload.pull_request.head?.ref ?? "";
+    // pull_request 가 없는 이벤트 형태도 들어올 수 있어 모든 접근에 옵셔널 체이닝.
+    const pr = payload?.pull_request;
+    if (!pr) return;
+    const head = pr.head?.ref ?? "";
     if (!head.startsWith("navis/self-improve/")) return;
 
     // 원래 작업 지시는 PR body 의 ``` 블록에 박혀있음(워크플로 yaml 참조)
-    const body = payload.pull_request.body ?? "";
+    const body = pr.body ?? "";
     const instruction =
       body.match(/##\s*작업 지시\s*\n```\n([\s\S]*?)\n```/)?.[1]?.trim() ??
       "(지시 파싱 실패)";
 
     // fire-and-forget — 검토 결과는 앱 보고(/api/reports)로 기록된다.
     void reviewPullRequest({
-      prNumber: payload.pull_request.number,
-      prTitle: payload.pull_request.title,
-      prUrl: payload.pull_request.html_url,
+      prNumber: pr.number,
+      prTitle: pr.title,
+      prUrl: pr.html_url,
       instruction,
     });
   } catch (err) {
