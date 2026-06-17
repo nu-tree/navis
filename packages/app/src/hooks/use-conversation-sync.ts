@@ -52,12 +52,23 @@ export function useConversationSync(): void {
     };
     void pull();
     const id = setInterval(pull, PULL_INTERVAL_MS);
+    // 포그라운드 복귀 직후엔 백그라운드 완주 답이 막 영속됐을 수 있다. 서버 조회가
+    // 경합으로 한 번 실패/지연돼도 놓치지 않게 짧게 몇 번 더 당겨온다(단발 pull 보강).
+    let burstTimers: ReturnType<typeof setTimeout>[] = [];
+    const burstPull = () => {
+      for (const t of burstTimers) clearTimeout(t); // 직전 버스트의 미발화 타이머 정리(누적 방지)
+      void pull();
+      burstTimers = [
+        setTimeout(() => void pull(), 3000),
+        setTimeout(() => void pull(), 8000),
+      ];
+    };
     // 앱이 백그라운드에서 다시 활성화되면(foreground 복귀) 즉시 한 번 pull 한다.
     // 폰을 잠그거나 앱을 나간 사이 서버가 백그라운드로 완주·저장한 답변을, 다음 30초
     // 주기를 기다리지 않고 곧바로 받아와 부분 답변("멈춤") 상태를 빠르게 해소한다.
     const appStateSub = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
-        void pull();
+        burstPull();
       } else if (state === 'background') {
         // 앱이 백그라운드로 감(홈/앱전환/잠금) → 진행 중인 모든 턴을 서버에 핸드오프한다.
         // 이러면 연결 끊김 감지(clientGone)에 의존하지 않고도 서버가 응답을 끝까지
@@ -69,6 +80,7 @@ export function useConversationSync(): void {
     return () => {
       alive = false;
       clearInterval(id);
+      for (const t of burstTimers) clearTimeout(t);
       appStateSub.remove();
     };
   }, [merge]);

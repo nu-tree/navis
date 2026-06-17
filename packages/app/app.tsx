@@ -16,6 +16,7 @@ import { SettingsScreen } from './src/screens/settings-screen';
 import { SpaceBackground } from './src/components/space-background';
 import { useUiStore } from './src/store/ui-store';
 import { useThemeStore } from './src/store/theme-store';
+import { useConversationSync } from './src/hooks/use-conversation-sync';
 import { THEME_VARS } from './src/lib/theme';
 import { TITLEBAR_INSET } from './src/lib/desktop';
 
@@ -67,6 +68,10 @@ function Screen() {
 
 function Root() {
   const theme = useThemeStore((s) => s.theme);
+  // 대화 동기화(주기 pull + 변경 push) + 백그라운드 핸드오프 비콘/복귀 pull 을 여기서
+  // 돌린다. 화면(ChatScreen 등)에 두면 다른 화면일 때 언마운트돼, 화면 이동 후 백그라운드
+  // 진입 시 핸드오프 비콘도 복귀 pull 도 죽는다 → 항상 마운트되는 Root 에 둔다.
+  useConversationSync();
   return (
     // 테마 변수를 루트에서 주입 → 하위 트리의 시맨틱 토큰이 교체된다(웹/네이티브 공용).
     <View style={[{ flex: 1 }, THEME_VARS[theme]]} className="flex-1 bg-background">

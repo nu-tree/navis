@@ -1,4 +1,5 @@
 import { upsertConversationRemote } from "../conversations/api.js";
+import { invalidateConversationsCache } from "./conversations.js";
 import { publishToNtfy } from "../reports/ntfy.js";
 
 // 진행 중인 챗 생성의 AbortController 레지스트리. 명시적 중지(/api/chat/cancel)만
@@ -101,6 +102,17 @@ export async function persistAndNotify(
   };
   const prior = Array.isArray(snapshot.messages) ? snapshot.messages : [];
 
+  // ★ LWW 시계차 방어: 폰 로컬의 대화 updatedAt 은 마지막(유저) 메시지의 createdAt(=폰
+  // 시계)으로 찍혀 있다. 폰 시계가 서버보다 앞서 있으면 서버 완료시각(Date.now())이 그보다
+  // 작아, 동기화 머지(updatedAt 비교)가 서버 응답을 "더 낡음"으로 버린다 → 답이 영영 안 뜸.
+  // 그래서 스냅샷 메시지들의 최대 createdAt(폰 시계 기준)보다 확실히 뒤로 찍는다.
+  const priorMaxMs = prior.reduce<number>((mx, m) => {
+    const c = (m as { createdAt?: unknown } | null)?.createdAt;
+    const t = typeof c === "string" ? Date.parse(c) : NaN;
+    return Number.isFinite(t) && t > mx ? t : mx;
+  }, 0);
+  const updatedAt = new Date(Math.max(Date.now(), priorMaxMs + 1000)).toISOString();
+
   try {
     await upsertConversationRemote(conversationId, {
       title: snapshot.title || "나비스와의 대화",
@@ -111,8 +123,10 @@ export async function persistAndNotify(
       sessionId: reply.sessionId || snapshot.sessionId || null,
       unread: (snapshot.unread ?? 0) + 1, // 안 보고 있던 방 → 안 읽음 +1
       hidden: false,
-      updatedAt: new Date().toISOString(),
+      updatedAt,
     });
+    // 방금 영속한 답이 폰의 다음 pull(GET 캐시)에 즉시 반영되게 캐시 무효화.
+    invalidateConversationsCache();
   } catch (err) {
     console.error("[chat] 백그라운드 응답 영속 실패(무시):", err);
   }

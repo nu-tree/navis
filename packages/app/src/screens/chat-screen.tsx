@@ -18,7 +18,6 @@ import {
 import { useUiStore } from '../store/ui-store';
 import { useReports } from '../hooks/use-reports';
 import { useCrons } from '../hooks/use-crons';
-import { useConversationSync } from '../hooks/use-conversation-sync';
 import { ensureNotifyPermission } from '../lib/notify';
 import { localAgent } from '../lib/local-agent';
 
@@ -181,8 +180,7 @@ export function ChatScreen() {
   // navis 선제 보고 폴링 → 보고방에 머지 + 크론 목록으로 보고방 미리 생성
   useReports();
   useCrons();
-  // 기기 간 대화 동기화(pull 주기 + 변경분 push)
-  useConversationSync();
+  // 대화 동기화는 App.tsx Root 로 올렸다(화면 무관 항상 마운트 — 백그라운드 핸드오프/복귀 pull 신뢰성).
 
   // 데스크톱/웹 알림 권한 요청(1회). 네이티브 모바일에선 no-op.
   useEffect(() => {

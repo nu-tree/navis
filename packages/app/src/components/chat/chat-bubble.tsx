@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { Image, Pressable, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { cn } from '../../lib/cn';
@@ -19,7 +19,7 @@ export type ChatBubbleProps = {
   streaming?: boolean;
 };
 
-export function ChatBubble({ message, className, streaming = false }: ChatBubbleProps) {
+function ChatBubbleImpl({ message, className, streaming = false }: ChatBubbleProps) {
   const isUser = message.role === 'user';
   const [pickerOpen, setPickerOpen] = useState(false);
   // 전체 복사 버튼의 "복사됨" 피드백 상태 — 잠시 보여줬다 원래대로 돌아온다.
@@ -140,3 +140,8 @@ export function ChatBubble({ message, className, streaming = false }: ChatBubble
     </View>
   );
 }
+
+// message 참조가 안 바뀌면 재렌더 건너뜀(memo). 스트리밍 중엔 그 말풍선의 message 만
+// 새 객체가 되고(chat-store 의 map 은 나머지 메시지 참조를 보존), 나머지 말풍선들은
+// 매 토큰마다 불필요하게 재렌더되던 걸 멈춘다 — 긴 방에서 토큰당 비용 급감.
+export const ChatBubble = memo(ChatBubbleImpl);

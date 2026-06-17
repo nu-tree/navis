@@ -238,7 +238,10 @@ export async function handoffChat(turnId: string): Promise<void> {
       method: 'POST',
       headers: jsonHeaders(),
       body: JSON.stringify({ turnId }),
-    });
+      // 앱이 백그라운드로 전환되며 JS 가 곧 정지돼도 OS 가 전송을 끝내도록 — 비콘이
+      // 안 나가면 서버가 백그라운드 완주를 못 타 답이 유실된다(미지원 환경에선 무시됨).
+      keepalive: true,
+    } as RequestInit);
   } catch {
     /* 무시 */
   }

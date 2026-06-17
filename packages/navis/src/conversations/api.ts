@@ -7,7 +7,7 @@ const auth = { Authorization: `Bearer ${config.namoryToken}` };
 export async function listConversationsRemote(): Promise<unknown[]> {
   const res = await fetch(`${BASE}/conversations`, {
     headers: auth,
-    signal: AbortSignal.timeout(10_000),
+    signal: AbortSignal.timeout(25_000),
   });
   if (!res.ok) throw new Error(`대화 조회 실패: ${res.status}`);
   const data = (await res.json()) as { conversations?: unknown[] };
@@ -19,7 +19,7 @@ export async function upsertConversationRemote(id: string, body: unknown): Promi
     method: "PUT",
     headers: { ...auth, "content-type": "application/json" },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(10_000),
+    signal: AbortSignal.timeout(25_000),
   });
   if (!res.ok) throw new Error(`대화 저장 실패: ${res.status}`);
 }
@@ -28,7 +28,7 @@ export async function deleteConversationRemote(id: string): Promise<void> {
   const res = await fetch(`${BASE}/conversations/${encodeURIComponent(id)}`, {
     method: "DELETE",
     headers: auth,
-    signal: AbortSignal.timeout(10_000),
+    signal: AbortSignal.timeout(25_000),
   });
   if (!res.ok) throw new Error(`대화 삭제 실패: ${res.status}`);
 }

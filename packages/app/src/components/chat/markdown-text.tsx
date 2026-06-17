@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode } from 'react';
+import { Fragment, memo, type ReactNode } from 'react';
 import { Linking, View } from 'react-native';
 import { cn } from '../../lib/cn';
 import { Text } from '../ui/text';
@@ -91,7 +91,10 @@ function isTableSeparator(line: string): boolean {
 // 단락 바로 다음 줄에 붙은 표가 단락에 삼켜지지 않게.
 const BLOCK_START = /^(#{1,6}\s|```|\s*([-*+]|\d+\.)\s|\s*>|\s*([-*_])\3\3|\s*\|)/;
 
-export function MarkdownText({ text, className }: { text: string; className?: string }) {
+// 텍스트/클래스가 안 바뀌면 재렌더·재파싱을 건너뛴다(memo). 스트리밍 중인 말풍선
+// 하나만 텍스트가 바뀌므로, 같은 방의 나머지 메시지들은 매 토큰마다 전체 재파싱하던
+// O(length²) 비용을 멈춘다 — 긴 대화에서 토큰마다 느려지던 핵심 원인.
+function MarkdownTextImpl({ text, className }: { text: string; className?: string }) {
   const base = cn('text-[15px] leading-5', className);
   const lines = text.replace(/\r\n/g, '\n').split('\n');
   const blocks: ReactNode[] = [];
@@ -254,3 +257,5 @@ export function MarkdownText({ text, className }: { text: string; className?: st
 
   return <View className="gap-1">{blocks}</View>;
 }
+
+export const MarkdownText = memo(MarkdownTextImpl);
