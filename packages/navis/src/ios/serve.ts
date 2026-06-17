@@ -16,12 +16,13 @@
 // 인증은 navis 의 기존 APP_API_TOKEN(config.appApiToken)을 그대로 재사용한다.
 // SideStore 는 커스텀 헤더를 못 보내므로 source/파일 URL 에 ?token= 쿼리로 토큰을 박는다
 // (피드 JSON 안의 downloadURL 도 같은 토큰을 포함해 발급).
-import { createReadStream, createWriteStream } from "node:fs";
-import { mkdir, readdir, stat, unlink } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { readdir, stat, unlink } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { config } from "../config.js";
 import { authed, parseVersion, compareVersion, safePath } from "../dist/serve-utils.js";
+import { handleStreamUpload } from "../dist/upload-util.js";
 
 const DIR = resolve(config.iosDir);
 const BUNDLE_ID = "com.knu9910.navis";
@@ -63,63 +64,19 @@ async function latestIpa(): Promise<{ name: string; version: string; size: numbe
 }
 
 // PUT/POST /api/ios/upload?name=<파일> — 맥의 빌드 스크립트가 .ipa/아이콘을 올린다.
+// 실제 인증·스트림·abort/부분파일 정리는 dist/upload-util.ts 의 공통 헬퍼가 담당한다.
 export async function handleIosUpload(
   req: IncomingMessage,
   res: ServerResponse,
   url: URL,
 ): Promise<void> {
-  if (!config.appApiToken) {
-    res.writeHead(503, { "content-type": "application/json" });
-    res.end(JSON.stringify({ error: "ios dist not configured" }));
-    return;
-  }
-  if (!authed(req, url)) {
-    res.writeHead(401, { "content-type": "application/json" });
-    res.end(JSON.stringify({ error: "unauthorized" }));
-    return;
-  }
-  const name = url.searchParams.get("name");
-  const dest = name ? safePath(DIR, name) : undefined;
-  if (!dest) {
-    res.writeHead(400, { "content-type": "application/json" });
-    res.end(JSON.stringify({ error: "bad or missing ?name" }));
-    return;
-  }
-  try {
-    await mkdir(DIR, { recursive: true });
-  } catch (err) {
-    const e = err as NodeJS.ErrnoException;
-    console.error(`[ios] 디렉터리 생성 실패 DIR=${DIR}:`, e);
-    res.writeHead(500, { "content-type": "application/json" });
-    res.end(
-      JSON.stringify({
-        error: "mkdir failed",
-        dir: DIR,
-        code: e.code,
-        hint: "IOS_DIR 가 쓰기 가능한 경로인지 확인. Railway면 그 경로에 볼륨 마운트 필요.",
-      }),
-    );
-    return;
-  }
-  try {
-    await new Promise<void>((ok, fail) => {
-      const out = createWriteStream(dest);
-      req.pipe(out);
-      out.on("finish", () => ok());
-      out.on("error", fail);
-      req.on("error", fail);
-    });
-    res.writeHead(200, { "content-type": "application/json" });
-    res.end(JSON.stringify({ ok: true, name: basename(dest) }));
-  } catch (err) {
-    const e = err as NodeJS.ErrnoException;
-    console.error(`[ios] 쓰기 실패 dest=${dest}:`, e);
-    // 부분 기록된 파일을 정리 — 그대로 두면 latestIpa() 가 손상된 .ipa 를 "최신"으로
-    // 골라 SideStore 피드에 노출, 폰 설치가 깨진다. 파일이 없거나 삭제 실패해도 무시.
-    await unlink(dest).catch(() => {});
-    res.writeHead(500, { "content-type": "application/json" });
-    res.end(JSON.stringify({ error: "write failed", code: e.code, message: e.message }));
-  }
+  await handleStreamUpload(req, res, url, {
+    dir: DIR,
+    tag: "ios",
+    configured: !!config.appApiToken,
+    notConfiguredError: "ios dist not configured",
+    mkdirHint: "IOS_DIR 가 쓰기 가능한 경로인지 확인. Railway면 그 경로에 볼륨 마운트 필요.",
+  });
 }
 
 // GET /api/ios/source.json — SideStore source 피드. 최신 .ipa 로부터 동적 생성한다.

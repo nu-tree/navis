@@ -1,12 +1,10 @@
-import { config } from "../config.js";
+import { namoryFetch } from "../namory-client.js";
 import type { Connector } from "./types.js";
 
 // 커넥터 목록을 namory(DB)의 settings KV 한 칸(key="connectors")에 JSON 배열로 보관한다.
 // namory 스키마를 건드리지 않고(전용 테이블/엔드포인트 불필요) "DB 등록만으로 붙였다 빼기"
 // 를 만족시키는 가장 단순한 경로. system-prompt.ts 와 동일한 settings 패턴 + 짧은 캐시.
 
-const BASE = config.namoryMcpUrl.replace(/\/mcp\/?$/, "");
-const auth = { Authorization: `Bearer ${config.namoryToken}` };
 const KEY = "connectors";
 const TTL_MS = 30_000;
 
@@ -112,10 +110,7 @@ export async function listConnectors(): Promise<Connector[]> {
   if (cache && Date.now() - cache.at < TTL_MS) return cache.value;
   let value: Connector[] = [];
   try {
-    const res = await fetch(`${BASE}/settings/${KEY}`, {
-      headers: auth,
-      signal: AbortSignal.timeout(10_000),
-    });
+    const res = await namoryFetch(`/settings/${KEY}`);
     if (res.ok) {
       const data = (await res.json()) as { value?: string | null };
       if (data.value) value = parseConnectors(data.value);
@@ -134,11 +129,10 @@ export async function getConnector(id: string): Promise<Connector | undefined> {
 
 // 전체 목록을 통째로 저장(KV 한 칸이라 read-modify-write). 즉시 캐시 갱신.
 async function saveAll(list: Connector[]): Promise<void> {
-  const res = await fetch(`${BASE}/settings/${KEY}`, {
+  const res = await namoryFetch(`/settings/${KEY}`, {
     method: "PUT",
-    headers: { ...auth, "content-type": "application/json" },
+    headers: { "content-type": "application/json" },
     body: JSON.stringify({ value: JSON.stringify(list) }),
-    signal: AbortSignal.timeout(10_000),
   });
   if (!res.ok) throw new Error(`커넥터 저장 실패: ${res.status}`);
   cache = { at: Date.now(), value: list };

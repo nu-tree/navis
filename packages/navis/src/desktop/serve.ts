@@ -10,12 +10,13 @@
 //
 // 인증은 navis 의 기존 APP_API_TOKEN(config.appApiToken)을 그대로 재사용한다.
 // 토큰은 Authorization: Bearer 헤더 또는 ?token= 쿼리(브라우저 다운로드 링크용)로 받는다.
-import { createReadStream, createWriteStream } from "node:fs";
-import { mkdir, readdir, stat, unlink } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { readdir, stat, unlink } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { config } from "../config.js";
 import { authed, parseVersion, compareVersion, safePath } from "../dist/serve-utils.js";
+import { handleStreamUpload } from "../dist/upload-util.js";
 
 const DIR = resolve(config.desktopDir);
 
@@ -30,64 +31,20 @@ const MIME: Record<string, string> = {
 };
 
 // PUT/POST /api/desktop/upload?name=<파일> — Actions 가 빌드 산출물을 올린다.
+// 실제 인증·스트림·abort/부분파일 정리는 dist/upload-util.ts 의 공통 헬퍼가 담당한다.
 export async function handleDesktopUpload(
   req: IncomingMessage,
   res: ServerResponse,
   url: URL,
 ): Promise<void> {
-  if (!config.appApiToken) {
-    res.writeHead(503, { "content-type": "application/json" });
-    res.end(JSON.stringify({ error: "desktop dist not configured" }));
-    return;
-  }
-  if (!authed(req, url)) {
-    res.writeHead(401, { "content-type": "application/json" });
-    res.end(JSON.stringify({ error: "unauthorized" }));
-    return;
-  }
-  const name = url.searchParams.get("name");
-  const dest = name ? safePath(DIR, name) : undefined;
-  if (!dest) {
-    res.writeHead(400, { "content-type": "application/json" });
-    res.end(JSON.stringify({ error: "bad or missing ?name" }));
-    return;
-  }
-  try {
-    await mkdir(DIR, { recursive: true });
-  } catch (err) {
-    const e = err as NodeJS.ErrnoException;
-    console.error(`[desktop] 디렉터리 생성 실패 DIR=${DIR}:`, e);
-    res.writeHead(500, { "content-type": "application/json" });
-    res.end(
-      JSON.stringify({
-        error: "mkdir failed",
-        dir: DIR,
-        code: e.code,
-        message: e.message,
-        hint: "DESKTOP_DIR 가 쓰기 가능한 경로인지 확인. Railway면 그 경로에 볼륨이 마운트돼 있어야 함.",
-      }),
-    );
-    return;
-  }
-  try {
-    await new Promise<void>((ok, fail) => {
-      const out = createWriteStream(dest);
-      req.pipe(out);
-      out.on("finish", () => ok());
-      out.on("error", fail);
-      req.on("error", fail);
-    });
-    res.writeHead(200, { "content-type": "application/json" });
-    res.end(JSON.stringify({ ok: true, name: basename(dest) }));
-  } catch (err) {
-    const e = err as NodeJS.ErrnoException;
-    console.error(`[desktop] 쓰기 실패 dest=${dest}:`, e);
-    // 부분 기록된 파일을 정리 — 손상된 설치파일/yml 이 그대로 서빙되면
-    // electron-updater 가 잘못된 파일을 받아 설치 실패. 파일이 없거나 삭제 실패해도 무시.
-    await unlink(dest).catch(() => {});
-    res.writeHead(500, { "content-type": "application/json" });
-    res.end(JSON.stringify({ error: "write failed", dest, code: e.code, message: e.message }));
-  }
+  await handleStreamUpload(req, res, url, {
+    dir: DIR,
+    tag: "desktop",
+    configured: !!config.appApiToken,
+    notConfiguredError: "desktop dist not configured",
+    mkdirHint:
+      "DESKTOP_DIR 가 쓰기 가능한 경로인지 확인. Railway면 그 경로에 볼륨이 마운트돼 있어야 함.",
+  });
 }
 
 // GET /api/desktop/list — 토큰 검증 후 보관 중인 파일 목록(JSON). 다운로드 페이지가 렌더용으로 호출.
