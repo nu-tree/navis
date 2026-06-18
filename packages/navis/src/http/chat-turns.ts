@@ -71,9 +71,46 @@ export function hasHandoff(turnId: string): boolean {
   return !!turnId && handoff.has(turnId);
 }
 
+// 대화 메시지의 최소 보존 형태. namory 동기화 머지(LWW) 가 신뢰할 수 있는 필드만.
+// 잡 필드(예: 디버그 메타)는 의도적으로 버린다 — 서버가 권위 응답을 써넣을 때 깔끔하게.
+export type NormalizedMessage = {
+  id: string;
+  role: string;
+  text: string;
+  createdAt: string;
+  toolsUsed?: string[];
+};
+
+// 클라가 보낸 conversation snapshot.messages(unknown[])를 신뢰하지 않고 한 번에 정규화한다.
+// 잡 필드 무시 + 핵심 4필드(id/role/createdAt/text) 가 정상이 아닌 원소는 제거.
+// 이 함수의 산출물은 그대로 namory 로 upsert 되므로 형태가 권위 있는 진실이 된다.
+export function normalizeSnapshotMessages(arr: unknown): NormalizedMessage[] {
+  if (!Array.isArray(arr)) return [];
+  const out: NormalizedMessage[] = [];
+  for (const m of arr) {
+    if (!m || typeof m !== "object") continue;
+    const o = m as Record<string, unknown>;
+    const id = typeof o.id === "string" && o.id ? o.id : "";
+    const role = typeof o.role === "string" && o.role ? o.role : "";
+    const text = typeof o.text === "string" ? o.text : "";
+    const createdAt = typeof o.createdAt === "string" && o.createdAt ? o.createdAt : "";
+    // text 는 빈 문자열 허용(이미지/도구-only 메시지). id/role/createdAt 은 필수.
+    if (!id || !role || !createdAt) continue;
+    const norm: NormalizedMessage = { id, role, text, createdAt };
+    if (Array.isArray(o.toolsUsed)) {
+      const t = (o.toolsUsed as unknown[]).filter(
+        (s): s is string => typeof s === "string",
+      );
+      if (t.length > 0) norm.toolsUsed = t;
+    }
+    out.push(norm);
+  }
+  return out;
+}
+
 export type ChatSnapshot = {
   title: string;
-  messages: unknown[];
+  messages: NormalizedMessage[];
   unread: number;
   sessionId?: string | null;
 };
@@ -91,7 +128,7 @@ export async function persistAndNotify(
   const text = reply.text?.trim();
   if (!conversationId || !text) return;
 
-  const assistant = {
+  const assistant: NormalizedMessage = {
     id: `a${Date.now()}`,
     role: "assistant",
     text: reply.text,
@@ -100,15 +137,16 @@ export async function persistAndNotify(
       ? { toolsUsed: reply.toolsUsed }
       : {}),
   };
-  const prior = Array.isArray(snapshot.messages) ? snapshot.messages : [];
+  // 스냅샷은 parseChatRequest 단계에서 normalize 를 거쳐 들어오지만, 직접 호출 경로
+  // (테스트/내부)에서 잡 데이터가 새지 않게 여기서 한 번 더 거른다.
+  const prior = normalizeSnapshotMessages(snapshot.messages);
 
   // ★ LWW 시계차 방어: 폰 로컬의 대화 updatedAt 은 마지막(유저) 메시지의 createdAt(=폰
   // 시계)으로 찍혀 있다. 폰 시계가 서버보다 앞서 있으면 서버 완료시각(Date.now())이 그보다
   // 작아, 동기화 머지(updatedAt 비교)가 서버 응답을 "더 낡음"으로 버린다 → 답이 영영 안 뜸.
   // 그래서 스냅샷 메시지들의 최대 createdAt(폰 시계 기준)보다 확실히 뒤로 찍는다.
   const priorMaxMs = prior.reduce<number>((mx, m) => {
-    const c = (m as { createdAt?: unknown } | null)?.createdAt;
-    const t = typeof c === "string" ? Date.parse(c) : NaN;
+    const t = Date.parse(m.createdAt);
     return Number.isFinite(t) && t > mx ? t : mx;
   }, 0);
   const updatedAt = new Date(Math.max(Date.now(), priorMaxMs + 1000)).toISOString();

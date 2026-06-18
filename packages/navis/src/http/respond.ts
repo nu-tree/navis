@@ -78,6 +78,26 @@ export function safeParse(raw: string): Record<string, unknown> | undefined {
   }
 }
 
+// readBody + safeParse 를 합친 공통 헬퍼. 핸들러 곳곳에서 반복되던
+// `safeParse(await readBody(req,res)) ?? {}` 보일러플레이트를 한 군데로 모은다.
+//   - 413(페이로드 초과): readBody 가 직접 413 응답 후 reject → throw 가 그대로 위로 전파.
+//   - 빈 본문: 기존 동작 보존 — `{}` 로 본다(POST 가 빈 body 로 와도 핸들러의 필드 검증을 타도록).
+//   - 본문은 있는데 JSON 파싱 실패: 즉시 400 "invalid json" 응답 후 null 반환.
+// 호출 측은 null 일 때 즉시 return 하면 된다.
+export async function readJsonBody(
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<Record<string, unknown> | null> {
+  const raw = await readBody(req, res);
+  if (!raw) return {};
+  const parsed = safeParse(raw);
+  if (!parsed) {
+    sendJson(res, 400, { error: "invalid json" });
+    return null;
+  }
+  return parsed;
+}
+
 // "Bearer <token>" 헤더를 상수시간 비교로 검증.
 export function verifyBearer(token: string, header: string): boolean {
   const match = header.match(/^Bearer\s+(.+)$/i);

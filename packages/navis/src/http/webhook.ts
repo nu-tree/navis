@@ -78,19 +78,27 @@ export async function handleGithubWebhook(
     const head = pr.head?.ref ?? "";
     if (!head.startsWith("navis/self-improve/")) return;
 
-    // 원래 작업 지시는 PR body 의 ``` 블록에 박혀있음(워크플로 yaml 참조)
+    // 원래 작업 지시는 PR body 의 ``` 블록에 박혀있음(워크플로 yaml 참조).
+    // 파싱이 깨지면(템플릿 변경/수동 PR 등) 빈/잘못된 지시로 리뷰 에이전트가 돌아가는 것을
+    // 막기 위해 spawn 자체를 건너뛴다 — 잘못된 지시로 토큰을 태우고 엉뚱한 결과를 보고하는
+    // 사고를 막는다.
     const body = pr.body ?? "";
-    const instruction =
-      body.match(/##\s*작업 지시\s*\n```\n([\s\S]*?)\n```/)?.[1]?.trim() ??
-      "(지시 파싱 실패)";
+    const instruction = body
+      .match(/##\s*작업 지시\s*\n```\n([\s\S]*?)\n```/)?.[1]
+      ?.trim();
+    if (!instruction) {
+      console.warn(`[webhook] PR #${pr.number} 의 작업 지시 파싱 실패 — 리뷰 스킵`);
+      return;
+    }
 
     // fire-and-forget — 검토 결과는 앱 보고(/api/reports)로 기록된다.
-    void reviewPullRequest({
+    // reject 시 unhandledRejection 으로 새지 않게 .catch 로 흡수.
+    reviewPullRequest({
       prNumber: pr.number,
       prTitle: pr.title,
       prUrl: pr.html_url,
       instruction,
-    });
+    }).catch((e) => console.error("reviewPullRequest failed", e));
   } catch (err) {
     console.error("[webhook] 처리 실패:", err);
     if (!res.headersSent) {

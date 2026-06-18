@@ -2,8 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import {
   requireAppAuth,
   sendJson,
-  readBody,
-  safeParse,
+  readJsonBody,
   sendUpstreamError,
 } from "./respond.js";
 import {
@@ -74,7 +73,8 @@ export async function handlePutConversation(
 ): Promise<void> {
   if (!requireAppAuth(req, res)) return;
   try {
-    const body = safeParse(await readBody(req, res)) ?? {};
+    const body = await readJsonBody(req, res);
+    if (!body) return;
     await upsertConversationRemote(id, body);
     invalidateList(); // 내 쓰기가 다음 조회에 즉시 반영되게
     sendJson(res, 200, { ok: true, id });

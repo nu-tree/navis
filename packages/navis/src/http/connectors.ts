@@ -2,8 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import {
   requireAppAuth,
   sendJson,
-  readBody,
-  safeParse,
+  readJsonBody,
   CORS_HEADERS,
   sendUpstreamError,
 } from "./respond.js";
@@ -71,7 +70,8 @@ export async function handlePutConnector(
     return sendJson(res, 400, { error: "invalid id (소문자/숫자/_, 예약어 불가)" });
   }
   try {
-    const body = safeParse(await readBody(req, res)) ?? {};
+    const body = await readJsonBody(req, res);
+    if (!body) return;
     // URL 의 id 가 정본 — body 에 id 가 있어도 덮어쓴다.
     const saved = await upsertConnector({ ...body, id });
     sendJson(res, 200, { connector: redact(saved) });
@@ -120,16 +120,20 @@ export async function handleGetProviders(
 //
 // 보안: NAVIS_PUBLIC_URL(config.publicUrl) 이 설정돼 있으면 그 값을 "강제" 사용한다.
 // 헤더 기반 폴백은 검증 없이 받는 값이라(x-forwarded-host/Host) Host-header 주입으로
-// 공격자 도메인이 redirect_uri 베이스가 될 수 있다 — 프로덕션에선 반드시 NAVIS_PUBLIC_URL
+// 공격자 도메인이 redirect_uri 베이스가 될 수 있다 — 운영에선 반드시 NAVIS_PUBLIC_URL
 // 을 박아두고, 그 값과 동일한 redirect_uri 를 제공자(노션/구글 등) 에 등록한다.
-// 폴백 경로(개발 편의)는 한 번 경고를 찍어 운영 누락이 조용히 묻히지 않게 한다.
+//
+// 운영(NODE_ENV==='production') + publicUrl 미설정 → null 을 돌려 호출자가 503 으로 거절.
+// 비운영(개발/로컬)에서만 헤더 폴백을 허용한다(편의), 한 번 경고를 찍어 운영 누락이
+// 조용히 묻히지 않게 한다.
 let warnedHeaderFallback = false;
-function publicBaseUrl(req: IncomingMessage): string {
+function publicBaseUrl(req: IncomingMessage): string | null {
   if (config.publicUrl) return config.publicUrl;
+  if (process.env.NODE_ENV === "production") return null;
   if (!warnedHeaderFallback) {
     warnedHeaderFallback = true;
     console.warn(
-      "[connectors] NAVIS_PUBLIC_URL 미설정 — redirect_uri 베이스를 요청 헤더에서 추정합니다(Host 주입 노출). 운영에선 반드시 NAVIS_PUBLIC_URL 을 설정하세요.",
+      "[connectors] NAVIS_PUBLIC_URL 미설정 — 비운영 환경의 헤더 추정 폴백 사용중(Host 주입 위험). 운영에선 NAVIS_PUBLIC_URL 을 설정하세요.",
     );
   }
   const fwdProto = req.headers["x-forwarded-proto"];
@@ -147,10 +151,18 @@ export async function handleOAuthStart(
 ): Promise<void> {
   if (!requireAppAuth(req, res)) return;
   try {
-    const body = safeParse(await readBody(req, res)) ?? {};
+    const body = await readJsonBody(req, res);
+    if (!body) return;
     const provider = typeof body.provider === "string" ? body.provider : "";
     if (!provider) return sendJson(res, 400, { error: "provider required" });
-    const { authUrl } = await startOAuth(provider, publicBaseUrl(req));
+    const base = publicBaseUrl(req);
+    if (base === null) {
+      console.error(
+        "[connectors] 운영 환경에서 NAVIS_PUBLIC_URL 미설정 — OAuth 시작 거부(Host 주입 방어)",
+      );
+      return sendJson(res, 503, { error: "NAVIS_PUBLIC_URL not configured" });
+    }
+    const { authUrl } = await startOAuth(provider, base);
     sendJson(res, 200, { authUrl });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
