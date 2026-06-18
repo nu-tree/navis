@@ -137,3 +137,22 @@ export function requireAppAuth(req: IncomingMessage, res: ServerResponse): boole
   }
   return true;
 }
+
+// 앱 API 핸들러 공통 래퍼 — `requireAppAuth → try { handler } catch { onError(...) }`
+// 보일러플레이트를 한 곳에 모은다. 인증 실패 시 requireAppAuth 가 직접 응답을 쓰고
+// 핸들러는 호출되지 않는다(기존 동작과 동일). onError 는 기본 sendUpstreamError(502) —
+// 내부 처리 실패가 명확한 라우트는 sendInternalError(500) 를 명시적으로 넘긴다.
+export async function withAppAuth(
+  req: IncomingMessage,
+  res: ServerResponse,
+  tag: string,
+  handler: () => void | Promise<void>,
+  onError: (res: ServerResponse, tag: string, err: unknown) => void = sendUpstreamError,
+): Promise<void> {
+  if (!requireAppAuth(req, res)) return;
+  try {
+    await handler();
+  } catch (err) {
+    onError(res, tag, err);
+  }
+}
