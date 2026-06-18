@@ -9,6 +9,16 @@ import { createCronRemote, deleteCronRemote, fetchCrons, patchCronRemote } from 
 import { scheduleCron, unscheduleCron } from "./scheduler.js";
 
 const ok = (text: string) => ({ content: [{ type: "text" as const, text }] });
+const err = (text: string) => ({
+  content: [{ type: "text" as const, text }],
+  isError: true,
+});
+
+function cronErr(op: string, e: unknown): string {
+  const raw = e instanceof Error ? e.message : String(e);
+  console.error(`[cron/mcp] ${op} 실패:`, e);
+  return `크론 ${op} 실패: ${raw.slice(0, 300)}`;
+}
 
 // in-process 크론 도구. 발동 결과는 앱 보고(/api/reports)로 기록돼 앱/데스크톱이 받는다.
 export function buildCronTools(): McpSdkServerConfigWithInstance {
@@ -38,27 +48,43 @@ export function buildCronTools(): McpSdkServerConfigWithInstance {
           if (!cron.validate(args.schedule)) {
             return ok(`잘못된 cron 식입니다: ${args.schedule}`);
           }
-          const row = await createCronRemote(args);
-          scheduleCron(row);
-          return ok(
-            `등록 완료 — '${row.title}' (${row.schedule}, ${row.timezone}), id=${row.id}`,
-          );
+          try {
+            // timezone 미지정 시 Asia/Seoul 폴백 — 빈 값으로 저장되면 UTC 발동(9시간 어긋남).
+            const tz = args.timezone ?? "Asia/Seoul";
+            const row = await createCronRemote({ ...args, timezone: tz });
+            scheduleCron(row);
+            return ok(
+              `등록 완료 — '${row.title}' (${row.schedule}, ${row.timezone}), id=${row.id}`,
+            );
+          } catch (e) {
+            return err(cronErr("등록", e));
+          }
         },
       ),
       tool(
         "cron_list",
         "등록된 정기 알림(크론) 목록을 조회한다.",
         {},
-        async () => ok(JSON.stringify(await fetchCrons(), null, 2)),
+        async () => {
+          try {
+            return ok(JSON.stringify(await fetchCrons(), null, 2));
+          } catch (e) {
+            return err(cronErr("조회", e));
+          }
+        },
       ),
       tool(
         "cron_delete",
         "정기 알림(크론)을 id로 삭제한다. 먼저 cron_list로 id를 확인하라.",
         { id: z.string().min(1).describe("삭제할 크론 id") },
         async (args) => {
-          await deleteCronRemote(args.id);
-          unscheduleCron(args.id);
-          return ok(`삭제 완료 — ${args.id}`);
+          try {
+            await deleteCronRemote(args.id);
+            unscheduleCron(args.id);
+            return ok(`삭제 완료 — ${args.id}`);
+          } catch (e) {
+            return err(cronErr("삭제", e));
+          }
         },
       ),
       tool(
@@ -69,16 +95,20 @@ export function buildCronTools(): McpSdkServerConfigWithInstance {
           enabled: z.boolean().describe("true=활성화, false=비활성화"),
         },
         async (args) => {
-          await patchCronRemote(args.id, { enabled: args.enabled });
-          if (args.enabled) {
-            // 활성화 시 스케줄러에도 즉시 반영
-            const rows = await fetchCrons();
-            const row = rows.find((r) => r.id === args.id);
-            if (row) scheduleCron(row);
-          } else {
-            unscheduleCron(args.id);
+          try {
+            await patchCronRemote(args.id, { enabled: args.enabled });
+            if (args.enabled) {
+              // 활성화 시 스케줄러에도 즉시 반영
+              const rows = await fetchCrons();
+              const row = rows.find((r) => r.id === args.id);
+              if (row) scheduleCron(row);
+            } else {
+              unscheduleCron(args.id);
+            }
+            return ok(`${args.enabled ? "활성화" : "비활성화"} 완료 — ${args.id}`);
+          } catch (e) {
+            return err(cronErr("토글", e));
           }
-          return ok(`${args.enabled ? "활성화" : "비활성화"} 완료 — ${args.id}`);
         },
       ),
     ],
