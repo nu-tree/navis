@@ -444,13 +444,25 @@ async function doRefresh(c: Connector): Promise<Connector> {
         ...(a.resource ? { resource: a.resource } : {}),
       },
     );
+    // expires_in 이 응답에 없으면 a.expiresAt 이 과거 시각 그대로 남아 다음 refreshIfNeeded
+     // 호출이 즉시 또 갱신을 시도하는 루프 위험이 있다. 명세상 일반 access token 수명에
+     // 가까운 1시간을 기본값으로 박아 새 expiresAt 을 세팅한다.
+    let expiresAt: number | undefined;
+    if (tok.expires_in) {
+      expiresAt = Date.now() + tok.expires_in * 1000;
+    } else {
+      expiresAt = Date.now() + 3600 * 1000;
+      console.warn(
+        `[connectors] ${c.id} 토큰 응답에 expires_in 누락 — 기본 1시간으로 expiresAt 설정`,
+      );
+    }
     const updated: Connector = {
       ...c,
       auth: {
         ...a,
         token: tok.access_token,
         ...(tok.refresh_token ? { refreshToken: tok.refresh_token } : {}),
-        ...(tok.expires_in ? { expiresAt: Date.now() + tok.expires_in * 1000 } : {}),
+        expiresAt,
         needsReauth: false,
       },
     };

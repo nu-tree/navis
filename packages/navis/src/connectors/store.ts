@@ -33,7 +33,12 @@ function parseConnectors(raw: string): Connector[] {
   let arr: unknown;
   try {
     arr = JSON.parse(raw);
-  } catch {
+  } catch (err) {
+    // 손상된 데이터를 시야 없이 사라지게 두지 않는다 — err.message 만 남겨 시크릿 노출 방지.
+    console.warn(
+      "[connectors] parseConnectors: corrupted data, returning empty",
+      (err as Error).message,
+    );
     return [];
   }
   if (!Array.isArray(arr)) return [];
