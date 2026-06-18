@@ -20,19 +20,26 @@ const DEFAULT_TIMEOUT_MS = 10_000;
 // init.headers 가 있으면 Authorization 위에 머지(content-type 등은 호출부 명시).
 // 호출부의 에러 처리(throw/log) 분기는 기존 동작을 그대로 보존하기 위해 이 래퍼에서는
 // 강제하지 않는다 — 응답 객체를 그대로 반환한다.
+//
+// HeadersInit 은 세 가지 형태가 모두 합법이다: Record<string,string> | [string,string][] |
+// Headers. 예전 구현은 항상 Record 로 단언했기에 Headers 인스턴스나 튜플 배열을 호출부가
+// 넘기면 Object.keys 가 빈 결과를 돌려줘서 사용자 헤더가 조용히 사라졌다. 표준
+// `new Headers()` 로 정규화한 뒤 NAMORY_AUTH 위에 덮어쓴다.
 export async function namoryFetch(
   path: string,
   init?: RequestInit,
   timeoutMs?: number,
 ): Promise<Response> {
-  const headers: Record<string, string> = { ...NAMORY_AUTH };
+  const merged = new Headers(NAMORY_AUTH);
   if (init?.headers) {
-    const h = init.headers as Record<string, string>;
-    for (const k of Object.keys(h)) headers[k] = h[k];
+    const extra = new Headers(init.headers);
+    extra.forEach((value, key) => {
+      merged.set(key, value);
+    });
   }
   return fetch(`${NAMORY_BASE}${path}`, {
     ...(init ?? {}),
-    headers,
+    headers: merged,
     signal: AbortSignal.timeout(timeoutMs ?? DEFAULT_TIMEOUT_MS),
   });
 }
