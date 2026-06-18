@@ -1,4 +1,4 @@
-import { namoryFetch } from "../namory-client.js";
+import { getSetting, putSetting } from "../settings-kv.js";
 import type { Connector } from "./types.js";
 
 // 커넥터 목록을 namory(DB)의 settings KV 한 칸(key="connectors")에 JSON 배열로 보관한다.
@@ -127,18 +127,19 @@ function normalizeAuth(raw: unknown): Connector["auth"] | undefined {
 // 전체 커넥터 목록(캐시). 조회 실패·미설정 시 빈 배열(연동 없음으로 안전 동작).
 export async function listConnectors(): Promise<Connector[]> {
   if (cache && Date.now() - cache.at < TTL_MS) return cache.value;
-  let value: Connector[] = [];
-  try {
-    const res = await namoryFetch(`/settings/${KEY}`);
-    if (res.ok) {
-      const data = (await res.json()) as { value?: string | null };
-      if (data.value) value = parseConnectors(data.value);
-    }
-  } catch (err) {
-    console.error("[connectors] 목록 조회 실패(빈 목록으로 진행):", err);
-  }
+  const raw = await getSetting(KEY, {
+    onError: (err) => console.error("[connectors] 목록 조회 실패(빈 목록으로 진행):", err),
+  });
+  const value = raw ? parseConnectors(raw) : [];
   cache = { at: Date.now(), value };
   return value;
+}
+
+// 캐시 강제 무효화 — refresh 직후 같은 커넥터의 다음 조회가 막 저장한 새 토큰을
+// 반드시 읽게 하기 위해 호출. TTL(30s) 안이라도 즉시 다음 listConnectors 가
+// 새 값을 가져오도록 한다.
+export function invalidateConnectorsCache(): void {
+  cache = undefined;
 }
 
 // 단건 조회(id 기준). 없으면 undefined.
@@ -146,25 +147,54 @@ export async function getConnector(id: string): Promise<Connector | undefined> {
   return (await listConnectors()).find((c) => c.id === id);
 }
 
-// 전체 목록을 통째로 저장(KV 한 칸이라 read-modify-write). 즉시 캐시 갱신.
+// 전체 목록을 통째로 저장(KV 한 칸이라 read-modify-write).
+// 저장 실패는 호출부(특히 completeOAuth)에 치명적이다 — 막 받은 access/refresh 토큰을
+// 잃을 수 있다. 그래서 일시 오류 대비 1회 재시도 후, 최종 실패는 명시적으로 throw 해
+// 호출부가 인지하고 복구(또는 명확한 에러 응답)할 수 있게 한다.
+//
+// 캐시는 저장 성공 시에만 갱신 — 실패한 데이터로 캐시가 오염되어 다른 호출이 "저장됐다"
+// 고 오인하는 것을 막는다.
 async function saveAll(list: Connector[]): Promise<void> {
-  const res = await namoryFetch(`/settings/${KEY}`, {
-    method: "PUT",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ value: JSON.stringify(list) }),
-  });
-  if (!res.ok) throw new Error(`커넥터 저장 실패: ${res.status}`);
-  cache = { at: Date.now(), value: list };
+  const serialized = JSON.stringify(list);
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      await putSetting(KEY, serialized);
+      cache = { at: Date.now(), value: list };
+      return;
+    } catch (err) {
+      lastErr = err;
+      console.error(
+        `[connectors] 커넥터 저장 실패(attempt ${attempt + 1}/2):`,
+        err,
+      );
+      // 짧은 백오프 — 즉시 재시도는 같은 일시 오류에 다시 부딪치기 쉽다.
+      if (attempt === 0) await new Promise((r) => setTimeout(r, 250));
+    }
+  }
+  throw new Error(
+    `커넥터 저장 실패(재시도 후): ${
+      lastErr instanceof Error ? lastErr.message : String(lastErr)
+    }`,
+  );
 }
 
 // 커넥터 1개 추가/수정(id 기준 upsert). 정규화 실패 시 throw.
+// 저장 실패도 그대로 전파한다 — completeOAuth 호출부가 토큰 유실을 인지하고 사용자에게
+// 에러를 돌려줄 수 있게(조용히 삼키면 사용자는 "연결됐다"고 오인).
 export async function upsertConnector(input: unknown): Promise<Connector> {
   const c = normalize(input);
   if (!c) throw new Error("커넥터 형식 오류: id(슬러그)/url/auth 를 확인하세요.");
   const list = await listConnectors();
   const next = list.filter((x) => x.id !== c.id);
   next.push(c);
-  await saveAll(next);
+  try {
+    await saveAll(next);
+  } catch (err) {
+    // 호출부에서도 보이게 보강 메시지 — 어느 커넥터를 저장하다 실패했는지.
+    console.error(`[connectors] upsert(${c.id}) 저장 실패:`, err);
+    throw err;
+  }
   return c;
 }
 
@@ -173,6 +203,11 @@ export async function removeConnector(id: string): Promise<boolean> {
   const list = await listConnectors();
   const next = list.filter((x) => x.id !== id);
   if (next.length === list.length) return false;
-  await saveAll(next);
+  try {
+    await saveAll(next);
+  } catch (err) {
+    console.error(`[connectors] remove(${id}) 저장 실패:`, err);
+    throw err;
+  }
   return true;
 }
