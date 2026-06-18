@@ -1,6 +1,7 @@
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import { config } from "../config.js";
 import { projectGuidance } from "../projects.js";
+import { iterToolUses } from "./ask.js";
 import { namoryMcp } from "./mcp.js";
 
 // 사후 큐레이터(post-turn curator) — 메인 턴이 끝난 뒤 별도 LLM 호출이 "방금 턴에서
@@ -81,11 +82,14 @@ export async function curateTurn(input: CurateInput): Promise<boolean> {
     .filter(Boolean)
     .join("\n");
 
-  // 기존 프로젝트 표기를 재사용하도록 가이던스 주입(나비스↔navis 분기 방지).
-  const systemPrompt = CURATOR_SYSTEM_PROMPT + (await projectGuidance());
-
   let saved = false;
   try {
+    // 기존 프로젝트 표기를 재사용하도록 가이던스 주입(나비스↔navis 분기 방지).
+    // projectGuidance() 는 namory 호출이라 장애 시 reject 가능 — try 안에서 await 해야
+    // catch 가 받아 무시한다. 옛 위치(try 밖)에선 namory 장애가 unhandled rejection 으로
+    // 새 사용자 흐름을 막을 위험이 있었다.
+    const systemPrompt = CURATOR_SYSTEM_PROMPT + (await projectGuidance());
+
     for await (const _msg of query({
       prompt: turn,
       options: {
@@ -103,18 +107,9 @@ export async function curateTurn(input: CurateInput): Promise<boolean> {
       },
     })) {
       // namory.save 호출 감지 — 호출 측이 💡 리액션을 붙일지 결정하는 신호.
-      if (_msg.type === "assistant") {
-        const content = _msg.message.content;
-        if (Array.isArray(content)) {
-          for (const block of content) {
-            if (
-              block.type === "tool_use" &&
-              block.name === "mcp__namory__save"
-            ) {
-              saved = true;
-            }
-          }
-        }
+      // tool_use 순회는 ask.ts 와 동일 로직이라 iterToolUses 헬퍼로 통일.
+      for (const tu of iterToolUses(_msg)) {
+        if (tu.name === "mcp__namory__save") saved = true;
       }
     }
   } catch (err) {

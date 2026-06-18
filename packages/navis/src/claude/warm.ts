@@ -4,11 +4,11 @@ import { getChatPrefetch } from "./prefetch.js";
 import { applySaveNudge } from "./nudge.js";
 import {
   buildChatSystemPrompt,
-  buildChatMcpServers,
-  buildChatAllowedTools,
+  buildChatQueryOptions,
   newTurnAccumulator,
   processChatMessage,
   ResultFailureError,
+  type TurnAccumulator,
   type TurnCallbacks,
 } from "./ask.js";
 import type { AskResult } from "./types.js";
@@ -127,6 +127,10 @@ function createInput(): {
   return {
     stream: stream(),
     push(m) {
+      // close 후 들어온 push 는 무시 — 세션 폐기(teardown→closeInput) 후 미처 들어온
+      // 마지막 메시지가 큐에 쌓여 영영 yield 되지 않거나, 새 세션이 옛 큐 메시지를
+      // 잘못 소비하는 일을 막는다(생성 race / 폐기 잔재 메시지 방어).
+      if (closed) return;
       queue.push(m);
       wake?.();
       wake = null;
@@ -205,17 +209,18 @@ async function createSession(
     prompt: input.stream,
     options: {
       model,
+      // 공통 옵션(systemPrompt/mcpServers/allowedTools/settingSources/maxTurns/
+      // includePartialMessages/abortController/resume)은 콜드/워밍 공유 빌더로 통일 —
+      // 어느 한쪽만 바꿔도 두 경로가 어긋나던 위험(파일 상단 주석 참조)을 단일 출처로 막는다.
       // 채팅 경로 = projectContext 없음, allowProfileUpdate=false(인젝션 방어).
-      systemPrompt: buildChatSystemPrompt(baseSystemPrompt, guidance),
-      mcpServers: buildChatMcpServers(connectors),
-      allowedTools: buildChatAllowedTools(connectors, false),
-      settingSources: [],
-      maxTurns: 16,
-      includePartialMessages: true,
-      abortController: abort,
       // 워밍 첫 턴은 앱이 보낸 직전 세션을 이어받는다(콜드 경로와 동일 연속성).
       // 이후 턴부터는 살아있는 세션 자체가 맥락이라 resume 불필요.
-      ...(resume ? { resume } : {}),
+      ...buildChatQueryOptions(connectors, buildChatSystemPrompt(baseSystemPrompt, guidance), {
+        resume,
+        abortController: abort,
+        allowProfileUpdate: false,
+        includePartial: true,
+      }),
     },
   });
   // 갓 만든 세션은 첫 턴을 claim 하기 전까진 busy=false 이고 lastUsed 가 "현재"라
@@ -234,6 +239,22 @@ async function createSession(
   };
   sessions.set(conversationId, session);
   return session;
+}
+
+// runWarmTurn 의 catch 에서 던질 에러를 4갈래로 분류한다:
+//  - WarmFallback: 호출부가 콜드 폴백 — 워밍 시작 전 실패였거나, 출력 전(=델타 중복 위험 없음).
+//  - ResultFailureError: turn-level 실패라 콜드 재실행하면 같은 도구가 중복 호출돼 이중 과금.
+//    그대로 전파(상위는 일반 에러로 사용자에게 보고).
+//  - emitted 후 기타 에러: 부분 출력이 이미 클라로 나간 뒤 → 폴백 불가, 일반 에러로 전파.
+//  - emitted 전 기타 에러: 출력 안 흘렸으니 콜드 폴백이 안전.
+// catch 안에 인라인으로 두면 4갈래 분기가 한눈에 안 들어와 헬퍼로 추출.
+function classifyWarmError(err: unknown, acc: TurnAccumulator): Error {
+  if (err instanceof WarmFallback) return err;
+  if (err instanceof ResultFailureError) return err;
+  const msg = err instanceof Error ? err.message : String(err);
+  if (!acc.emitted) return new WarmFallback(`turn-error: ${msg}`);
+  // 이미 델타가 흘러나간 뒤라 폴백 불가 — 원본 Error 가 있으면 그대로, 아니면 감싸서 전파.
+  return err instanceof Error ? err : new Error(msg);
 }
 
 // 한 턴을 워밍 세션으로 실행. 실패가 스트리밍 시작 전이면 WarmFallback 을 던져 호출부가
@@ -299,16 +320,8 @@ export async function runWarmTurn(opts: {
   } catch (err) {
     session.busy = false;
     dropSession(conversationId);
-    if (err instanceof WarmFallback) throw err;
-    // result 단계 실패(ResultFailureError) — 도구 호출이 다 끝난 뒤의 turn-level 실패라
-    // 콜드 재실행하면 같은 도구가 또 호출돼 중복/이중 과금이 난다. 폴백 변환 대상에서
-    // 제외하고 그대로 전파(상위는 일반 에러로 사용자에게 보고).
-    if (err instanceof ResultFailureError) throw err;
-    // 클라이언트로 출력을 아직 안 흘렸으면(emitted=false) 콜드 폴백이 안전(델타 중복 없음).
-    // 이미 흘린 뒤면 폴백 불가 — 일반 에러로 전파.
-    throw !acc.emitted
-      ? new WarmFallback(`turn-error: ${err instanceof Error ? err.message : String(err)}`)
-      : err;
+    // 4갈래 분기는 classifyWarmError 헬퍼로(WarmFallback / ResultFailureError / emitted 후 / 그 외).
+    throw classifyWarmError(err, acc);
   } finally {
     if (timer) clearTimeout(timer);
   }

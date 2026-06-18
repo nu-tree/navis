@@ -3,6 +3,7 @@ import {
   type SDKUserMessage,
   type SDKMessage,
   type McpServerConfig,
+  type Options,
 } from "@anthropic-ai/claude-agent-sdk";
 import { config } from "../config.js";
 import { buildCronTools, CRON_TOOL_NAMES } from "../cron/mcp.js";
@@ -95,6 +96,35 @@ export function buildChatAllowedTools(
   ];
 }
 
+// 콜드(askClaude) / 워밍(warm.ts createSession) 공유 query options 빌더.
+// SDK 옵션 객체를 양쪽이 거의 동일하게 구성하던 중복을 제거한다 — maxTurns 같은
+// 한 값만 바뀌어도 두 경로가 어긋나면 채팅 동작이 달라지는 위험(파일 상단 주석이
+// 명시적으로 막으려던 위험)을 단일 출처로 보장. model·thinking·effort 처럼 경로별로
+// 다른 옵션은 호출부에서 spread 로 덧붙인다.
+export function buildChatQueryOptions(
+  connectors: BuiltConnectors,
+  systemPrompt: string,
+  opts: {
+    resume?: string;
+    abortController?: AbortController;
+    allowProfileUpdate: boolean;
+    includePartial: boolean;
+  },
+): Options {
+  return {
+    systemPrompt,
+    mcpServers: buildChatMcpServers(connectors),
+    allowedTools: buildChatAllowedTools(connectors, opts.allowProfileUpdate),
+    // 로컬 설정(CLAUDE.md, settings.json) 무시.
+    settingSources: [],
+    // 도구 호출 루프 여유.
+    maxTurns: 16,
+    ...(opts.includePartial ? { includePartialMessages: true } : {}),
+    ...(opts.abortController ? { abortController: opts.abortController } : {}),
+    ...(opts.resume ? { resume: opts.resume } : {}),
+  };
+}
+
 // result 단계에서 subtype != "success" 로 떨어지는 turn-level 실패. 도구 호출이 이미
 // 모두 끝난 뒤의 실패라, 워밍 경로에서 콜드로 재실행하면 같은 도구가 다시 호출되어
 // 중복/이중 과금이 생긴다. 별도 타입으로 구분해 워밍 폴백 변환 대상에서 제외한다.
@@ -139,6 +169,57 @@ export function newTurnAccumulator(tQuery: number): TurnAccumulator {
   return { text: "", sessionId: "", contextTokens: 0, saved: false, toolsUsed: [], firstMsgMs: 0, emitted: false, tQuery };
 }
 
+// assistant 메시지의 content 배열에서 tool_use 블록만 뽑아 단일 포맷으로 반환.
+// ask.ts(메인 턴 — 도구 라벨 수집/저장 감지)와 curator.ts(사후 큐레이터 — 저장 감지)가
+// 각자 content 배열을 다시 순회하던 중복을 제거한다. content 가 배열이 아니거나
+// assistant 가 아니면 빈 배열을 돌려줘 호출부가 분기를 더 안 둬도 안전하다.
+export function iterToolUses(
+  message: SDKMessage,
+): { name: string; input: Record<string, unknown> }[] {
+  if (message.type !== "assistant") return [];
+  const content = message.message.content;
+  if (!Array.isArray(content)) return [];
+  const out: { name: string; input: Record<string, unknown> }[] = [];
+  for (const block of content) {
+    if (block.type === "tool_use") {
+      out.push({ name: block.name, input: block.input as Record<string, unknown> });
+    }
+  }
+  return out;
+}
+
+// SDK BetaMessage.usage 의 핵심 토큰 필드만 안전하게 추출한다.
+// SDK 가 메시지 구조를 바꿔 usage 가 사라지면 워밍 세션 컨텍스트 한도 리셋
+// (warm.ts: acc.contextTokens >= config.contextTokenLimit) 이 영영 트리거되지 않아
+// 세션이 무한 증가하는 silent failure 가 생긴다. 그래서 타입 단언 대신 런타임 shape
+// 가드로 형태를 확인하고, 깨졌으면 undefined 를 돌려 호출부가 1회만 경고 로그를
+// 남기도록 한다(스팸 방지).
+function extractAssistantUsage(
+  message: unknown,
+): TurnAccumulator["lastAssistantUsage"] | undefined {
+  if (!message || typeof message !== "object") return undefined;
+  const usage = (message as { usage?: unknown }).usage;
+  if (!usage || typeof usage !== "object") return undefined;
+  const u = usage as Record<string, unknown>;
+  const numOrNullish = (v: unknown): v is number | null | undefined =>
+    v === undefined || v === null || typeof v === "number";
+  if (
+    !numOrNullish(u.input_tokens) ||
+    !numOrNullish(u.cache_read_input_tokens) ||
+    !numOrNullish(u.cache_creation_input_tokens)
+  ) {
+    return undefined;
+  }
+  return {
+    input_tokens: u.input_tokens ?? undefined,
+    cache_read_input_tokens: u.cache_read_input_tokens ?? undefined,
+    cache_creation_input_tokens: u.cache_creation_input_tokens ?? undefined,
+  };
+}
+
+// usage 누락 경고는 프로세스 수명 동안 한 번만(메시지마다 찍으면 로그 스팸).
+let warnedMissingUsage = false;
+
 // SDK 메시지 한 개를 처리해 accumulator 갱신 + 콜백 호출. result 를 만나면 true 반환
 // (이 턴 종료 신호) — 워밍은 이걸로 루프를 멈춘다(제너레이터를 닫지 않고). 콜드 경로는
 // for-await 가 자연 종료하므로 반환값을 무시해도 된다.
@@ -168,21 +249,23 @@ export function processChatMessage(
   }
 
   if (message.type === "assistant") {
-    const content = message.message.content;
-    if (Array.isArray(content)) {
-      for (const block of content) {
-        if (block.type === "tool_use") {
-          acc.emitted = true;
-          if (block.name === "mcp__namory__save") acc.saved = true;
-          const label = richToolStatus(block.name, block.input as Record<string, unknown>);
-          if (cb.onStatus) cb.onStatus(label);
-          if (cb.onToolComplete) cb.onToolComplete(label);
-          if (!acc.toolsUsed.includes(label)) acc.toolsUsed.push(label);
-        }
-      }
+    for (const tu of iterToolUses(message)) {
+      acc.emitted = true;
+      if (tu.name === "mcp__namory__save") acc.saved = true;
+      const label = richToolStatus(tu.name, tu.input);
+      if (cb.onStatus) cb.onStatus(label);
+      if (cb.onToolComplete) cb.onToolComplete(label);
+      if (!acc.toolsUsed.includes(label)) acc.toolsUsed.push(label);
     }
-    const u = (message.message as unknown as { usage?: TurnAccumulator["lastAssistantUsage"] }).usage;
-    if (u) acc.lastAssistantUsage = u;
+    const u = extractAssistantUsage(message.message);
+    if (u) {
+      acc.lastAssistantUsage = u;
+    } else if (!warnedMissingUsage) {
+      warnedMissingUsage = true;
+      console.warn(
+        "[chat] assistant 메시지에서 usage 형태를 인식 못함 — contextTokens 측정 불가, 워밍 세션 컨텍스트 한도 리셋이 동작 안 할 수 있음(SDK 업데이트 필요?)",
+      );
+    }
     return false;
   }
 
@@ -201,6 +284,32 @@ export function processChatMessage(
   }
 
   return false;
+}
+
+// askClaude 의 프롬프트 조립을 한 곳에 모은다: 너지 키워드 → history 합성 → 이미지가
+// 있으면 user content block 배열로 감싼 async iterable. 옛 askClaude 안에서 인라인으로
+// 흩어져 있어 가독성이 낮았고, 워밍 경로가 이 단계를 우회한다는 사실도 한눈에 안 보였다.
+// 반환은 SDK 가 받는 string 또는 AsyncIterable<SDKUserMessage> 둘 중 하나.
+export function buildPromptInput(opts: {
+  prompt: string;
+  historyContext?: string;
+  images?: InputImage[];
+}): string | AsyncGenerator<SDKUserMessage> {
+  // 키워드 너지(B): 사용자 메시지에 결정/약속/할 일/배움 신호가 보이면 메인 턴에도
+  // save 호출을 상기시키는 가벼운 힌트를 앞에 붙인다. 사후 큐레이터(A)가 그물이지만
+  // 메인 턴에서 잡으면 응답 흐름 안에서 자연스럽게 저장돼 UX가 매끄럽다.
+  const nudgedPrompt = applySaveNudge(opts.prompt);
+
+  // historyContext 는 사용자가 아닌 채널 로그라 nudge 키워드 매칭 대상이 아니다.
+  // 그래서 nudge 적용 후에 합친다.
+  const promptWithHistory = opts.historyContext
+    ? `[참고: 이 채널의 최근 메시지 — 'navis' 는 너 자신의 직전 발화/자동 보고. 새 세션이라 맥락 보강용으로 붙여둠. 사용자의 이번 질문은 아래 "[현재 메시지]" 블록.]\n${opts.historyContext}\n\n[현재 메시지]\n${nudgedPrompt}`
+    : nudgedPrompt;
+
+  // 이미지가 있으면 content block 배열로 구성해 user 메시지 하나를 yield 한다.
+  // 없으면 기존처럼 문자열 prompt 그대로(가장 단순한 경로).
+  const images = opts.images ?? [];
+  return images.length > 0 ? buildImageMessage(promptWithHistory, images) : promptWithHistory;
 }
 
 // 프롬프트 한 개를 Claude에 넣고 답변 + 세션 정보를 받는다.
@@ -227,23 +336,8 @@ export async function askClaude(opts: AskClaudeOptions): Promise<AskResult> {
   // 지연 계측 — 채팅 속도 진단. 전 구간 시작점.
   const t0 = Date.now();
 
-  // 키워드 너지(B): 사용자 메시지에 결정/약속/할 일/배움 신호가 보이면 메인 턴에도
-  // save 호출을 상기시키는 가벼운 힌트를 앞에 붙인다. 사후 큐레이터(A)가 그물이지만
-  // 메인 턴에서 잡으면 응답 흐름 안에서 자연스럽게 저장돼 UX가 매끄럽다.
-  const nudgedPrompt = applySaveNudge(prompt);
-
-  // historyContext 는 사용자가 아닌 채널 로그라 nudge 키워드 매칭 대상이 아니다.
-  // 그래서 nudge 적용 후에 합친다.
-  const promptWithHistory = historyContext
-    ? `[참고: 이 채널의 최근 메시지 — 'navis' 는 너 자신의 직전 발화/자동 보고. 새 세션이라 맥락 보강용으로 붙여둠. 사용자의 이번 질문은 아래 "[현재 메시지]" 블록.]\n${historyContext}\n\n[현재 메시지]\n${nudgedPrompt}`
-    : nudgedPrompt;
-
-  // 이미지가 있으면 content block 배열로 구성해 user 메시지 하나를 yield 한다.
-  // 없으면 기존처럼 문자열 prompt 그대로(가장 단순한 경로).
-  const promptInput =
-    images.length > 0
-      ? buildImageMessage(promptWithHistory, images)
-      : promptWithHistory;
+  // 프롬프트 조립(너지·history·이미지) — 단일 헬퍼로 추출(buildPromptInput).
+  const promptInput = buildPromptInput({ prompt, historyContext, images });
 
   // in-process MCP 서버들(cron/repo/self_modify/settings/google)은 모듈 최상단에서
   // 한 번만 초기화한 캐시를 그대로 쓴다 — askClaude 가 호출될 때마다 다시 짜지 않는다.
@@ -283,21 +377,15 @@ export async function askClaude(opts: AskClaudeOptions): Promise<AskResult> {
         ...(onThinkingDelta
           ? { thinking: { type: "adaptive" as const }, effort: "medium" as const }
           : {}),
-        // 중지 버튼 → 서버 생성도 실제로 끊기게 컨트롤러 연결(토큰 낭비 방지).
-        ...(abortController ? { abortController } : {}),
-        systemPrompt: systemPromptFinal,
-        // namory(항상 로드) + 동적 커넥터 + 내장 in-process 서버 — 공유 빌더.
-        mcpServers: buildChatMcpServers(connectors),
-        // 자동 승인 도구 — 공유 빌더(./allowed-tools.ts 가 단일 출처).
-        allowedTools: buildChatAllowedTools(connectors, allowProfileUpdate),
-        // 로컬 설정(CLAUDE.md, settings.json) 무시.
-        settingSources: [],
-        // 도구 호출 루프 여유.
-        maxTurns: 16,
-        // 스트리밍 콜백이 있으면 부분 메시지(text_delta)를 받기 위해 켠다.
-        ...(onTextDelta ? { includePartialMessages: true } : {}),
-        // 이전 대화 이어받기 (있을 때만).
-        ...(resumeSessionId ? { resume: resumeSessionId } : {}),
+        // 공통 옵션(systemPrompt/mcpServers/allowedTools/settingSources/maxTurns/
+        // includePartialMessages/abortController/resume)은 콜드/워밍 공유 빌더로 통일.
+        ...buildChatQueryOptions(connectors, systemPromptFinal, {
+          resume: resumeSessionId,
+          abortController,
+          allowProfileUpdate,
+          // 스트리밍 콜백이 있으면 부분 메시지(text_delta)를 받기 위해 켠다.
+          includePartial: !!onTextDelta,
+        }),
       },
     })) {
       // 메시지 처리(델타·도구·result)는 콜드/워밍 공유 처리기로.
