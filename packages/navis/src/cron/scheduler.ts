@@ -29,7 +29,8 @@ export function scheduleCron(c: CronRow): void {
     return;
   }
   const task = cron.schedule(c.schedule, () => void runCron(c), {
-    timezone: c.timezone,
+    // 빈 timezone 이 흘러들어와도 UTC 발동(9시간 어긋남)을 막기 위한 폴백.
+    timezone: c.timezone || "Asia/Seoul",
   });
   jobs.set(c.id, { task, sig: sigOf(c) });
   console.log(`[cron] 등록: '${c.title}' (${c.schedule} ${c.timezone})`);
@@ -60,7 +61,10 @@ async function runCron(c: CronRow): Promise<void> {
     const { text } = await askClaude({ prompt: c.prompt });
     emitReport(text, "cron", meta);
     // 성공한 실행 시각을 기록 (lastRunAt 업데이트). 실패해도 흐름은 유지.
-    void patchCronRemote(c.id, { lastRunAt: new Date().toISOString() });
+    // namoryFetch 네트워크 거부 시 unhandled rejection 으로 새지 않게 catch.
+    void patchCronRemote(c.id, { lastRunAt: new Date().toISOString() }).catch(
+      (err) => console.error(`[cron] lastRunAt 기록 실패 ('${c.title}'):`, err),
+    );
   } catch (err) {
     console.error(`[cron] '${c.title}' 실행 실패:`, err);
     // 사용자가 실패를 인지할 수 있도록 보고방에도 알림.
