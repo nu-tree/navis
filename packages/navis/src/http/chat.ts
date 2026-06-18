@@ -6,8 +6,7 @@ import { curateTurn } from "../claude/curator.js";
 import { collectImagesFromDataUrls } from "../claude/images.js";
 import type { AskResult, InputImage } from "../claude/types.js";
 import {
-  readBody,
-  safeParse,
+  readJsonBody,
   requireAppAuth,
   sendJson,
   sendInternalError,
@@ -22,6 +21,7 @@ import {
   consumeHandoff,
   hasHandoff,
   persistAndNotify,
+  normalizeSnapshotMessages,
   type ChatSnapshot,
 } from "./chat-turns.js";
 
@@ -76,11 +76,11 @@ async function parseChatRequest(
   req: IncomingMessage,
   res: ServerResponse,
 ): Promise<ChatRequest | null> {
-  const raw = await readBody(req, res);
-  const body = safeParse(raw);
-  const text = typeof body?.text === "string" ? body.text.trim() : "";
+  const body = await readJsonBody(req, res);
+  if (!body) return null;
+  const text = typeof body.text === "string" ? body.text.trim() : "";
 
-  const imageUrls = Array.isArray(body?.images)
+  const imageUrls = Array.isArray(body.images)
     ? (body.images.filter((u) => typeof u === "string") as string[])
     : [];
   // 개수/총량 상한 — 초과 시 디코드도 하지 않고 즉시 400.
@@ -105,28 +105,30 @@ async function parseChatRequest(
     return null;
   }
   const resume =
-    typeof body?.sessionId === "string" && body.sessionId ? body.sessionId : undefined;
+    typeof body.sessionId === "string" && body.sessionId ? body.sessionId : undefined;
   // 모델은 화이트리스트(config.selectableModels) 검증 — 임의 문자열 주입 차단.
   const model =
-    typeof body?.model === "string" && config.selectableModels.includes(body.model)
+    typeof body.model === "string" && config.selectableModels.includes(body.model)
       ? body.model
       : undefined;
-  const thinking = body?.thinking === true;
+  const thinking = body.thinking === true;
 
   const conversationId =
-    typeof body?.conversationId === "string" && body.conversationId
+    typeof body.conversationId === "string" && body.conversationId
       ? body.conversationId
       : undefined;
   const turnId =
-    typeof body?.turnId === "string" && body.turnId ? body.turnId : undefined;
+    typeof body.turnId === "string" && body.turnId ? body.turnId : undefined;
   const snap =
-    body?.conversation && typeof body.conversation === "object"
+    body.conversation && typeof body.conversation === "object"
       ? (body.conversation as Record<string, unknown>)
       : undefined;
+  // 스냅샷 메시지는 클라가 보낸 임의 구조라 그대로 namory upsert 로 흘러가면 안 된다.
+  // {id,role,text,createdAt} 만 통과시키고 잡 원소를 제거(저장 전 단계에서 한번).
   const snapshot: ChatSnapshot | undefined = snap
     ? {
         title: typeof snap.title === "string" ? snap.title : "",
-        messages: Array.isArray(snap.messages) ? snap.messages : [],
+        messages: normalizeSnapshotMessages(snap.messages),
         unread: typeof snap.unread === "number" ? snap.unread : 0,
         sessionId: typeof snap.sessionId === "string" ? snap.sessionId : null,
       }
@@ -151,16 +153,16 @@ function turnMeta(
 
 // 명시적 중지 — 진행 중인 챗 턴 생성을 실제로 끊는다(토큰 절약). 단순 연결 종료
 // (폰 백그라운드)는 생성을 끊지 않으므로, 중지 버튼은 이 엔드포인트를 따로 부른다.
-// readBody 가 413(페이로드 초과)으로 reject 할 수 있어 try/catch 로 감싼다 — 라우터의
-// void 호출에서 unhandledRejection 으로 흘러나가지 않게.
+// readJsonBody 가 413/파싱 실패 응답을 직접 처리한다.
 export async function handleChatCancel(
   req: IncomingMessage,
   res: ServerResponse,
 ): Promise<void> {
   if (!requireAppAuth(req, res)) return;
   try {
-    const body = safeParse(await readBody(req, res));
-    const turnId = typeof body?.turnId === "string" ? body.turnId : "";
+    const body = await readJsonBody(req, res);
+    if (!body) return;
+    const turnId = typeof body.turnId === "string" ? body.turnId : "";
     const ok = turnId ? cancelTurn(turnId) : false;
     sendJson(res, 200, { ok });
   } catch (err) {
@@ -171,15 +173,15 @@ export async function handleChatCancel(
 // 핸드오프 — 앱이 백그라운드로 전환될 때 진행 중인 턴을 알린다. Railway 프록시 뒤에선
 // 연결 종료(req 'close')가 서버까지 안 닿을 수 있어, 이 명시 신호로 "클라가 떠남"을
 // 확실히 표시한다 → 완료 시 서버가 응답을 영속하고 폰으로 푸시한다. fire-and-forget.
-// readBody/safeParse 경로의 예외(413 등)를 흘려보내지 않게 try/catch.
 export async function handleChatHandoff(
   req: IncomingMessage,
   res: ServerResponse,
 ): Promise<void> {
   if (!requireAppAuth(req, res)) return;
   try {
-    const body = safeParse(await readBody(req, res));
-    const turnId = typeof body?.turnId === "string" ? body.turnId : "";
+    const body = await readJsonBody(req, res);
+    if (!body) return;
+    const turnId = typeof body.turnId === "string" ? body.turnId : "";
     if (turnId) markHandoff(turnId);
     sendJson(res, 200, { ok: !!turnId });
   } catch (err) {
@@ -287,11 +289,125 @@ async function runChatTurn(
   }
 }
 
+// 스트림 가드 상태 — req 'close' 콜백이 mutate 하는 clientGone 을 본문으로 노출.
+type StreamState = { clientGone: boolean };
+
+// 연결 종료 / wall-clock 상한 / 핸드오프 유예를 묶어서 켠다. 진짜 앱 턴(턴ID+대화+
+// 스냅샷)은 backgroundable 로 보고 연결 끊겨도 생성을 끊지 않는다. cleanup 으로 타이머
+// 정리(finally 1회). 본문 분기 가독성을 위한 추출이라 동작은 변경하지 않는다.
+function setupAbandonGuards(
+  req: IncomingMessage,
+  parsed: ChatRequest,
+  ctrl: AbortController,
+  stopHeartbeat: () => void,
+): { state: StreamState; cleanup: () => void } {
+  const state: StreamState = { clientGone: false };
+  const backgroundable = !!(parsed.turnId && parsed.conversationId && parsed.snapshot);
+  let abandonTimer: ReturnType<typeof setTimeout> | undefined;
+  // wall-clock 안전 backstop — 백그라운드 완주 턴은 연결 종료로 끊지 않으니, 생성이
+  // 영영 안 끝나는 병적 케이스(모델 API 스톨 등)가 슬롯을 무한 점유하지 않게 상한을 둔다.
+  const maxTurnTimer: ReturnType<typeof setTimeout> = setTimeout(() => {
+    if (!ctrl.signal.aborted) ctrl.abort();
+  }, MAX_TURN_MS);
+  req.on("close", () => {
+    stopHeartbeat();
+    state.clientGone = true;
+    // 백그라운드 완주 대상 턴은 끊지 않는다 — 완료 시 clientGone(또는 핸드오프)으로
+    // 영속 + 푸시 분기를 탄다. 답을 잃지 않는 것이 최우선.
+    if (backgroundable) return;
+    // 스냅샷 없는 요청(진단 curl·새로고침·레거시 클라)만 "버려진 요청"으로 보고 유예
+    // 후 회수 — 누적→포화(death-spiral) 방지 가드는 그대로.
+    abandonTimer = setTimeout(() => {
+      if (!(parsed.turnId && hasHandoff(parsed.turnId))) ctrl.abort();
+    }, ABANDON_GRACE_MS);
+  });
+  return {
+    state,
+    cleanup: () => {
+      if (abandonTimer) clearTimeout(abandonTimer);
+      clearTimeout(maxTurnTimer);
+    },
+  };
+}
+
+// 완료 분기 — clientGone/handoff/cancelled 신호로 (영속+푸시) 와 (done 이벤트) 사이를
+// 가른다. 어느 쪽이든 res 종료까지 책임진다.
+async function finalizeTurn(
+  result: AskResult,
+  parsed: ChatRequest,
+  res: ServerResponse,
+  sse: (event: string, data: unknown) => void,
+  state: StreamState,
+): Promise<void> {
+  const { contextFull, model } = turnMeta(result, parsed.model);
+  // 클라가 응답 전에 떠났는가? 두 신호를 함께 본다:
+  //  - clientGone: req 'close'(연결 종료). 프록시 뒤에선 안 뜰 수 있어 단독으론 불충분.
+  //  - handedOff: 앱이 AppState 'background' 에서 보낸 명시적 핸드오프(신뢰 가능한 신호).
+  const handedOff = parsed.turnId ? consumeHandoff(parsed.turnId) : false;
+  if (state.clientGone || handedOff) {
+    // 클라가 응답 전에 떠남 → 서버가 대신 대화에 답변을 써넣고(동기화로 복원) 폰 푸시.
+    // 완료 직후 도착한 중지 신호가 있으면(consumeCancelled) 영속/푸시하지 않는다.
+    const stopped = parsed.turnId ? consumeCancelled(parsed.turnId) : false;
+    if (!stopped && parsed.conversationId && parsed.snapshot) {
+      await persistAndNotify(parsed.conversationId, parsed.snapshot, {
+        text: result.text,
+        toolsUsed: result.toolsUsed,
+        sessionId: result.sessionId,
+      });
+    }
+    // 핸드오프인데 연결이 아직 열려 있을 수 있다 → 정리. done 은 보내지 않는다(클라는
+    // 다음 동기화 pull 로 권위 응답을 받음, 중복 방지).
+    if (!res.writableEnded) res.end();
+    return;
+  }
+  // 권위 있는 최종 텍스트도 함께 보내 클라가 누적분을 보정하게 한다.
+  sse("done", {
+    text: result.text,
+    sessionId: result.sessionId,
+    contextFull,
+    saved: result.saved,
+    toolsUsed: result.toolsUsed,
+    // 지연 계측(ms) — 앱/디버그에서 응답 속도 분해 확인용.
+    timing: result.timing,
+    // 이 턴에 실제로 사용된 모델 — 앱이 모델 선택이 반영됐는지 확인/표시.
+    model,
+  });
+  if (!res.writableEnded) res.end();
+}
+
+// 스트림 에러 분기 — 명시 중지(abort)와 진짜 에러를 가른다. 명시 중지면 클라가 끊긴
+// 스트림을 에러로 오인하지 않도록 'aborted' SSE 이벤트를 1회 보낸 뒤 종료한다.
+// (헤더가 안 나간 경우는 sse 가 작동하지 않으니 그대로 res.end 만 한다.)
+function handleStreamError(
+  err: unknown,
+  res: ServerResponse,
+  sse: (event: string, data: unknown) => void,
+  ctrl: AbortController,
+): void {
+  if (ctrl.signal.aborted) {
+    if (res.headersSent && !res.writableEnded) sse("aborted", { reason: "cancelled" });
+    if (!res.writableEnded) res.end();
+    return;
+  }
+  console.error("[chat/stream] 처리 실패:", err);
+  if (!res.headersSent) {
+    sendJson(res, 500, { error: "internal error" });
+    return;
+  }
+  sse("error", { error: "internal error" });
+  if (!res.writableEnded) res.end();
+}
+
 // /api/chat 의 스트리밍 버전. 응답 토큰을 SSE 로 흘려보낸다:
 //   event: delta     data: {"text":"..."}  ← 답변 토큰 조각 (여러 번)
 //   event: thinking  data: {"text":"..."}  ← 생각 과정 조각 (adaptive — 있을 때만)
-//   event: done      data: {"sessionId","contextFull","saved"}  ← 종료 + 메타
+//   event: done      data: {"sessionId","contextFull","saved"}  ← 정상 종료 + 메타
+//   event: aborted   data: {"reason"}       ← 사용자/타임아웃 중지로 인한 종료 신호
 //   event: error     data: {"error"}        ← 실패
+//
+// 연결 종료 != 중지. 폰을 잠그거나 앱을 나가면 연결이 끊기지만(clientGone) 생성은
+// 계속 돌려 완료 후 서버가 응답을 영속 + 폰 푸시한다. 실제 중지는 /api/chat/cancel
+// 이 turnId 로 이 컨트롤러를 abort 할 때만 일어난다(토큰 절약은 그 경로로 유지).
 export async function handleChatStream(
   req: IncomingMessage,
   res: ServerResponse,
@@ -304,41 +420,15 @@ export async function handleChatStream(
   const sse = (event: string, data: unknown) => sseEvent(res, event, data);
   const stopHeartbeat = startHeartbeat(res);
 
-  // 연결 종료 != 중지. 폰을 잠그거나 앱을 나가면 연결이 끊기지만(clientGone) 생성은
-  // 계속 돌려 완료 후 서버가 응답을 영속 + 폰 푸시한다. 실제 중지는 /api/chat/cancel
-  // 이 turnId 로 이 컨트롤러를 abort 할 때만 일어난다(토큰 절약은 그 경로로 유지).
   const abortController = new AbortController();
   if (parsed.turnId) registerTurn(parsed.turnId, abortController);
 
-  // 진짜 앱 턴인가 — turnId + 대화 + 스냅샷이 모두 있으면, 사용자가 "보내고 폰을
-  // 내려놔도 답이 끝나면 영속 + 푸시"되길 원하는 백그라운드 완주 대상 턴이다. 서버는
-  // 이 정보를 요청 본문에서 이미 받으므로, 완주 여부 판단에 핸드오프 비콘이 꼭 필요하진
-  // 않다. 이런 턴은 연결이 끊겨도(폰 백그라운드/잠금) 생성을 끊지 않는다:
-  //  - iOS 는 백그라운드 전환 시 JS 를 즉시 정지시켜 비콘이 늦거나 유실될 수 있고,
-  //  - 긴 답변은 생성에 15초 이상 걸려, 유예-후-abort 가 답을 다 만들기도 전에 죽인다.
-  // 둘 다 "백그라운드로 보내면 답이 멈춘다"의 직접 원인이었다. 실제 중지는 오직
-  // /api/chat/cancel(turnId) 만 — 토큰 절약 경로는 그대로 유지된다.
-  const backgroundable = !!(parsed.turnId && parsed.conversationId && parsed.snapshot);
-  let clientGone = false;
-  let abandonTimer: ReturnType<typeof setTimeout> | undefined;
-  // wall-clock 안전 backstop — 백그라운드 완주 턴은 연결 종료로 끊지 않으니, 생성이
-  // 영영 안 끝나는 병적 케이스(모델 API 스톨 등)가 슬롯을 무한 점유하지 않게 상한을 둔다.
-  const maxTurnTimer: ReturnType<typeof setTimeout> = setTimeout(() => {
-    if (!abortController.signal.aborted) abortController.abort();
-  }, MAX_TURN_MS);
-  req.on("close", () => {
-    stopHeartbeat();
-    clientGone = true;
-    // 백그라운드 완주 대상 턴은 끊지 않는다 — 완료 시 clientGone(또는 핸드오프)으로
-    // 영속 + 푸시 분기를 탄다(아래). 답을 잃지 않는 것이 최우선.
-    if (backgroundable) return;
-    // 스냅샷 없는 요청(진단 curl·새로고침·레거시 클라)만 "버려진 요청"으로 보고 유예
-    // 후 회수한다 — 버려진 생성이 단일 이벤트 루프를 점유해 새 요청의 첫 토큰을 수십 초
-    // 늦추는 누적→포화(death-spiral)를 막는 가드는 그대로 둔다.
-    abandonTimer = setTimeout(() => {
-      if (!(parsed.turnId && hasHandoff(parsed.turnId))) abortController.abort();
-    }, ABANDON_GRACE_MS);
-  });
+  const { state, cleanup } = setupAbandonGuards(
+    req,
+    parsed,
+    abortController,
+    stopHeartbeat,
+  );
 
   try {
     const callbacks: StreamCallbacks = {
@@ -353,63 +443,13 @@ export async function handleChatStream(
 
     const result = await runChatTurn(parsed, callbacks, abortController);
     if (parsed.turnId) clearTurn(parsed.turnId);
-    const { contextFull, model } = turnMeta(result, parsed.model);
-
-    // 클라가 응답 전에 떠났는가? 두 신호를 함께 본다:
-    //  - clientGone: req 'close'(연결 종료). 프록시 뒤에선 안 뜰 수 있어 단독으론 불충분.
-    //  - handedOff: 앱이 AppState 'background' 에서 보낸 명시적 핸드오프(신뢰 가능한 신호).
-    const handedOff = parsed.turnId ? consumeHandoff(parsed.turnId) : false;
-    if (clientGone || handedOff) {
-      // 클라가 응답 전에 떠남 → 서버가 대신 대화에 답변을 써넣고(동기화로 복원) 폰 푸시.
-      // 포그라운드(연결 유지·핸드오프 없음)였다면 클라가 받은 응답을 스스로 동기화하므로
-      // 생략(중복 방지). 단, 완료 직후 도착한 중지 신호가 있으면(consumeCancelled)
-      // 사용자가 멈춘 것이므로 영속/푸시하지 않는다.
-      const stopped = parsed.turnId ? consumeCancelled(parsed.turnId) : false;
-      if (!stopped && parsed.conversationId && parsed.snapshot) {
-        await persistAndNotify(parsed.conversationId, parsed.snapshot, {
-          text: result.text,
-          toolsUsed: result.toolsUsed,
-          sessionId: result.sessionId,
-        });
-      }
-      // 핸드오프인데 연결이 아직 열려 있을 수 있다(프록시가 끊김을 안 알림) → 정리.
-      // done 은 보내지 않는다: 앱은 다음 동기화 pull 로 권위 응답을 받는다(중복 방지).
-      if (!res.writableEnded) res.end();
-    } else {
-      // 권위 있는 최종 텍스트도 함께 보내 클라가 누적분을 보정하게 한다.
-      sse("done", {
-        text: result.text,
-        sessionId: result.sessionId,
-        contextFull,
-        saved: result.saved,
-        toolsUsed: result.toolsUsed,
-        // 지연 계측(ms) — 앱/디버그에서 응답 속도 분해 확인용.
-        timing: result.timing,
-        // 이 턴에 실제로 사용된 모델 — 앱이 모델 선택이 반영됐는지 확인/표시.
-        model,
-      });
-      if (!res.writableEnded) res.end();
-    }
-
+    await finalizeTurn(result, parsed, res, sse, state);
     curate(parsed.text, result.text);
   } catch (err) {
     if (parsed.turnId) clearTurn(parsed.turnId);
-    // 명시적 중지(/api/chat/cancel → abort)로 query 가 끊긴 건 에러가 아니다 —
-    // 영속/푸시 없이 조용히 종료(사용자가 의도적으로 멈춤).
-    if (abortController.signal.aborted) {
-      if (!res.writableEnded) res.end();
-    } else {
-      console.error("[chat/stream] 처리 실패:", err);
-      if (!res.headersSent) {
-        sendJson(res, 500, { error: "internal error" });
-      } else {
-        sse("error", { error: "internal error" });
-        if (!res.writableEnded) res.end();
-      }
-    }
+    handleStreamError(err, res, sse, abortController);
   } finally {
     stopHeartbeat();
-    if (abandonTimer) clearTimeout(abandonTimer);
-    clearTimeout(maxTurnTimer);
+    cleanup();
   }
 }

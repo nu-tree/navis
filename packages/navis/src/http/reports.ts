@@ -1,8 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { getReports, recordReport } from "../reports/store.js";
 import {
-  readBody,
-  safeParse,
+  readJsonBody,
   requireAppAuth,
   sendJson,
   sendInternalError,
@@ -26,25 +25,25 @@ export function handleReports(req: IncomingMessage, res: ServerResponse): void {
 // 용도: 개발 머신의 Claude Code 가 작업을 끝내면 "작업 완료" 를 여기로 POST → 맥에서 알림.
 // body: { text: string, title?: string, sourceId?: string }
 //   sourceId 같으면 같은 방으로 묶인다(기본 "claude-code" → "🤖 작업 보고" 방).
-// readBody 가 413 등으로 reject 할 수 있어 try/catch 필수 — 없으면 void 호출에서
-// unhandledRejection 으로 떨어진다.
+// readJsonBody 가 413/파싱 실패 응답을 직접 처리한다. 라우터의 void 호출에서
+// unhandledRejection 으로 떨어지지 않게 try/catch 는 유지.
 export async function handlePostReport(
   req: IncomingMessage,
   res: ServerResponse,
 ): Promise<void> {
   if (!requireAppAuth(req, res)) return;
   try {
-    const raw = await readBody(req, res);
-    const body = safeParse(raw);
-    const text = typeof body?.text === "string" ? body.text.trim() : "";
+    const body = await readJsonBody(req, res);
+    if (!body) return;
+    const text = typeof body.text === "string" ? body.text.trim() : "";
     if (!text) {
       sendJson(res, 400, { error: "text required" });
       return;
     }
     const sourceId =
-      typeof body?.sourceId === "string" && body.sourceId ? body.sourceId : "claude-code";
+      typeof body.sourceId === "string" && body.sourceId ? body.sourceId : "claude-code";
     const sourceTitle =
-      typeof body?.title === "string" && body.title ? body.title : "🤖 작업 보고";
+      typeof body.title === "string" && body.title ? body.title : "🤖 작업 보고";
     recordReport({ type: "claude-code", text, sourceId, sourceTitle });
     sendJson(res, 200, { ok: true });
   } catch (err) {
