@@ -5,6 +5,8 @@ import { applySaveNudge } from "./nudge.js";
 import {
   buildChatSystemPrompt,
   buildChatQueryOptions,
+} from "./query-options.js";
+import {
   newTurnAccumulator,
   processChatMessage,
   ResultFailureError,
