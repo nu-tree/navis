@@ -1,23 +1,16 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { fetchMemories, patchMemory, deleteMemory } from "../memories/api.js";
-import {
-  readJsonBody,
-  requireAppAuth,
-  sendJson,
-  sendUpstreamError,
-} from "./respond.js";
+import { readJsonBody, sendJson, withAppAuth } from "./respond.js";
 
 // 앱 기억 페이지 — namory 기억 REST 프록시. GET 목록 / PATCH 수정 / DELETE 삭제.
 export async function handleMemories(
   req: IncomingMessage,
   res: ServerResponse,
 ): Promise<void> {
-  if (!requireAppAuth(req, res)) return;
+  await withAppAuth(req, res, "[memories] proxy 실패:", async () => {
+    const url = new URL(req.url ?? "/api/memories", "http://localhost");
+    const idMatch = url.pathname.match(/^\/api\/memories\/([^/]+)$/);
 
-  const url = new URL(req.url ?? "/api/memories", "http://localhost");
-  const idMatch = url.pathname.match(/^\/api\/memories\/([^/]+)$/);
-
-  try {
     if (req.method === "GET" && url.pathname === "/api/memories") {
       // limit 은 양의 정수만 허용 — 음수/0/소수/NaN 은 모두 무시(undefined → 서버 기본값).
       // Number("...")||undefined 만 쓰면 limit=-5 같은 음수가 그대로 통과해 namory 가
@@ -43,7 +36,5 @@ export async function handleMemories(
       return;
     }
     sendJson(res, 404, { error: "not found" });
-  } catch (err) {
-    sendUpstreamError(res, "[memories] proxy 실패:", err);
-  }
+  });
 }

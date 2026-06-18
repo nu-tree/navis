@@ -4,7 +4,7 @@ import {
   sendJson,
   readJsonBody,
   CORS_HEADERS,
-  sendUpstreamError,
+  withAppAuth,
 } from "./respond.js";
 import {
   listConnectors,
@@ -51,13 +51,10 @@ export async function handleGetConnectors(
   req: IncomingMessage,
   res: ServerResponse,
 ): Promise<void> {
-  if (!requireAppAuth(req, res)) return;
-  try {
+  await withAppAuth(req, res, "[connectors] 목록 조회 실패:", async () => {
     const list = await listConnectors();
     sendJson(res, 200, { connectors: list.map(redact) });
-  } catch (err) {
-    sendUpstreamError(res, "[connectors] 목록 조회 실패:", err);
-  }
+  });
 }
 
 export async function handlePutConnector(
@@ -89,14 +86,14 @@ export async function handleDeleteConnector(
   res: ServerResponse,
   id: string,
 ): Promise<void> {
-  if (!requireAppAuth(req, res)) return;
-  try {
+  await withAppAuth(req, res, "[connectors] 삭제 실패:", async () => {
     const ok = await removeConnector(id);
-    if (!ok) return sendJson(res, 404, { error: "not found" });
+    if (!ok) {
+      sendJson(res, 404, { error: "not found" });
+      return;
+    }
     sendJson(res, 200, { ok: true });
-  } catch (err) {
-    sendUpstreamError(res, "[connectors] 삭제 실패:", err);
-  }
+  });
 }
 
 // ── OAuth 커넥터 ──────────────────────────────────────────────────────
