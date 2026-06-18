@@ -1,10 +1,15 @@
+// 역할: navis-app 채팅 HTTP 핸들러 조립부.
+// 요청 파싱(chat-request.ts)·턴 실행(chat-run.ts)·완결 처리(chat-finalize.ts)·
+// 가드(chat-guards.ts)를 묶어 4개 엔드포인트를 노출한다:
+//   handleChat        — 비스트리밍 채팅
+//   handleChatStream  — SSE 스트리밍 채팅
+//   handleChatCancel  — 진행 중 턴 명시 중지
+//   handleChatHandoff — 백그라운드 전환 신호
+// 공개 export 는 router.ts 가 그대로 쓰므로 절대 바꾸지 않는다.
+
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { config } from "../config.js";
 import { askClaude } from "../claude/ask.js";
-import { warmEnabled, runWarmTurn, WarmFallback, dropWarmSession } from "../claude/warm.js";
 import { curateTurn } from "../claude/curator.js";
-import { collectImagesFromDataUrls } from "../claude/images.js";
-import type { AskResult, InputImage } from "../claude/types.js";
 import {
   readJsonBody,
   requireAppAuth,
@@ -17,110 +22,11 @@ import {
   clearTurn,
   cancelTurn,
   markHandoff,
-  normalizeSnapshotMessages,
-  type ChatSnapshot,
 } from "./chat-turns.js";
 import { setupAbandonGuards } from "./chat-guards.js";
 import { turnMeta, finalizeTurn, handleStreamError } from "./chat-finalize.js";
-
-type ChatRequest = {
-  text: string;
-  images: InputImage[];
-  resume: string | undefined;
-  // 사용자가 고른 모델(클로드 데스크톱식). 화이트리스트에 있을 때만 채워지고,
-  // 아니면 undefined → askClaude 가 config.model 로 폴백한다.
-  model: string | undefined;
-  // 확장 사고(adaptive thinking) opt-in. body 에 명시적으로 true 일 때만 켠다.
-  // 기본 off — adaptive 라도 첫 토큰을 2~4초 늦추므로 응답성 우선.
-  thinking: boolean;
-  // 백그라운드 완주/푸시용(스트림 전용). conversationId+conversation 스냅샷이 있으면
-  // 클라가 응답 전에 떠나도 서버가 응답을 영속 + 폰 푸시한다. turnId 로 명시적 중지.
-  conversationId: string | undefined;
-  turnId: string | undefined;
-  snapshot: ChatSnapshot | undefined;
-};
-
-// 한 요청당 이미지 상한 — 토큰/메모리 과부하·악의적 페이로드 방지. images.ts 에서 개별
-// 이미지 크기를 다시 거르지만, 여기서 먼저 끊어 디코드 비용 자체를 막는다.
-const MAX_IMAGES_PER_REQUEST = 8;
-const MAX_TOTAL_IMAGE_BYTES = 12 * 1024 * 1024;
-
-// data URL 의 base64 페이로드만 보고 디코드 바이트 크기를 근사한다. 정확한 디코드 전에
-// 합계를 가늠하기 위함(`= 패딩 2자 제외).
-function approxDataUrlBytes(u: string): number {
-  const i = u.indexOf(";base64,");
-  if (i < 0) return u.length;
-  const b64 = u.slice(i + ";base64,".length);
-  const pad = b64.endsWith("==") ? 2 : b64.endsWith("=") ? 1 : 0;
-  return Math.max(0, Math.floor((b64.length * 3) / 4) - pad);
-}
-
-// chat / chat-stream 공통 바디 파싱. text + 첨부 이미지(data URL) + resume(sessionId).
-// 텍스트도 이미지도 없으면 400 을 쓰고 null 을 반환한다(이미지-only 는 허용).
-async function parseChatRequest(
-  req: IncomingMessage,
-  res: ServerResponse,
-): Promise<ChatRequest | null> {
-  const body = await readJsonBody(req, res);
-  if (!body) return null;
-  const text = typeof body.text === "string" ? body.text.trim() : "";
-
-  const imageUrls = Array.isArray(body.images)
-    ? (body.images.filter((u) => typeof u === "string") as string[])
-    : [];
-  // 개수/총량 상한 — 초과 시 디코드도 하지 않고 즉시 400.
-  if (imageUrls.length > MAX_IMAGES_PER_REQUEST) {
-    sendJson(res, 400, {
-      error: `too many images (max ${MAX_IMAGES_PER_REQUEST})`,
-    });
-    return null;
-  }
-  let total = 0;
-  for (const u of imageUrls) total += approxDataUrlBytes(u);
-  if (total > MAX_TOTAL_IMAGE_BYTES) {
-    sendJson(res, 400, {
-      error: `total image bytes too large (max ${MAX_TOTAL_IMAGE_BYTES})`,
-    });
-    return null;
-  }
-  const images = imageUrls.length > 0 ? await collectImagesFromDataUrls(imageUrls) : [];
-
-  if (!text && images.length === 0) {
-    sendJson(res, 400, { error: "text or image required" });
-    return null;
-  }
-  const resume =
-    typeof body.sessionId === "string" && body.sessionId ? body.sessionId : undefined;
-  // 모델은 화이트리스트(config.selectableModels) 검증 — 임의 문자열 주입 차단.
-  const model =
-    typeof body.model === "string" && config.selectableModels.includes(body.model)
-      ? body.model
-      : undefined;
-  const thinking = body.thinking === true;
-
-  const conversationId =
-    typeof body.conversationId === "string" && body.conversationId
-      ? body.conversationId
-      : undefined;
-  const turnId =
-    typeof body.turnId === "string" && body.turnId ? body.turnId : undefined;
-  const snap =
-    body.conversation && typeof body.conversation === "object"
-      ? (body.conversation as Record<string, unknown>)
-      : undefined;
-  // 스냅샷 메시지는 클라가 보낸 임의 구조라 그대로 namory upsert 로 흘러가면 안 된다.
-  // {id,role,text,createdAt} 만 통과시키고 잡 원소를 제거(저장 전 단계에서 한번).
-  const snapshot: ChatSnapshot | undefined = snap
-    ? {
-        title: typeof snap.title === "string" ? snap.title : "",
-        messages: normalizeSnapshotMessages(snap.messages),
-        unread: typeof snap.unread === "number" ? snap.unread : 0,
-        sessionId: typeof snap.sessionId === "string" ? snap.sessionId : null,
-      }
-    : undefined;
-
-  return { text, images, resume, model, thinking, conversationId, turnId, snapshot };
-}
+import { parseChatRequest } from "./chat-request.js";
+import { runChatTurn, type StreamCallbacks } from "./chat-run.js";
 
 // 명시적 중지 — 진행 중인 챗 턴 생성을 실제로 끊는다(토큰 절약). 단순 연결 종료
 // (폰 백그라운드)는 생성을 끊지 않으므로, 중지 버튼은 이 엔드포인트를 따로 부른다.
@@ -194,69 +100,6 @@ export async function handleChat(req: IncomingMessage, res: ServerResponse): Pro
     curate(parsed.text, result.text);
   } catch (err) {
     sendInternalError(res, "[chat] 처리 실패:", err);
-  }
-}
-
-// 스트리밍 콜백 묶음. 워밍/콜드 경로 양쪽에서 동일하게 쓴다(thinking 은 콜드 전용).
-type StreamCallbacks = {
-  onTextDelta: (delta: string) => void;
-  onStatus: (toolName: string) => void;
-  onToolComplete: (label: string) => void;
-  onThinkingDelta?: (delta: string) => void;
-};
-
-// 워밍/콜드 선택 — 워밍 가능하면 warm 시도, WarmFallback(스트리밍 시작 전 신호)이면
-// 콜드로 같은 턴 재실행. 콜드 폴백은 사용자가 멈추지 않은 경우에만(abort 후엔 던진다).
-// 워밍 경로는 중지(/api/chat/cancel → abort)에 대응해 워밍 세션을 폐기한다.
-// 호출부(handleChatStream) 는 워밍/콜드 분기 자체를 모르게 한다.
-async function runChatTurn(
-  parsed: ChatRequest,
-  callbacks: StreamCallbacks,
-  abortController: AbortController,
-): Promise<AskResult> {
-  const askCold = (): Promise<AskResult> =>
-    askClaude({
-      prompt: parsed.text,
-      resumeSessionId: parsed.resume,
-      images: parsed.images,
-      onTextDelta: callbacks.onTextDelta,
-      onStatus: callbacks.onStatus,
-      onToolComplete: callbacks.onToolComplete,
-      modelOverride: parsed.model,
-      onThinkingDelta: callbacks.onThinkingDelta,
-      abortController,
-    });
-
-  // 워밍 경로 조건: 켜짐 + 대화 id 있음 + 이미지/확장사고 아님(이 둘은 턴마다 세션
-  // 옵션이 달라 콜드로 처리). 워밍이 폴백을 던지면(스트리밍 시작 전) 콜드로 재시도.
-  const canWarm =
-    warmEnabled() && !!parsed.conversationId && parsed.images.length === 0 && !parsed.thinking;
-  if (!canWarm) return askCold();
-
-  const convId = parsed.conversationId as string;
-  // 중지(/api/chat/cancel → abort) 시 워밍 세션을 폐기해 SDK 생성을 끊는다.
-  const onAbort = () => dropWarmSession(convId);
-  abortController.signal.addEventListener("abort", onAbort);
-  try {
-    return await runWarmTurn({
-      conversationId: convId,
-      prompt: parsed.text,
-      model: parsed.model ?? config.model,
-      resume: parsed.resume,
-      callbacks: {
-        onTextDelta: callbacks.onTextDelta,
-        onStatus: callbacks.onStatus,
-        onToolComplete: callbacks.onToolComplete,
-      },
-    });
-  } catch (err) {
-    // 스트리밍 시작 전 폴백 신호이고 사용자가 멈춘 게 아니면 콜드로 같은 턴 재실행.
-    if (err instanceof WarmFallback && !abortController.signal.aborted) {
-      return askCold();
-    }
-    throw err;
-  } finally {
-    abortController.signal.removeEventListener("abort", onAbort);
   }
 }
 
