@@ -42,6 +42,14 @@
         {
           "photosPermission": "나비스에게 보낼 이미지를 선택하기 위해 사진 접근 권한이 필요해요."
         }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "음성 대화모드에서 말로 나비스와 대화하기 위해 마이크 접근 권한이 필요해요.",
+          "speechRecognitionPermission": "말한 내용을 글자로 바꾸기 위해 음성 인식 권한이 필요해요.",
+          "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox"]
+        }
       ]
     ],
     "extra": {

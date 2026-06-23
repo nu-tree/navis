@@ -17,6 +17,10 @@ type UiStore = {
   sidebarCollapsed: boolean;
   setSidebarCollapsed: (collapsed: boolean) => void;
   toggleSidebar: () => void;
+  // 핸드프리 음성 대화모드(ChatGPT Voice 식) on/off. 켜지면 전용 풀스크린 오버레이가
+  // 현재 활성 대화 위에 떠 말로 주고받는다. 휘발성 — persist 안 함.
+  voiceMode: boolean;
+  setVoiceMode: (on: boolean) => void;
 };
 
 // 라우터 없이 최상위 화면 전환 (채팅 ↔ 내 기억)
@@ -28,4 +32,6 @@ export const useUiStore = create<UiStore>((set) => ({
   sidebarCollapsed: false,
   setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
+  voiceMode: false,
+  setVoiceMode: (on) => set({ voiceMode: on }),
 }));

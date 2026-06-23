@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform, useWindowDimensions, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, useWindowDimensions, View } from 'react-native';
+import { Icon } from '../components/ui/icon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChatDrawer, ChatHeader, ChatInput, MessageList, ModelPicker } from '../components/chat';
 import { PreviewPanel } from '../components/chat/preview-panel';
@@ -37,6 +38,7 @@ export function ChatScreen() {
   const isActiveTyping = useIsActiveTyping();
   const sidebarCollapsed = useUiStore((s) => s.sidebarCollapsed);
   const setSidebarCollapsed = useUiStore((s) => s.setSidebarCollapsed);
+  const setVoiceMode = useUiStore((s) => s.setVoiceMode);
 
   // 데스크톱 고정 사이드바는 접지 않았을 때만. 접으면 헤더 ☰ 로 다시 펼친다.
   const showSidebar = isWide && !sidebarCollapsed;
@@ -95,8 +97,24 @@ export function ChatScreen() {
             onMenu={() => (isWide ? setSidebarCollapsed(false) : setDrawerOpen(true))}
             unread={totalUnread}
             showMenu={!showSidebar}
-            // 모델 선택은 코드 세션(=로컬 에이전트)에서만 숨긴다.
-            right={!isCode ? <ModelPicker /> : undefined}
+            // 모델 선택은 코드 세션(=로컬 에이전트)에서만 숨긴다. 일반 채팅엔 음성
+            // 대화모드 진입(🎙️) 버튼도 함께 둔다(보고방·코드 세션 제외).
+            right={
+              isCode ? undefined : (
+                <View className="flex-row items-center gap-1">
+                  {!isReport ? (
+                    <Pressable
+                      hitSlop={8}
+                      onPress={() => setVoiceMode(true)}
+                      className="h-9 w-9 items-center justify-center rounded-lg cursor-pointer transition-colors active:bg-secondary hover:bg-secondary"
+                    >
+                      <Icon name="mic" size={20} tone="foreground" />
+                    </Pressable>
+                  ) : null}
+                  <ModelPicker />
+                </View>
+              )
+            }
           />
           <KeyboardAvoidingView
             className="flex-1"
