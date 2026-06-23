@@ -29,6 +29,9 @@ function App() {
   const [session, setSession] = useState<{ sessionId: string; contextTokens: number } | null>(
     null,
   );
+  // 진행 중 응답의 실시간 상태(Claude Code 식 스트리밍).
+  const [streamingText, setStreamingText] = useState(""); // 누적 중인 답변 텍스트
+  const [activity, setActivity] = useState(""); // 현재 도구/상태 라벨
   const nextId = useRef(0);
 
   const addTurn = useCallback((partial: TurnInput) => {
@@ -81,12 +84,21 @@ function App() {
         });
       }
 
+      setStreamingText("");
+      setActivity("");
       try {
         const { text, sessionId, contextTokens, saved } = await askClaude({
           prompt: trimmed,
           resumeSessionId: resumeId,
           // CLI 는 이미지 첨부 없음, profile_update 항상 금지(대화 경로).
           projectContext,
+          // 로컬 실행 — 현재 폴더 코드를 직접 Read/Edit/Write/Bash 로 작업(Claude Code 식).
+          localExecution: true,
+          // Claude Code 처럼 실시간 출력: 토큰 델타를 즉시 흘리고, 도구 진행/완료를
+          // 화면에 표시한다(완성 텍스트를 한 번에 던지지 않음).
+          onStatus: (s) => setActivity(statusLabel(s)),
+          onTextDelta: (d) => setStreamingText((p) => p + d),
+          onToolComplete: (label) => addTurn({ kind: "note", text: `🔧 ${label}` }),
         });
         setSession({ sessionId, contextTokens });
         addTurn({ kind: "assistant", text, saved });
@@ -98,6 +110,8 @@ function App() {
         });
       } finally {
         setPending(false);
+        setStreamingText("");
+        setActivity("");
       }
     },
     [session, exit, addTurn],
@@ -113,11 +127,14 @@ function App() {
       </Static>
 
       {pending && (
-        <Box marginTop={1}>
-          <Text color="cyan">
-            <Spinner type="dots" />
-          </Text>
-          <Text> 생각 중...</Text>
+        <Box flexDirection="column" marginTop={1}>
+          {streamingText ? <Text>{streamingText}</Text> : null}
+          <Box>
+            <Text color="cyan">
+              <Spinner type="dots" />
+            </Text>
+            <Text dimColor> {activity || "생각 중..."}</Text>
+          </Box>
         </Box>
       )}
 
@@ -140,6 +157,14 @@ function App() {
       </Box>
     </Box>
   );
+}
+
+// 도구 진행 상태(onStatus)를 사람이 읽을 라벨로. '__thinking__'/'__answering__' 은
+// 의사 상태이고, 그 외엔 도구 진행 라벨이 그대로 들어온다.
+function statusLabel(s: string): string {
+  if (s === "__thinking__") return "생각 중...";
+  if (s === "__answering__") return "답변 작성 중...";
+  return s;
 }
 
 function TurnView({ turn }: { turn: Turn }) {

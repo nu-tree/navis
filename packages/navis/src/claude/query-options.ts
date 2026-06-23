@@ -33,17 +33,29 @@ export function buildChatSystemPrompt(
   baseSystemPrompt: string,
   guidance: string,
   projectContext?: string,
+  localExecution = false,
 ): string {
   let s = projectContext
     ? `${baseSystemPrompt}\n\n[운영 컨텍스트] 현재 작업 프로젝트: "${projectContext}". 이 대화에서 mcp__namory__save 를 호출할 때 모든 항목에 project: "${projectContext}" 를 명시할 것.`
     : baseSystemPrompt;
-  // 원격 실행(Railway 컨테이너) 운영 안내 — 소스 파일이 없어 자기 코드 직접 수정 불가.
-  s +=
-    "\n\n[원격 실행 안내]\n" +
-    "- 이 환경(Railway 컨테이너)에는 소스 파일이 없다. Edit/Write/Bash 로 이 모노레포 코드(packages/** — navis, namory, app, desktop 등)를 직접 수정하려 시도하지 말 것.\n" +
-    "- 코드 수정 요청(어느 패키지든)은 반드시 mcp__self_modify__request_self_modification 도구로 GitHub Actions 의 코드 수정 서브에이전트에게 위임. 즉시 트리거만 던지면 작업·검토 결과는 별도 보고로 전달됨.\n" +
-    "- 자기 코드 조회는 mcp__repo__read_repo_file / mcp__repo__list_repo_files 사용.\n" +
-    "- 사용자 시스템의 다른 파일·셸 작업은 평소대로 허용(자기 수정만 위임).";
+  if (localExecution) {
+    // 로컬 실행(navis CLI) — 현재 폴더의 코드가 디스크에 그대로 있으므로 Claude Code 처럼
+    // 직접 읽고·고치고·실행한다. 위임(self_modify)·GitHub 조회(repo)는 쓰지 않는다.
+    s +=
+      "\n\n[로컬 실행 안내]\n" +
+      "- 너는 사용자의 로컬 머신에서 직접 실행 중이다(navis CLI). 현재 작업 디렉터리의 코드가 디스크에 그대로 있다.\n" +
+      "- 코드는 Read/Glob/Grep 으로 충분히 읽고, Edit/Write 로 직접 수정하고, Bash 로 빌드·타입체크·테스트·git 을 직접 실행하라(Claude Code 처럼).\n" +
+      "- mcp__self_modify__*(GitHub Actions 위임)·mcp__repo__*(GitHub raw 조회)는 쓰지 말 것 — 로컬 파일이 바로 있어 직접 작업이 빠르고 정확하다.\n" +
+      "- 수정 뒤에는 빌드/타입체크로 검증하고, 무엇을 바꿨는지 간결히 보고하라.";
+  } else {
+    // 원격 실행(Railway 컨테이너) 운영 안내 — 소스 파일이 없어 자기 코드 직접 수정 불가.
+    s +=
+      "\n\n[원격 실행 안내]\n" +
+      "- 이 환경(Railway 컨테이너)에는 소스 파일이 없다. Edit/Write/Bash 로 이 모노레포 코드(packages/** — navis, namory, app, desktop 등)를 직접 수정하려 시도하지 말 것.\n" +
+      "- 코드 수정 요청(어느 패키지든)은 반드시 mcp__self_modify__request_self_modification 도구로 GitHub Actions 의 코드 수정 서브에이전트에게 위임. 즉시 트리거만 던지면 작업·검토 결과는 별도 보고로 전달됨.\n" +
+      "- 자기 코드 조회는 mcp__repo__read_repo_file / mcp__repo__list_repo_files 사용.\n" +
+      "- 사용자 시스템의 다른 파일·셸 작업은 평소대로 허용(자기 수정만 위임).";
+  }
   s += guidance;
   return s;
 }

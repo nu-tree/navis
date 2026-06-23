@@ -32,6 +32,7 @@ export async function askClaude(opts: AskClaudeOptions): Promise<AskResult> {
     images = [],
     allowProfileUpdate = false,
     projectContext,
+    localExecution = false,
     historyContext,
     onTextDelta,
     onThinkingDelta,
@@ -60,7 +61,12 @@ export async function askClaude(opts: AskClaudeOptions): Promise<AskResult> {
   const prefetchMs = Date.now() - tPrefetch;
 
   // 시스템 프롬프트 + MCP/도구 — 콜드/워밍 공유 빌더로 동일 설정 보장.
-  const systemPromptFinal = buildChatSystemPrompt(baseSystemPrompt, guidance, projectContext);
+  const systemPromptFinal = buildChatSystemPrompt(
+    baseSystemPrompt,
+    guidance,
+    projectContext,
+    localExecution,
+  );
 
   // query() 시작 시각 — 첫 메시지까지가 CLI 스폰 + MCP 핸드셰이크 바닥(모델 무관).
   const tQuery = Date.now();
