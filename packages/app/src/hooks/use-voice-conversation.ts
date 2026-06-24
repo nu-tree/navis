@@ -88,6 +88,18 @@ export function useVoiceConversation(): VoiceConversation {
       setPartial('');
       setAnswer('');
       setPhaseBoth('thinking');
+      // STT 가 잡았던 record 오디오 세션을 '재생 전용(playback)'으로 되돌린다 — STT 의
+      // start() 가 세션을 record 로 덮어써 TTS(expo-speech)가 수화기/무음으로 새던 문제 해결.
+      // 듣기로 돌아갈 때 startListening 이 다시 playAndRecord 로 바꾼다.
+      if (Platform.OS === 'ios') {
+        try {
+          ExpoSpeechRecognitionModule.setCategoryIOS({
+            category: 'playback',
+            categoryOptions: [],
+            mode: 'default',
+          });
+        } catch {}
+      }
       spokenTextRef.current = '';
       watchConvRef.current = useChatStore.getState().activeId;
       // 이전 턴 큐가 어떤 이유로든 살아있으면 멈추고 새로 만든다(겹침/누수 방지).
