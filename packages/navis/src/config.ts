@@ -1,10 +1,12 @@
 // 환경변수 로딩 + 검증. 누락 시 즉시 죽어서 잘못된 설정으로 떠 있는 걸 막는다.
 //
 // env 파일 자동 로드 — 본 모듈이 평가되기 직전에 실행돼 process.env를 채운 뒤
-// required()/optional() 검증이 동작한다. 우선순위:
-//   1) 현재 디렉터리의 .env  (개발용)
-//   2) ~/.config/navis/env    (글로벌 설치용 — XDG 표준)
-//   3) 이미 export 된 process.env (가장 마지막에 우선 — Railway 등 호스팅 환경)
+// required()/optional() 검증이 동작한다. 존재하는 후보를 모두 순서대로 로드해 '병합'한다:
+//   1) 현재 디렉터리의 .env  (개발용 — 먼저 로드해 우선)
+//   2) ~/.config/navis/env    (글로벌 설치용 XDG — 1)에 없는 키만 보충)
+//   3) 이미 export 된 process.env (둘 다보다 우선 — Railway 등 호스팅 환경)
+// process.loadEnvFile() 은 이미 설정된 키를 덮어쓰지 않으므로(검증함), 먼저 로드한 쪽이
+// 이기고 뒤는 빈칸만 채운다 → 위 우선순위가 자연히 성립.
 // Node 21.7+ 의 process.loadEnvFile()을 사용 — 별도 dotenv 의존성 불필요.
 
 import { existsSync } from "node:fs";
@@ -16,11 +18,14 @@ import { join } from "node:path";
     join(process.cwd(), ".env"),
     join(homedir(), ".config", "navis", "env"),
   ];
+  // 첫 매치에서 멈추지 않고 둘 다 로드한다. navis 는 아무 프로젝트 폴더에서나 실행되는
+  // CLI 라, 그 폴더의 (navis 와 무관한) .env 가 글로벌 설정을 '가려' CLAUDE_CODE_OAUTH_TOKEN
+  // 같은 필수값 누락으로 죽는 일을 막아야 한다 — 첫 매치만 로드하던 옛 동작의 버그였다.
+  // 글로벌은 누락분만 보충하므로(no-overwrite), 프로젝트 .env 의 값은 그대로 우선한다.
   for (const path of candidates) {
     if (existsSync(path)) {
       try {
         process.loadEnvFile(path);
-        return; // 첫 번째로 찾은 파일만 로드(우선순위 보존)
       } catch (err) {
         console.error(`[config] env 파일 로드 실패: ${path}`, err);
       }
