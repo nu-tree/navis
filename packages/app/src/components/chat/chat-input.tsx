@@ -16,11 +16,33 @@ import { Text } from '../ui/text';
 import { Icon } from '../ui/icon';
 import { useSendMessage } from '../../hooks/use-send-message';
 import { useIsActiveTyping, useChatStore } from '../../store/chat-store';
+import { useUiStore } from '../../store/ui-store';
 import { localAgent } from '../../lib/local-agent';
 import type { Attachment } from '../../api/navis';
 
 // 첨부 최대 개수 — pickImage(selectionLimit), 붙여넣기, 합산 모두 이 한도에 맞춘다.
 const MAX_ATTACHMENTS = 4;
+
+// 음성 대화모드 진입 버튼의 파형 아이콘(ChatGPT Voice 식). Feather 엔 audio waveform 이
+// 없어 세로 막대로 직접 그린다. 검은(테마 background) 막대 — 밝은 원 위에 얹힌다.
+function Waveform() {
+  const bars = [8, 15, 11, 18, 10];
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2.5 }}>
+      {bars.map((h, i) => (
+        <View
+          key={i}
+          style={{
+            width: 2.5,
+            height: h,
+            borderRadius: 2,
+            backgroundColor: 'rgb(13,14,26)',
+          }}
+        />
+      ))}
+    </View>
+  );
+}
 
 // 브라우저 File → Attachment(base64). 데이터 URL 의 ',' 뒤가 base64 본문.
 const fileToAttachment = (file: File): Promise<Attachment> =>
@@ -62,6 +84,11 @@ export function ChatInput({ placeholder = '메시지 입력…', className }: Ch
   const typing = useIsActiveTyping();
   const activeId = useChatStore((s) => s.activeId);
   const stopGenerating = useChatStore((s) => s.stopGenerating);
+  const conversations = useChatStore((s) => s.conversations);
+  const setVoiceMode = useUiStore((s) => s.setVoiceMode);
+  // 음성 대화모드는 일반 채팅방에서만 — 보고방/코드 세션 제외.
+  const isChatRoom =
+    conversations.find((c) => c.id === activeId)?.kind === 'chat';
 
   const canSend = (text.trim().length > 0 || attachments.length > 0) && !typing;
 
@@ -234,8 +261,22 @@ export function ChatInput({ placeholder = '메시지 입력…', className }: Ch
           >
             <Icon name="square" size={16} tone="foreground" />
           </Button>
+        ) : canSend ? (
+          <Button size="icon" className="rounded-full" onPress={submit}>
+            <Icon name="arrow-up" size={18} tone="primary-foreground" />
+          </Button>
+        ) : isChatRoom ? (
+          // 입력이 비어 있고 일반 채팅이면 — 음성 대화모드 진입(검은 원 + 파형).
+          <Button
+            size="icon"
+            className="rounded-full bg-foreground transition-transform active:scale-95"
+            onPress={() => setVoiceMode(true)}
+          >
+            <Waveform />
+          </Button>
         ) : (
-          <Button size="icon" className="rounded-full" disabled={!canSend} onPress={submit}>
+          // 보고방/코드 세션: 음성 없이 비활성 전송 버튼 유지.
+          <Button size="icon" className="rounded-full" disabled onPress={submit}>
             <Icon name="arrow-up" size={18} tone="primary-foreground" />
           </Button>
         )}
