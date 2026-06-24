@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import {
   ExpoSpeechRecognitionModule,
   useSpeechRecognitionEvent,
@@ -53,7 +53,8 @@ export function useVoiceConversation(): VoiceConversation {
     setPhase(p);
   }, []);
 
-  const finalRef = useRef(''); // 이번 발화의 최종 인식 텍스트
+  const finalRef = useRef(''); // 이번 발화의 최종 인식 텍스트(isFinal)
+  const partialRef = useRef(''); // 마지막 인식 텍스트(isFinal 없이 끝나도 쓸 fallback)
   const ttsRef = useRef<SpeechQueue | null>(null);
   // 이미 TTS 에 넘긴 텍스트(접두). 증분만 말하되, 최종 보정(setMessageText)으로 앞부분이
   // 달라지면 잘못 읽지 않도록 startsWith 로 append-only 를 확인한다.
@@ -67,6 +68,7 @@ export function useVoiceConversation(): VoiceConversation {
   const startListening = useCallback(() => {
     if (!aliveRef.current) return;
     finalRef.current = '';
+    partialRef.current = '';
     lastStartRef.current = Date.now();
     setPartial('');
     setAnswer('');
@@ -114,13 +116,17 @@ export function useVoiceConversation(): VoiceConversation {
   useSpeechRecognitionEvent('result', (e) => {
     if (phaseRef.current !== 'listening') return;
     const transcript = e.results?.[0]?.transcript ?? '';
+    // 마지막 인식 텍스트는 항상 보관 — iOS 에서 isFinal 없이 end 가 오는 경우가 잦은데,
+    // 그때 finalRef 가 비어 전송이 누락되던 버그(응답이 간헐적으로만 오던 원인)를 막는다.
+    if (transcript) partialRef.current = transcript;
     if (e.isFinal) finalRef.current = transcript;
     else setPartial(transcript);
   });
 
   useSpeechRecognitionEvent('end', () => {
     if (!aliveRef.current || phaseRef.current !== 'listening') return;
-    const text = finalRef.current.trim();
+    // isFinal 이 못 온 경우 마지막 부분 인식(partial)으로라도 전송한다.
+    const text = (finalRef.current || partialRef.current).trim();
     if (text) {
       rapidEmptyRef.current = 0;
       submit(text);
@@ -213,6 +219,18 @@ export function useVoiceConversation(): VoiceConversation {
           setErrorText('마이크/음성 인식 권한이 필요해요.');
           setPhaseBoth('denied');
           return;
+        }
+        // iOS: STT 가 마이크(record) 세션을 잡으면 TTS(expo-speech) 출력이 수화기로/무음
+        // 으로 새어 안 들린다. playAndRecord + defaultToSpeaker 로 깔아 재생이 스피커로
+        // 나가게 한다(TTS 가 안 나오던 핵심 원인).
+        if (Platform.OS === 'ios') {
+          try {
+            ExpoSpeechRecognitionModule.setCategoryIOS({
+              category: 'playAndRecord',
+              categoryOptions: ['defaultToSpeaker', 'allowBluetooth'],
+              mode: 'default',
+            });
+          } catch {}
         }
         startListening();
       } catch {
