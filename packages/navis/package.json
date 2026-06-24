@@ -29,6 +29,9 @@
     "sharp": "^0.34.5",
     "zod": "^4.4.3"
   },
+  "overrides": {
+    "google-auth-library": "$google-auth-library"
+  },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@types/node-cron": "^3.0.11",
