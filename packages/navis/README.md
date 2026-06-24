@@ -217,7 +217,29 @@ navis: 검토 서브에이전트 — PR #42: navis self-improve: maxTurns 20
 
 ```bash
 brew tap nu-tree/navis
+brew trust nu-tree/navis   # 서드파티 tap 신뢰(최신 brew 보안 요구 — 1회)
 brew install navis
 mkdir -p ~/.config/navis && $EDITOR ~/.config/navis/env  # env 채움
 navis                                                     # 어디서나 실행
 ```
+
+업데이트: `brew update && brew upgrade navis`.
+
+### CLI 릴리스 자동화 (`.github/workflows/cli-release.yml`)
+
+formula 는 별도 tap 레포 `nu-tree/homebrew-navis` 의 `Formula/navis.rb` 에 있다.
+`main` 에 `packages/navis/**` 변경이 들어오면(또는 워크플로 수동 실행) 자동으로:
+
+1. tap formula 의 현재 버전 +patch 로 새 태그(`vX.Y.Z`)를 찍어 push(이미 있으면 재사용),
+2. 그 태그 소스 타르볼의 sha256 계산,
+3. tap 의 `url`·`sha256` 갱신(+ 진입 래퍼 `dist/cli.js` 멱등 정규화)을 **한 커밋**으로 push.
+
+버전 기준이 formula(마지막 성공 릴리스)라, 태그만 찍히고 갱신이 실패한 런도 다음 런이 같은
+버전을 재시도해 버전 구멍 없이 자기복구된다.
+
+→ 사용자는 `brew upgrade navis` 만 하면 새 버전을 받는다. 손으로 태그/sha 갱신 불필요.
+
+> **사전 준비(1회)**: repo secret `HOMEBREW_TAP_TOKEN` 등록 — `nu-tree/homebrew-navis` 에
+> `Contents: Read/Write` 권한이 있는 fine-grained PAT. 기본 `GITHUB_TOKEN` 은 현재 레포만
+> 접근 가능해 다른 레포(tap)에 push 할 수 없어 별도 토큰이 필요하다. 미설정 시 워크플로는
+> 태그까지만 찍고 tap 갱신 단계에서 에러로 멈춘다.

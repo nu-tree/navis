@@ -1,0 +1,138 @@
+# navis CLI 자동 릴리스 — packages/navis 변경이 main 에 들어오면 Homebrew tap 갱신.
+#
+# 동작:
+#   1. tap 레포(nu-tree/homebrew-navis)를 받아 formula 의 현재 버전을 읽고 patch +1.
+#      (버전 source-of-truth = formula 자신. 태그가 아니라 formula 기준이라, 태그만 찍히고
+#       formula 갱신이 실패한 런도 다음 런이 같은 버전을 재시도해 버전 구멍 없이 자기복구된다.)
+#   2. 새 태그(vX.Y.Z)를 찍어 push(이미 있으면 재사용 — 부분 실패 복구).
+#   3. 그 태그 소스 타르볼의 sha256 계산(다운로드 실패 시 명시적 중단).
+#   4. tap 의 url + sha256 갱신(+ 진입 래퍼 dist/bin.js → dist/cli.js 멱등 정규화)을
+#      한 커밋으로 push. → 래퍼 수정이 항상 새 버전과 같은 커밋에 묶여 깨진 중간 상태가 없다.
+#
+# → 사용자는 `brew upgrade navis` 만 하면 새 버전을 받는다. 손으로 태그/sha 갱신 불필요.
+#
+# 사전 준비(1회): repo secret `HOMEBREW_TAP_TOKEN` 등록 —
+#   nu-tree/homebrew-navis 에 Contents:Read/Write 권한이 있는 fine-grained PAT.
+#   기본 GITHUB_TOKEN 은 현재 레포만 접근 가능해 다른 레포(tap)에 push 할 수 없어서 필요하다.
+#   미설정이면 태그를 찍기 전(formula 갱신 불가 확인 단계)에서 바로 멈춘다.
+#
+# 무한 루프 없음: 이 워크플로는 main 에 커밋을 되돌려 푸시하지 않는다(태그 push + tap 레포 push 만).
+#   태그 push 는 branches:[main] 이벤트를 재발동시키지 않는다.
+
+name: cli release (homebrew)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/navis/**"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "릴리스 버전(예: 0.1.2). 비우면 tap formula 현재 버전 +patch."
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cli-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    # 수동 실행은 항상 허용. push 트리거는 [skip-release]/release(cli) 커밋이면 건너뛴다.
+    if: ${{ github.event_name == 'workflow_dispatch' || (!contains(github.event.head_commit.message, 'release(cli)') && !contains(github.event.head_commit.message, '[skip-release]')) }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # tap 을 먼저 받고 버전을 계산한다 — 토큰이 없거나 tap 접근이 안 되면 태그를
+      # 찍기 전에 멈춰서, 태그만 남고 formula 가 안 바뀌는 어긋남을 애초에 막는다.
+      - name: tap clone + 버전 계산
+        id: ver
+        env:
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+        run: |
+          set -euo pipefail
+          if [ -z "$TAP_TOKEN" ]; then
+            echo "::error::HOMEBREW_TAP_TOKEN secret 미설정 — tap 갱신 불가. README 사전준비 참조."; exit 1
+          fi
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/nu-tree/homebrew-navis.git" tap
+          if [ -n "$INPUT_VERSION" ]; then
+            next="$INPUT_VERSION"
+          else
+            cur=$(grep -oE 'tags/v[0-9]+\.[0-9]+\.[0-9]+' tap/Formula/navis.rb | head -1 | sed 's|tags/v||')
+            if [ -z "$cur" ]; then cur="0.1.0"; fi
+            maj=$(echo "$cur" | cut -d. -f1)
+            min=$(echo "$cur" | cut -d. -f2)
+            pat=$(echo "$cur" | cut -d. -f3)
+            next="${maj}.${min}.$((pat + 1))"
+          fi
+          echo "version=$next" >> "$GITHUB_OUTPUT"
+          echo "tag=v${next}" >> "$GITHUB_OUTPUT"
+          echo "다음 릴리스: v${next}"
+
+      - name: 태그 생성/push (존재하면 재사용)
+        env:
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git config user.name "navis-bot"
+          git config user.email "navis-bot@users.noreply.github.com"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "태그 $TAG 이미 존재 — 재사용(이전 런 부분실패 복구)"
+          else
+            git tag "$TAG"
+            git push origin "$TAG"
+            echo "태그 $TAG push 완료"
+          fi
+
+      - name: 타르볼 sha256 계산
+        id: sha
+        env:
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          set -euo pipefail
+          url="https://github.com/${{ github.repository }}/archive/refs/tags/${TAG}.tar.gz"
+          # 태그 push 직후 GitHub 아카이브 생성에 지연이 있을 수 있어 재시도.
+          ok=""
+          for i in 1 2 3 4 5; do
+            if curl -sfL "$url" -o tarball.tgz && [ -s tarball.tgz ]; then ok=1; break; fi
+            echo "아카이브 대기... ($i)"; sleep 5
+          done
+          if [ -z "$ok" ]; then echo "::error::타르볼 다운로드 실패: $url"; exit 1; fi
+          sha=$(sha256sum tarball.tgz | cut -d' ' -f1)
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "sha256=$sha" >> "$GITHUB_OUTPUT"
+          echo "url=$url"
+          echo "sha256=$sha"
+
+      - name: tap formula 갱신 + push
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+          NEW_URL: ${{ steps.sha.outputs.url }}
+          NEW_SHA: ${{ steps.sha.outputs.sha256 }}
+        run: |
+          set -euo pipefail
+          f="tap/Formula/navis.rb"
+          # url / sha256 줄을 통째로 교체(값에 / 가 있어 | 를 sed 구분자로).
+          sed -i -E "s|^  url \".*\"|  url \"${NEW_URL}\"|" "$f"
+          sed -i -E "s|^  sha256 \".*\"|  sha256 \"${NEW_SHA}\"|" "$f"
+          # 진입점 통합 후 단일 진입점은 dist/cli.js — 옛 dist/bin.js 참조를 멱등 정규화.
+          # (이미 cli.js 면 no-op) 래퍼 수정이 항상 새 버전과 같은 커밋에 묶이게 한다.
+          sed -i "s|dist/bin\.js|dist/cli.js|g" "$f"
+          cd tap
+          git config user.name "navis-bot"
+          git config user.email "navis-bot@users.noreply.github.com"
+          git add Formula/navis.rb
+          if git diff --cached --quiet; then
+            echo "변경 없음 — formula 이미 최신"; exit 0
+          fi
+          git commit -m "chore: navis ${VERSION} (url/sha256 자동 갱신)"
+          git push origin HEAD:main
+          echo "✅ tap 갱신 완료: navis ${VERSION}"
