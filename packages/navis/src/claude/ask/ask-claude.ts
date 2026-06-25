@@ -6,7 +6,6 @@
 
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import { config } from "../../config.js";
-import { getChatPrefetch } from "../prefetch.js";
 import {
   buildChatSystemPrompt,
   buildChatQueryOptions,
@@ -28,6 +27,7 @@ import {
 export async function askClaude(opts: AskClaudeOptions): Promise<AskResult> {
   const {
     prompt,
+    env,
     resumeSessionId,
     images = [],
     allowProfileUpdate = false,
@@ -57,7 +57,7 @@ export async function askClaude(opts: AskClaudeOptions): Promise<AskResult> {
   // namory 3회 왕복을 핫패스에서 없애, 버스트 시 namory 지연이 이벤트 루프를 압박해
   // 생기는 death-spiral 을 막는다(설정 변경은 TTL 내 반영).
   const tPrefetch = Date.now();
-  const [connectors, baseSystemPrompt, guidance] = await getChatPrefetch();
+  const [connectors, baseSystemPrompt, guidance] = await env.prefetch();
   const prefetchMs = Date.now() - tPrefetch;
 
   // 시스템 프롬프트 + MCP/도구 — 콜드/워밍 공유 빌더로 동일 설정 보장.
@@ -92,7 +92,7 @@ export async function askClaude(opts: AskClaudeOptions): Promise<AskResult> {
           : {}),
         // 공통 옵션(systemPrompt/mcpServers/allowedTools/settingSources/maxTurns/
         // includePartialMessages/abortController/resume)은 콜드/워밍 공유 빌더로 통일.
-        ...buildChatQueryOptions(connectors, systemPromptFinal, {
+        ...buildChatQueryOptions(env, connectors, systemPromptFinal, {
           resume: resumeSessionId,
           abortController,
           allowProfileUpdate,

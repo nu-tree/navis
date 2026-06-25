@@ -9,6 +9,7 @@
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { askClaude } from "../claude/ask.js";
+import { fullChatEnv } from "../claude/server-env.js";
 import { curateTurn } from "../claude/curator.js";
 import {
   readJsonBody,
@@ -83,6 +84,7 @@ export async function handleChat(req: IncomingMessage, res: ServerResponse): Pro
 
     const result = await askClaude({
       prompt: parsed.text,
+      env: fullChatEnv,
       resumeSessionId: parsed.resume,
       images: parsed.images,
       modelOverride: parsed.model,

@@ -1,6 +1,7 @@
 import cron from "node-cron";
 import { config } from "./config.js";
 import { askClaude } from "./claude/ask.js";
+import { fullChatEnv } from "./claude/server-env.js";
 import { emitReport } from "./reports/emit.js";
 
 // 주간 기억 다이제스트 — navis가 정기적으로 최근 기억을 요약해 자기이해 프로필에
@@ -34,6 +35,7 @@ export async function runDigest(): Promise<void> {
   try {
     const { text } = await askClaude({
       prompt: buildDigestPrompt(config.digestDays),
+      env: fullChatEnv,
       // 새 세션(이전 대화 맥락과 분리), profile_update 허용(신뢰된 자동화 경로).
       allowProfileUpdate: true,
     });

@@ -1,3 +1,5 @@
+import type { ChatEnv } from "./chat-env.js";
+
 // 앱 첨부 이미지를 Claude에 넘길 때 쓰는 형태. data는 base64(접두사 없음).
 // media_type은 Anthropic이 받는 4종으로 한정한다.
 export interface InputImage {
@@ -20,6 +22,9 @@ export interface InputImage {
 //   abortController: 중지 전파(클라 중지 버튼 → SDK query 생성 실제 중단).
 export interface AskClaudeOptions {
   prompt: string;
+  // 채팅 환경(주입할 MCP 도구셋 + 커넥터/프롬프트 prefetch). 서버는 fullChatEnv,
+  // CLI 는 localChatEnv 를 넘긴다. 이 값이 도구 범위를 결정한다(두뇌는 도구를 모름).
+  env: ChatEnv;
   resumeSessionId?: string;
   images?: InputImage[];
   allowProfileUpdate?: boolean;

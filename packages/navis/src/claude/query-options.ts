@@ -1,30 +1,15 @@
 import type { McpServerConfig, Options } from "@anthropic-ai/claude-agent-sdk";
-import { buildCronTools, CRON_TOOL_NAMES } from "../cron/mcp.js";
-import { buildRepoTools, REPO_TOOL_NAMES } from "../repo/mcp.js";
-import { buildSelfModifyTools, SELF_MODIFY_TOOL_NAMES } from "../self-modify/mcp.js";
-import { buildSettingsTools, SETTINGS_TOOL_NAMES } from "../settings/mcp.js";
-import { type BuiltConnectors } from "../connectors/mcp.js";
 import { namoryMcp } from "./mcp.js";
-import { buildGoogleTools, GOOGLE_TOOL_NAMES } from "../google/mcp.js";
-import { isCalendarEnabled } from "../google/auth.js";
 import {
   BUILTIN_TOOLS,
   NAMORY_PROFILE_UPDATE_TOOL,
   NAMORY_TOOLS,
 } from "./allowed-tools.js";
-
-// in-process MCP 서버 빌더들 — 상태가 변하지 않아 매 요청마다 다시 짜지 않는다.
-// 빌더 호출은 도구 메타 등록만 하지 외부 I/O 가 없어 모듈 로드 시 만들어도 안전.
-// 캐싱으로 첫 토큰 지연을 줄인다(이전엔 매 askClaude 호출마다 5개 서버를 재구성).
-const cronServer = buildCronTools();
-const repoServer = buildRepoTools();
-const selfModifyServer = buildSelfModifyTools();
-const settingsServer = buildSettingsTools();
-// 구글은 env(client/secret/refresh) 셋이 모두 채워졌을 때만 활성 — 환경변수는 프로세스
-// 수명 동안 안 바뀌므로 모듈 로드 시점에 한 번만 판정해도 충분.
-const googleServer = isCalendarEnabled() ? buildGoogleTools() : undefined;
+import type { ChatEnv, ConnectorBundle } from "./chat-env.js";
 
 // ── 채팅 query 설정 빌더 (콜드 askClaude · 워밍 세션이 공유) ──────────────────────
+// in-process MCP 서버(cron/google/...)는 여기서 모르고, 호출부가 넘기는 env 로 주입된다
+// (server-env.ts / local-env.ts). namory MCP 와 내장 도구만 이 파일의 공통 베이스.
 // mcpServers/allowedTools/systemPrompt 는 보안·동작에 직결되므로 한 곳에서 만들어
 // 두 경로(매 메시지 askClaude, 지속 워밍 세션 warm.ts)가 절대 어긋나지 않게 한다.
 
@@ -60,9 +45,10 @@ export function buildChatSystemPrompt(
   return s;
 }
 
-// MCP 서버 묶음: 동적 커넥터(있으면) + namory(항상 로드) + 내장 in-process 서버들.
+// MCP 서버 묶음: 동적 커넥터(있으면) + namory(항상 로드) + env 가 주입한 in-process 서버들.
 export function buildChatMcpServers(
-  connectors: BuiltConnectors,
+  env: ChatEnv,
+  connectors: ConnectorBundle,
 ): Record<string, McpServerConfig> {
   return {
     // DB 등록 커넥터들(있을 때만)을 먼저 펼친다 — 내장 서버 키(namory/cron/...)가
@@ -70,27 +56,22 @@ export function buildChatMcpServers(
     ...connectors.servers,
     // namory MCP — 공유 헬퍼(namoryMcp)로 alwaysLoad+Bearer 헤더를 단일 출처에서 만든다.
     namory: namoryMcp(),
-    cron: cronServer,
-    repo: repoServer,
-    self_modify: selfModifyServer,
-    settings: settingsServer,
-    ...(googleServer ? { google: googleServer } : {}),
+    // 서버/CLI 가 주입한 추가 서버(cron/google/...). CLI 는 비어 있음.
+    ...env.mcpServers,
   };
 }
 
 // 자동 승인 도구 목록. profile_update는 신뢰된 다이제스트 경로에서만 추가.
 export function buildChatAllowedTools(
-  connectors: BuiltConnectors,
+  env: ChatEnv,
+  connectors: ConnectorBundle,
   allowProfileUpdate: boolean,
 ): string[] {
   return [
     ...NAMORY_TOOLS,
     ...(allowProfileUpdate ? [NAMORY_PROFILE_UPDATE_TOOL] : []),
-    ...CRON_TOOL_NAMES,
-    ...REPO_TOOL_NAMES,
-    ...SELF_MODIFY_TOOL_NAMES,
-    ...SETTINGS_TOOL_NAMES,
-    ...(googleServer ? GOOGLE_TOOL_NAMES : []),
+    // env 가 주입한 추가 도구(cron/google/...). CLI 는 비어 있음.
+    ...env.allowedToolNames,
     // 동적 커넥터: "mcp__<id>" 와일드카드로 각 커넥터의 모든 도구를 자동 승인.
     ...connectors.allowedTools,
     ...BUILTIN_TOOLS,
@@ -103,7 +84,8 @@ export function buildChatAllowedTools(
 // 명시적으로 막으려던 위험)을 단일 출처로 보장. model·thinking·effort 처럼 경로별로
 // 다른 옵션은 호출부에서 spread 로 덧붙인다.
 export function buildChatQueryOptions(
-  connectors: BuiltConnectors,
+  env: ChatEnv,
+  connectors: ConnectorBundle,
   systemPrompt: string,
   opts: {
     resume?: string;
@@ -114,8 +96,8 @@ export function buildChatQueryOptions(
 ): Options {
   return {
     systemPrompt,
-    mcpServers: buildChatMcpServers(connectors),
-    allowedTools: buildChatAllowedTools(connectors, opts.allowProfileUpdate),
+    mcpServers: buildChatMcpServers(env, connectors),
+    allowedTools: buildChatAllowedTools(env, connectors, opts.allowProfileUpdate),
     // 로컬 설정(CLAUDE.md, settings.json) 무시.
     settingSources: [],
     // 도구 호출 루프 여유.

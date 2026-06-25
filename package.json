@@ -8,6 +8,7 @@
     "build": "pnpm -r build",
     "dev": "pnpm --filter namory-mcp dev",
     "dev:navis": "pnpm --filter navis dev",
+    "cli": "pnpm --filter navis-cli cli",
     "namory": "pnpm --filter namory-mcp",
     "navis": "pnpm --filter navis",
     "release:desktop": "node scripts/release-desktop.mjs",

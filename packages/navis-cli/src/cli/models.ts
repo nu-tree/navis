@@ -1,4 +1,4 @@
-import { config } from "../config.js";
+import { config } from "navis/config.js";
 
 // 모델 id → 사용자에게 보여줄 라벨. id 는 config.selectableModels(서버와 공유하는
 // 화이트리스트)와 일치한다 — 목록은 config 한 곳에서만 늘린다.

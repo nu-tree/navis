@@ -1,5 +1,6 @@
 import cron, { type ScheduledTask } from "node-cron";
 import { askClaude } from "../claude/ask.js";
+import { fullChatEnv } from "../claude/server-env.js";
 import { emitReport } from "../reports/emit.js";
 import { fetchCrons, patchCronRemote, type CronRow } from "./api.js";
 
@@ -58,7 +59,7 @@ async function runCron(c: CronRow): Promise<void> {
   // 크론마다 자기 보고방 — sourceId=크론 id, 제목=크론 DB 제목.
   const meta = { sourceId: c.id, sourceTitle: `⏰ ${c.title}` };
   try {
-    const { text } = await askClaude({ prompt: c.prompt });
+    const { text } = await askClaude({ prompt: c.prompt, env: fullChatEnv });
     emitReport(text, "cron", meta);
     // 성공한 실행 시각을 기록 (lastRunAt 업데이트). 실패해도 흐름은 유지.
     // namoryFetch 네트워크 거부 시 unhandled rejection 으로 새지 않게 catch.

@@ -1,4 +1,3 @@
-import React from "react";
 import { Box, Text } from "ink";
 import type { ModelOption } from "./models.js";
 
@@ -27,7 +26,9 @@ export function ModelPicker({
         const active = i === index;
         return (
           <Box key={m.id}>
-            <Text color={active ? "green" : "gray"}>{active ? "❯ " : "  "}</Text>
+            <Text color={active ? "green" : "gray"}>
+              {active ? "❯ " : "  "}
+            </Text>
             <Text color={active ? "green" : undefined} bold={active}>
               {m.label}
             </Text>

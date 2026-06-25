@@ -3,11 +3,11 @@
 // 생성/폐기 등 수명주기 전반을 담당한다. 턴 실행 로직은 turn.ts 가 이 모듈을 쓴다.
 
 import { query, type SDKUserMessage, type Query } from "@anthropic-ai/claude-agent-sdk";
-import { getChatPrefetch } from "../prefetch.js";
 import {
   buildChatSystemPrompt,
   buildChatQueryOptions,
 } from "../query-options.js";
+import { fullChatEnv } from "../server-env.js";
 import { IDLE_MS, MAX_SESSIONS, WarmCapacity } from "./config.js";
 
 export interface WarmSession {
@@ -148,7 +148,7 @@ async function createSession(
     if (!oldestId) throw new WarmCapacity();
     dropSession(oldestId);
   }
-  const [connectors, baseSystemPrompt, guidance] = await getChatPrefetch();
+  const [connectors, baseSystemPrompt, guidance] = await fullChatEnv.prefetch();
   const input = createInput();
   const abort = new AbortController();
   const q = query({
@@ -161,7 +161,7 @@ async function createSession(
       // 채팅 경로 = projectContext 없음, allowProfileUpdate=false(인젝션 방어).
       // 워밍 첫 턴은 앱이 보낸 직전 세션을 이어받는다(콜드 경로와 동일 연속성).
       // 이후 턴부터는 살아있는 세션 자체가 맥락이라 resume 불필요.
-      ...buildChatQueryOptions(connectors, buildChatSystemPrompt(baseSystemPrompt, guidance), {
+      ...buildChatQueryOptions(fullChatEnv, connectors, buildChatSystemPrompt(baseSystemPrompt, guidance), {
         resume,
         abortController: abort,
         allowProfileUpdate: false,

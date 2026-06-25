@@ -52,8 +52,11 @@ src/
 pnpm install
 cp .env.example .env             # 토큰들 채우기
 pnpm dev                          # HTTP 서버 모드(watch)
-pnpm cli                          # 터미널 REPL 모드
+pnpm cli                          # 터미널 REPL 모드(= navis-cli 패키지)
 ```
+
+> CLI 는 별도 패키지 `packages/navis-cli` 로 분리됨 — UI(Ink) + 이 패키지의 두뇌(claude/*, config)를
+> esbuild 로 단일 파일에 번들한다(google/cron/sharp 제외 → 가벼움). brew 릴리스도 navis-cli 를 빌드한다.
 
 ### env 우선순위 (자동 로드)
 

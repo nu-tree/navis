@@ -1,0 +1,35 @@
+{
+  "name": "navis-cli",
+  "version": "0.1.0",
+  "description": "navis CLI — 터미널 REPL (navis 두뇌 + Ink UI). 두뇌·UI 는 esbuild 로 번들에 인라인된다.",
+  "type": "module",
+  "bin": {
+    "navis": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "package.json",
+    "README.md"
+  ],
+  "scripts": {
+    "cli": "tsx src/cli.tsx",
+    "typecheck": "tsc --noEmit",
+    "build": "node build.mjs && chmod +x dist/cli.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.152"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.2.15",
+    "esbuild": "^0.24.0",
+    "ink": "^7.0.4",
+    "ink-spinner": "^5.0.0",
+    "ink-text-input": "^6.0.0",
+    "marked": "^15.0.7",
+    "marked-terminal": "^7.3.0",
+    "react": "^19.2.6",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}

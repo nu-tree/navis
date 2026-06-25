@@ -25,6 +25,8 @@ on:
   push:
     branches: [main]
     paths:
+      # CLI 는 navis-cli(UI) + navis(두뇌) 소스를 번들에 인라인하므로 둘 중 무엇이 바뀌어도 재릴리스.
+      - "packages/navis-cli/**"
       - "packages/navis/**"
   workflow_dispatch:
     inputs:
@@ -126,6 +128,10 @@ jobs:
           # 진입점 통합 후 단일 진입점은 dist/cli.js — 옛 dist/bin.js 참조를 멱등 정규화.
           # (이미 cli.js 면 no-op) 래퍼 수정이 항상 새 버전과 같은 커밋에 묶이게 한다.
           sed -i "s|dist/bin\.js|dist/cli.js|g" "$f"
+          # CLI 가 navis → navis-cli 패키지로 분리됨. 빌드 디렉터리를 멱등 정규화(이미 navis-cli 면 no-op).
+          # 새 타르볼은 packages/navis-cli 에서 빌드해야 하므로, url/sha 갱신과 같은 커밋에 묶어
+          # 릴리스가 스스로 빌드 경로까지 맞춘다(formula 손수정 불필요).
+          sed -i 's|cd "packages/navis"|cd "packages/navis-cli"|' "$f"
           cd tap
           git config user.name "navis-bot"
           git config user.email "navis-bot@users.noreply.github.com"

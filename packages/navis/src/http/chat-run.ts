@@ -5,6 +5,7 @@
 
 import { config } from "../config.js";
 import { askClaude } from "../claude/ask.js";
+import { fullChatEnv } from "../claude/server-env.js";
 import { warmEnabled, runWarmTurn, WarmFallback, dropWarmSession } from "../claude/warm.js";
 import type { AskResult } from "../claude/types.js";
 import type { ChatRequest } from "./chat-request.js";
@@ -29,6 +30,7 @@ export async function runChatTurn(
   const askCold = (): Promise<AskResult> =>
     askClaude({
       prompt: parsed.text,
+      env: fullChatEnv,
       resumeSessionId: parsed.resume,
       images: parsed.images,
       onTextDelta: callbacks.onTextDelta,
