@@ -1,6 +1,6 @@
 import { Box, Text } from "ink";
-import { renderMarkdown } from "./markdown.js";
-import type { Turn } from "./types.js";
+import { renderMarkdown } from "../utils/markdown.js";
+import type { Turn } from "../types/types.js";
 
 // 대화 한 턴을 종류별로 렌더. 사용자/답변(마크다운)/노트/오류 4가지.
 export function TurnView({ turn }: { turn: Turn }) {

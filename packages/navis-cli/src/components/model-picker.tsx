@@ -1,5 +1,5 @@
 import { Box, Text } from "ink";
-import type { ModelOption } from "./models.js";
+import { ModelOption } from "src/utils/models.js";
 
 // /model (인자 없음) 입력 시 뜨는 모델 선택 모달. ↑/↓ 이동 · Enter 적용 · Esc 취소.
 export function ModelPicker({

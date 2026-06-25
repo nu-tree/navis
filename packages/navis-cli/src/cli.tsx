@@ -2,17 +2,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { render, Box, Static, useApp, useInput, useStdout } from "ink";
 import { config } from "navis/config.js";
 import { detectProject } from "navis/project.js";
-import { matchCommands } from "./cli/commands.js";
-import { MODEL_OPTIONS } from "./cli/models.js";
-import { SlashMenu } from "./cli/SlashMenu.js";
-import { ModelPicker } from "./cli/ModelPicker.js";
-import { TurnView } from "./cli/TurnView.js";
-import { PendingView } from "./cli/PendingView.js";
-import { InputBox } from "./cli/InputBox.js";
-import { StatusBar } from "./cli/StatusBar.js";
-import { useConversation } from "./cli/useConversation.js";
-import { useModelPicker } from "./cli/useModelPicker.js";
-import { useCommands } from "./cli/useCommands.js";
+import { matchCommands } from "./utils/commands.js";
+import { MODEL_OPTIONS } from "./utils/models.js";
+import { TurnView } from "./components/turn-view.js";
+import { PendingView } from "./components/pending-view.js";
+import { InputBox } from "./components/input-box.js";
+import { useModelPicker } from "./hooks/use-model-picker.js";
+import { useCommands } from "./hooks/use-commands.js";
+import { useConversation } from "./hooks/use-conversation.js";
+import { ModelPicker } from "./components/model-picker.js";
+import { SlashMenu } from "./components/slash-menu.js";
+import { StatusBar } from "./components/status-bar.js";
 
 // navis CLI — Claude Code 스타일 Ink REPL.
 // 대화 두뇌는 useConversation, 명령은 useCommands, 모델 모달은 useModelPicker, 화면은 cli/* 컴포넌트.
@@ -41,7 +41,10 @@ function App() {
   const picker = useModelPicker(model, setModel, addTurn);
 
   // 화면+스크롤백 클리어 시퀀스(/clear 용).
-  const clearScreen = useCallback(() => stdout.write("\x1b[2J\x1b[3J\x1b[H"), [stdout]);
+  const clearScreen = useCallback(
+    () => stdout.write("\x1b[2J\x1b[3J\x1b[H"),
+    [stdout],
+  );
   const runCommand = useCommands({
     projectContext,
     addTurn,
@@ -63,7 +66,10 @@ function App() {
   // submit 이 항상 유효 범위의 강조 인덱스를 읽도록 ref 로 미러링(클램프).
   const menuItemsRef = useRef(menuItems);
   menuItemsRef.current = menuItems;
-  const clampedMenuIndex = Math.min(menuIndex, Math.max(0, menuItems.length - 1));
+  const clampedMenuIndex = Math.min(
+    menuIndex,
+    Math.max(0, menuItems.length - 1),
+  );
   const menuIndexRef = useRef(0);
   menuIndexRef.current = clampedMenuIndex;
 
@@ -81,7 +87,8 @@ function App() {
     }
     if (menuItems.length) {
       if (key.upArrow) setMenuIndex((i) => Math.max(0, i - 1));
-      else if (key.downArrow) setMenuIndex((i) => Math.min(menuItems.length - 1, i + 1));
+      else if (key.downArrow)
+        setMenuIndex((i) => Math.min(menuItems.length - 1, i + 1));
       else if (key.escape) setInput("");
     }
   });
@@ -103,7 +110,10 @@ function App() {
           if (items.length) name = items[menuIndexRef.current].name;
         }
         if (runCommand(name, arg)) return;
-        addTurn({ kind: "note", text: `알 수 없는 명령: ${cmd0} ( /help 로 목록 )` });
+        addTurn({
+          kind: "note",
+          text: `알 수 없는 명령: ${cmd0} ( /help 로 목록 )`,
+        });
         return;
       }
 
@@ -113,17 +123,28 @@ function App() {
     [model, addTurn, runCommand, sendMessage],
   );
 
-  const lastAssistant = [...turns].reverse().find((t) => t.kind === "assistant");
-  const justSaved = lastAssistant?.kind === "assistant" ? lastAssistant.saved : false;
+  const lastAssistant = [...turns]
+    .reverse()
+    .find((t) => t.kind === "assistant");
+  const justSaved =
+    lastAssistant?.kind === "assistant" ? lastAssistant.saved : false;
 
   return (
     <Box flexDirection="column">
-      <Static items={turns}>{(turn) => <TurnView key={turn.id} turn={turn} />}</Static>
+      <Static items={turns}>
+        {(turn) => <TurnView key={turn.id} turn={turn} />}
+      </Static>
 
-      {pending && <PendingView streamingText={streamingText} activity={activity} />}
+      {pending && (
+        <PendingView streamingText={streamingText} activity={activity} />
+      )}
 
       {picker.active ? (
-        <ModelPicker options={MODEL_OPTIONS} index={picker.index} current={model} />
+        <ModelPicker
+          options={MODEL_OPTIONS}
+          index={picker.index}
+          current={model}
+        />
       ) : menuItems.length ? (
         <SlashMenu items={menuItems} index={menuIndexRef.current} />
       ) : null}
@@ -135,12 +156,18 @@ function App() {
         focus={!picker.active && !pending}
       />
 
-      <StatusBar projectContext={projectContext} model={model} justSaved={justSaved} />
+      <StatusBar
+        projectContext={projectContext}
+        model={model}
+        justSaved={justSaved}
+      />
     </Box>
   );
 }
 
 // 시작 배너 — 한번만 stdout에 흘려 보내고 Ink가 그 아래에서 그리기 시작.
-console.log(`navis code${projectContext ? ` · 프로젝트: ${projectContext}` : ""}`);
+console.log(
+  `navis code${projectContext ? ` · 프로젝트: ${projectContext}` : ""}`,
+);
 
 render(<App />);
