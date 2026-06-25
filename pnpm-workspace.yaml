@@ -5,6 +5,13 @@ packages:
 # (예: react-native-css-interop)을 못 찾는다. hoisted 로 평탄화한다.
 nodeLinker: hoisted
 
+# react 를 워크스페이스 전체에서 한 버전(=앱/Expo 가 쓰는 19.2.0)으로 강제한다.
+# 안 그러면 ink·navis-cli 가 19.2.6 자체 copy 를 따로 깔아 react 인스턴스가 둘이 되고,
+# tsx 개발 경로(pnpm cli)에서 "Invalid hook call"(more than one copy of React) 이 난다.
+# (번들은 esbuild alias 로 이미 단일화돼 영향 없음.)
+overrides:
+  react: "19.2.0"
+
 allowBuilds:
   electron: true
   esbuild: true

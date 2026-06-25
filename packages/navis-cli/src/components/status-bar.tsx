@@ -1,5 +1,5 @@
 import { Box, Text } from "ink";
-import { modelLabel } from "./models.js";
+import { modelLabel } from "src/utils/models.js";
 
 // 화면 맨 아래 상태줄 — 프로젝트 · 현재 모델 · 방금 저장 여부 / 명령 힌트.
 export function StatusBar({

@@ -1,6 +1,6 @@
 import { useCallback } from "react";
-import { MODEL_OPTIONS, resolveModel } from "./models.js";
-import type { TurnInput } from "./types.js";
+import { TurnInput } from "src/types/types.js";
+import { MODEL_OPTIONS, resolveModel } from "src/utils/models.js";
 
 type Deps = {
   projectContext: string | undefined;
@@ -71,14 +71,22 @@ export function useCommands(deps: Deps) {
         case "/help":
           addTurn({
             kind: "note",
-            text:
-              "명령어: /model 모델 변경 · /reset 새 세션 · /project 프로젝트 · /clear 화면 비우기 · /quit 종료",
+            text: "명령어: /model 모델 변경 · /reset 새 세션 · /project 프로젝트 · /clear 화면 비우기 · /quit 종료",
           });
           return true;
         default:
           return false;
       }
     },
-    [projectContext, addTurn, resetSession, clearTurns, clearScreen, setModel, openModelPicker, exit],
+    [
+      projectContext,
+      addTurn,
+      resetSession,
+      clearTurns,
+      clearScreen,
+      setModel,
+      openModelPicker,
+      exit,
+    ],
   );
 }

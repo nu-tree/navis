@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import type { Key } from "ink";
-import { MODEL_OPTIONS } from "./models.js";
-import type { TurnInput } from "./types.js";
+import { TurnInput } from "src/types/types.js";
+import { MODEL_OPTIONS } from "src/utils/models.js";
 
 // /model 모델 선택 모달의 상태 + 키 입력을 한 곳에. 열림 여부·강조 인덱스를 들고,
 // 모달이 열린 동안의 ↑/↓·Enter(적용)·Esc(취소) 를 스스로 처리한다.

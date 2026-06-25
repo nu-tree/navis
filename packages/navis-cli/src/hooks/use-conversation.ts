@@ -3,8 +3,8 @@ import { config } from "navis/config.js";
 import { askClaude } from "navis/claude/ask.js";
 import { localChatEnv } from "navis/claude/local-env.js";
 import { curateTurn } from "navis/claude/curator.js";
-import { statusLabel } from "./status.js";
-import type { Turn, TurnInput } from "./types.js";
+import { Turn, TurnInput } from "src/types/types.js";
+import { statusLabel } from "src/utils/status.js";
 
 type Session = { sessionId: string; contextTokens: number };
 
@@ -39,7 +39,8 @@ export function useConversation(projectContext: string | undefined) {
       setPending(true);
 
       // 한도 초과 시 새 세션.
-      const overLimit = session !== null && session.contextTokens >= config.contextTokenLimit;
+      const overLimit =
+        session !== null && session.contextTokens >= config.contextTokenLimit;
       const resumeId = session && !overLimit ? session.sessionId : undefined;
       if (overLimit && session) {
         const k = Math.round(session.contextTokens / 1000);
@@ -64,11 +65,16 @@ export function useConversation(projectContext: string | undefined) {
           modelOverride: model,
           onStatus: (s) => setActivity(statusLabel(s)),
           onTextDelta: (d) => setStreamingText((p) => p + d),
-          onToolComplete: (label) => addTurn({ kind: "note", text: `🔧 ${label}` }),
+          onToolComplete: (label) =>
+            addTurn({ kind: "note", text: `🔧 ${label}` }),
         });
         setSession({ sessionId, contextTokens });
         addTurn({ kind: "assistant", text, saved });
-        void curateTurn({ userText: trimmed, assistantText: text, projectContext });
+        void curateTurn({
+          userText: trimmed,
+          assistantText: text,
+          projectContext,
+        });
       } catch (err) {
         addTurn({
           kind: "error",
