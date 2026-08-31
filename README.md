@@ -46,3 +46,6 @@ pnpm navis cli
 ```
 
 자세한 셋업은 각 패키지 README 참조.
+
+
+<!-- Security scan triggered at 2026-08-31 17:16:56 -->
