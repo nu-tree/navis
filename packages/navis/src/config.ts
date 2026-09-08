@@ -102,10 +102,9 @@ export const config = {
   // `claude setup-token` 으로 발급.
   claudeOauthToken: required("CLAUDE_CODE_OAUTH_TOKEN"),
 
-  // namory MCP 서버 접속 (navis가 namory를 외부 서비스처럼 도구로 호출).
-  // 로컬: http://localhost:3000/mcp, Railway 내부망: http://namory.railway.internal:PORT/mcp
-  namoryMcpUrl: required("NAMORY_MCP_URL"),
-  // namory 엔드포인트 보호 토큰 (namory의 NAMORY_TOKEN과 동일 값).
+  // 공개 /mcp 라우트 보호 토큰. namory 는 이제 같은 배포 안의 라이브러리라 에이전트는
+  // in-process 로 붙는다(HTTP 아님) — 이 토큰은 외부 MCP 클라이언트(Claude 커스텀
+  // 커넥터, mcp-remote)가 /mcp 를 호출할 때의 인증에만 쓴다.
   namoryToken: required("NAMORY_TOKEN"),
 
   // 모델 — 메인 응답·검토는 Opus 4.8(최고 품질), 사후 큐레이터만 경량 Haiku(아래).

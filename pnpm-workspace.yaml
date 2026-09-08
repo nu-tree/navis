@@ -12,6 +12,7 @@ overrides:
   react: "19.2.0"
 
 allowBuilds:
+  electron: set this to true or false
   esbuild: true
   msgpackr-extract: true
   sharp: true

@@ -3,15 +3,8 @@
   "version": "0.1.0",
   "description": "navis — namory 기반 양방향 에이전트 (앱 백엔드 HTTP 서버 + 두뇌).",
   "type": "module",
-  "files": [
-    "dist",
-    "package.json",
-    "README.md"
-  ],
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "build": "tsc",
-    "start": "node dist/index.js"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.152",
@@ -19,7 +12,8 @@
     "google-auth-library": "^10.6.2",
     "node-cron": "^3.0.3",
     "sharp": "^0.34.5",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "namory": "workspace:*"
   },
   "overrides": {
     "google-auth-library": "$google-auth-library"
@@ -29,5 +23,6 @@
     "@types/node-cron": "^3.0.11",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0"
-  }
+  },
+  "private": true
 }

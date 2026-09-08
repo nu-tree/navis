@@ -3,6 +3,7 @@
 //   - 있으면 namory save 로 직접 저장 (장기 기억 + 할 일 큐)
 
 import { query } from "@anthropic-ai/claude-agent-sdk";
+import { namoryMcp } from "../../claude/mcp.js";
 import { config } from "../../config.js";
 import { emitReport } from "../../reports/emit.js";
 import { getCalendar } from "../auth.js";
@@ -85,14 +86,7 @@ async function runFollowupAgent(events: RawCalEvent[]): Promise<string> {
       options: {
         model: config.model,
         systemPrompt: FOLLOWUP_SYSTEM_PROMPT,
-        mcpServers: {
-          namory: {
-            type: "http",
-            url: config.namoryMcpUrl,
-            headers: { Authorization: `Bearer ${config.namoryToken}` },
-            alwaysLoad: true,
-          },
-        },
+        mcpServers: { namory: namoryMcp() },
         allowedTools: [
           "mcp__namory__save",
           "mcp__namory__recall",

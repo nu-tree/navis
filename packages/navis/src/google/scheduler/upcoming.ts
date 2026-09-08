@@ -5,6 +5,7 @@
 //   - notified-state 로 중복 알림 방지
 
 import { query } from "@anthropic-ai/claude-agent-sdk";
+import { namoryMcp } from "../../claude/mcp.js";
 import { config } from "../../config.js";
 import { emitReport } from "../../reports/emit.js";
 import { getCalendar } from "../auth.js";
@@ -102,14 +103,7 @@ async function evaluateUpcoming(e: {
       options: {
         model: config.curatorModel,
         systemPrompt: UPCOMING_SYSTEM_PROMPT,
-        mcpServers: {
-          namory: {
-            type: "http",
-            url: config.namoryMcpUrl,
-            headers: { Authorization: `Bearer ${config.namoryToken}` },
-            alwaysLoad: true,
-          },
-        },
+        mcpServers: { namory: namoryMcp() },
         // 읽기만 — recall/recent. 절대 save·update·delete 금지.
         allowedTools: ["mcp__namory__recall", "mcp__namory__recent"],
         settingSources: [],

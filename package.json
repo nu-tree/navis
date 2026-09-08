@@ -1,15 +1,13 @@
 {
-  "name": "navis",
+  "name": "namory-monorepo",
   "version": "0.0.0",
-  "description": "navis — 제2의 뇌 + 에이전트 모노레포 (namory: 기억 백엔드, navis: 에이전트 백엔드)",
+  "description": "namory — 제2의 뇌 (기억 라이브러리) + navis 에이전트 + 웹/앱 클라이언트",
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "pnpm -r build",
-    "dev": "pnpm --filter namory-mcp dev",
-    "dev:navis": "pnpm --filter navis dev",
-    "namory": "pnpm --filter namory-mcp",
-    "navis": "pnpm --filter navis",
+    "typecheck": "pnpm -r typecheck",
+    "db:generate": "pnpm --filter namory db:generate",
+    "db:migrate": "pnpm --filter namory db:migrate",
     "ota": "cd packages/app && eas update --branch preview"
   },
   "engines": {

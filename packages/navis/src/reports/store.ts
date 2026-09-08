@@ -6,7 +6,7 @@
 // sourceId/sourceTitle 로 "출처별 방"을 만든다. 크론은 크론마다 방 1개(sourceId=크론 id,
 // sourceTitle=크론 DB 제목), 다이제스트/캘린더는 각각 고정 방.
 import { randomUUID } from "node:crypto";
-import { namoryFetch } from "../namory-client.js";
+import { getSetting, putSetting } from "../settings-kv.js";
 import { publishToNtfy } from "./ntfy.js";
 
 export type Report = {
@@ -88,22 +88,18 @@ export async function loadReports(): Promise<void> {
   if (loaded) return;
   loaded = true;
   try {
-    const res = await namoryFetch(`/settings/${KEY}`);
-    if (res.ok) {
-      const data = (await res.json()) as { value?: string | null };
-      const raw = (data.value ?? "").trim();
-      if (raw) {
-        const { seq: storedSeq, items: stored } = parseStored(raw);
-        const seen = new Set(BUFFER.map((r) => r.id));
-        for (const r of stored) if (!seen.has(r.id)) BUFFER.push(r);
-        BUFFER.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-        if (BUFFER.length > MAX) BUFFER.splice(0, BUFFER.length - MAX);
-        // 복원 도중 recordReport 가 먼저 발동했을 수 있어 seq.n 을 무작정 덮어쓰면
-        // 이미 발급된 카운터가 되감겨 id 충돌이 난다. 더 큰 값을 유지.
-        // BUFFER.length 가 아닌 영속화된 storedSeq 를 기준으로 한다 — 캡 이후에도
-        // 단조 증가(발행 순서 식별) 보장.
-        seq.n = Math.max(seq.n, storedSeq);
-      }
+    const raw = ((await getSetting(KEY)) ?? "").trim();
+    if (raw) {
+      const { seq: storedSeq, items: stored } = parseStored(raw);
+      const seen = new Set(BUFFER.map((r) => r.id));
+      for (const r of stored) if (!seen.has(r.id)) BUFFER.push(r);
+      BUFFER.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+      if (BUFFER.length > MAX) BUFFER.splice(0, BUFFER.length - MAX);
+      // 복원 도중 recordReport 가 먼저 발동했을 수 있어 seq.n 을 무작정 덮어쓰면
+      // 이미 발급된 카운터가 되감겨 id 충돌이 난다. 더 큰 값을 유지.
+      // BUFFER.length 가 아닌 영속화된 storedSeq 를 기준으로 한다 — 캡 이후에도
+      // 단조 증가(발행 순서 식별) 보장.
+      seq.n = Math.max(seq.n, storedSeq);
     }
   } catch (err) {
     console.error("[reports] 복원 실패(무시):", err);
@@ -144,12 +140,7 @@ async function saveReports(): Promise<void> {
         dirty = false;
         // 영속 포맷: { seq, items } — 캡 이후에도 단조 증가하는 seq 를 함께 저장.
         const snapshot = JSON.stringify({ seq: seq.n, items: BUFFER });
-        const res = await namoryFetch(`/settings/${KEY}`, {
-          method: "PUT",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ value: snapshot }),
-        });
-        if (!res.ok) console.error(`[reports] 저장 실패(무시): ${res.status}`);
+        await putSetting(KEY, snapshot);
       } while (dirty); // PUT 중 들어온 변경이 있으면 최신 스냅샷으로 다시 저장
     } catch (err) {
       console.error("[reports] 저장 실패(무시):", err);

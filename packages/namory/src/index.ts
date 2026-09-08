@@ -1,267 +1,50 @@
-import Fastify from "fastify";
-import type { FastifyReply } from "fastify";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { buildMcpServer } from "./mcp.js";
-import { listCrons, createCron, deleteCron, updateCron } from "./tools/cron.js";
-import { listMemories } from "./tools/recent.js";
-import { listProjects } from "./tools/projects.js";
-import {
+// ── namory 라이브러리 진입점 ──────────────────────────────────────────────────
+// 예전엔 이 파일이 Fastify 서버였다(listen + /mcp + REST 14개 + 부팅 마이그레이션).
+// 그 REST 라우트들은 전부 아래 순수 함수들을 검증·디스패치만 하는 얇은 껍데기였고,
+// 유일한 소비자가 별도 서비스로 떠 있던 navis 였다. 둘을 한 배포 단위로 합치면서
+// HTTP 홉이 필요 없어졌으므로, namory 는 "함수를 내보내는 라이브러리"가 된다.
+//
+// 여전히 HTTP 로 남아야 하는 것은 두 개뿐이고, 그건 웹 앱의 라우트가 담당한다:
+//   - /mcp    : Claude 커스텀 커넥터·외부 MCP 클라이언트용 (buildMcpServer 사용)
+//   - /health : 헬스체크
+//
+// 서버리스에서는 부팅 훅이 없다(요청마다 인스턴스가 새로 뜨고 응답 후 얼려진다).
+// 그래서 예전의 "listen 전에 마이그레이션" 시퀀스는 사라졌다 — runMigrations 는
+// 그대로 내보내되, 배포 파이프라인이나 보호된 관리 라우트에서 명시적으로 부른다.
+// 콜드스타트마다 마이그레이션을 돌리면 안 된다(동시 실행 경쟁 + 지연).
+
+// ── 기억 도구 (MCP 레지스트리 + 개별 함수) ──────────────────────────────
+export { MEMORY_TOOLS, type MemoryTool } from "./tools/registry.js";
+export { buildMcpServer } from "./mcp.js";
+
+export { save } from "./tools/save.js";
+export { recall } from "./tools/recall.js";
+export { recent, listMemories } from "./tools/recent.js";
+export { pattern } from "./tools/pattern.js";
+export { profileShow, profileUpdate } from "./tools/profile.js";
+export { update } from "./tools/update.js";
+export { remove } from "./tools/remove.js";
+export { todos } from "./tools/todos.js";
+export { graphify } from "./tools/graphify.js";
+
+// ── 프로젝트 / 설정 KV ──────────────────────────────────────────────────
+export { listProjects } from "./tools/projects.js";
+export { getSetting, setSetting } from "./tools/settings.js";
+
+// ── 대화방 동기화 ───────────────────────────────────────────────────────
+export {
   listConversations,
   upsertConversation,
   softDeleteConversation,
 } from "./tools/conversations.js";
-import { getSetting, setSetting } from "./tools/settings.js";
-import { update } from "./tools/update.js";
-import { remove } from "./tools/remove.js";
-import { CATEGORIES, type Category } from "./db/schema.js";
-import { runMigrations } from "./db/migrate.js";
-import { ensureConversationsTable } from "./db/ensure.js";
 
-// REST 핸들러 공통 에러 매핑: 도메인 에러 메시지를 HTTP 코드로.
-// "해당 id의 ... 없습니다" → 404, "수정할 필드가 없습니다" → 400, 그 외 → 500.
-function replyCrudError(reply: FastifyReply, err: unknown, logTag: string) {
-  if (err instanceof Error && err.message.startsWith("해당 id의")) {
-    // 기존 동작 유지: id 접미사(": <id>")를 떼고 메시지만 반환.
-    return reply.code(404).send({ error: err.message.replace(/:.*$/, "") });
-  }
-  if (err instanceof Error && err.message.startsWith("수정할 필드가 없습니다")) {
-    return reply.code(400).send({ error: err.message });
-  }
-  console.error(`${logTag} 오류:`, err);
-  return reply.code(500).send({ error: "서버 오류" });
-}
+// ── 크론 CRUD ───────────────────────────────────────────────────────────
+export { listCrons, createCron, deleteCron, updateCron } from "./tools/cron.js";
 
-const app = Fastify({
-  logger: {
-    // 쿼리 토큰(?token=)이 Railway 등 호스팅 로그에 평문으로 남지 않도록 마스킹.
-    serializers: {
-      req(request) {
-        return {
-          method: request.method,
-          url: request.url.replace(/([?&]token=)[^&]*/i, "$1[REDACTED]"),
-          host: request.headers?.host,
-          remoteAddress: request.ip,
-        };
-      },
-    },
-  },
-});
+// ── 스키마 / DB ─────────────────────────────────────────────────────────
+export { CATEGORIES, type Category } from "./db/schema.js";
+export { db } from "./db/client.js";
 
-// 헬스체크 (호스팅 uptime 용)
-app.get("/health", async () => ({ ok: true }));
-
-// 공개 HTTP 엔드포인트 보호: 단일 시크릿 토큰.
-// 별도 auth 모듈/Supabase Auth 불필요 — 단일 사용자라 이 hook 하나면 충분.
-// 인증 경로 2가지:
-//  1) Authorization: Bearer <토큰>  — 권장 (mcp-remote 등 헤더 가능한 클라이언트)
-//  2) ?token=<토큰> 쿼리 파라미터    — Claude 커스텀 커넥터 UI엔 헤더/토큰 입력란이
-//     없어 URL에 실어야 함. 토큰은 위 로거에서 마스킹됨.
-app.addHook("onRequest", async (req, reply) => {
-  // /mcp(도구)·/crons(스케줄)·/memories(기억 CRUD)·/projects·/conversations·/settings 토큰 보호.
-  // 그 외(/health)는 공개.
-  if (
-    !req.url.startsWith("/mcp") &&
-    !req.url.startsWith("/crons") &&
-    !req.url.startsWith("/memories") &&
-    !req.url.startsWith("/projects") &&
-    !req.url.startsWith("/conversations") &&
-    !req.url.startsWith("/settings")
-  )
-    return;
-  const headerToken = req.headers.authorization?.replace(/^Bearer\s+/i, "");
-  const queryToken =
-    new URL(req.url, "http://localhost").searchParams.get("token") ?? undefined;
-  const token = headerToken || queryToken;
-  if (!process.env.NAMORY_TOKEN || token !== process.env.NAMORY_TOKEN) {
-    return reply.code(401).send({ error: "unauthorized" });
-  }
-});
-
-// MCP Streamable HTTP — stateless 모드 (요청마다 새 서버+트랜스포트).
-// 단일 사용자·멀티 디바이스·멀티 인스턴스라 세션 친화성이 불필요 → 가장 견고.
-app.all("/mcp", async (req, reply) => {
-  // 트랜스포트가 reply.raw 에 직접 쓰므로 Fastify 응답 관리를 넘긴다.
-  reply.hijack();
-
-  const server = buildMcpServer();
-  const transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: undefined,
-  });
-  reply.raw.on("close", () => {
-    void transport.close();
-    void server.close();
-  });
-
-  try {
-    await server.connect(transport);
-    // Fastify 가 이미 본문을 파싱했으므로 req.body 를 그대로 넘겨 재파싱 방지.
-    await transport.handleRequest(req.raw, reply.raw, req.body);
-  } catch (err) {
-    app.log.error(err);
-    if (!reply.raw.headersSent) {
-      reply.raw.writeHead(500, { "content-type": "application/json" });
-      reply.raw.end(
-        JSON.stringify({
-          jsonrpc: "2.0",
-          error: { code: -32603, message: "internal error" },
-          id: null,
-        }),
-      );
-    }
-  }
-});
-
-// 사용 중인 프로젝트 목록 — navis가 저장 시 모델에 주입해 표기 통일에 쓴다.
-app.get("/projects", async () => ({ projects: await listProjects() }));
-
-// 일반 설정(key→value). 시스템 프롬프트 등을 앱에서 편집/조회.
-app.get<{ Params: { key: string } }>("/settings/:key", async (req) => ({
-  key: req.params.key,
-  value: await getSetting(req.params.key),
-}));
-
-app.put<{ Params: { key: string } }>("/settings/:key", async (req, reply) => {
-  const b = (req.body ?? {}) as Record<string, unknown>;
-  if (typeof b.value !== "string") {
-    return reply.code(400).send({ error: "value(string) 필요" });
-  }
-  await setSetting(req.params.key, b.value);
-  return { key: req.params.key, ok: true };
-});
-
-// 대화방 동기화 — 앱이 기기 간 채팅을 맞춘다. GET(전체 pull)·PUT(방 upsert)·DELETE(툼스톤).
-app.get("/conversations", async () => ({ conversations: await listConversations() }));
-
-app.put<{ Params: { id: string } }>("/conversations/:id", async (req, reply) => {
-  const b = (req.body ?? {}) as Record<string, unknown>;
-  const title = typeof b.title === "string" ? b.title : "";
-  if (!title) return reply.code(400).send({ error: "title 필요" });
-  const row = await upsertConversation({
-    id: req.params.id,
-    title,
-    kind: b.kind === "report" ? "report" : "chat",
-    messages: Array.isArray(b.messages) ? b.messages : [],
-    sessionId: typeof b.sessionId === "string" ? b.sessionId : null,
-    unread: typeof b.unread === "number" ? b.unread : 0,
-    hidden: typeof b.hidden === "boolean" ? b.hidden : false,
-    updatedAt: typeof b.updatedAt === "string" ? new Date(b.updatedAt) : new Date(),
-  });
-  // row 가 없으면 LWW 로 더 오래된 쓰기가 무시된 것 — 에러가 아니라 정상(no-op).
-  return row ?? { id: req.params.id, skipped: true };
-});
-
-app.delete<{ Params: { id: string } }>("/conversations/:id", async (req) => {
-  return await softDeleteConversation(req.params.id);
-});
-
-// 크론 CRUD (navis 스케줄러/대화 도구가 사용). MCP가 아닌 단순 REST —
-// navis가 에이전트 턴 밖(부팅·reconcile)에서도 조회해야 해서 일반 HTTP로 노출.
-app.get("/crons", async () => ({ crons: await listCrons() }));
-
-app.post("/crons", async (req, reply) => {
-  const b = (req.body ?? {}) as Record<string, unknown>;
-  const title = typeof b.title === "string" ? b.title.trim() : "";
-  const schedule = typeof b.schedule === "string" ? b.schedule.trim() : "";
-  const prompt = typeof b.prompt === "string" ? b.prompt.trim() : "";
-  const timezone = typeof b.timezone === "string" ? b.timezone.trim() : undefined;
-  if (!title || !schedule || !prompt) {
-    return reply
-      .code(400)
-      .send({ error: "title, schedule, prompt 가 모두 필요합니다" });
-  }
-  const row = await createCron({ title, schedule, prompt, timezone });
-  return reply.code(201).send(row);
-});
-
-app.delete<{ Params: { id: string } }>("/crons/:id", async (req, reply) => {
-  try {
-    return await deleteCron({ id: req.params.id });
-  } catch (err) {
-    return replyCrudError(reply, err, "[crons]");
-  }
-});
-
-app.patch<{ Params: { id: string } }>("/crons/:id", async (req, reply) => {
-  const b = (req.body ?? {}) as Record<string, unknown>;
-  const patches: { enabled?: boolean; lastRunAt?: Date } = {};
-  if (typeof b.enabled === "boolean") patches.enabled = b.enabled;
-  if (typeof b.lastRunAt === "string") patches.lastRunAt = new Date(b.lastRunAt);
-  if (Object.keys(patches).length === 0) {
-    return reply.code(400).send({ error: "enabled 또는 lastRunAt 중 하나 이상 필요" });
-  }
-  try {
-    return await updateCron({ id: req.params.id, ...patches });
-  } catch (err) {
-    return replyCrudError(reply, err, "[crons]");
-  }
-});
-
-// 기억 CRUD (앱 기억 페이지가 navis 프록시를 통해 사용). 조회/수정/삭제.
-// 수정 시 update() 가 content 변경을 감지해 임베딩을 재계산한다.
-app.get("/memories", async (req) => {
-  const q = new URL(req.url, "http://localhost").searchParams;
-  const limit = Number(q.get("limit")) || undefined;
-  const project = q.get("project") ?? undefined;
-  return { memories: await listMemories({ limit, project }) };
-});
-
-app.patch<{ Params: { id: string } }>("/memories/:id", async (req, reply) => {
-  const b = (req.body ?? {}) as Record<string, unknown>;
-  const patch: {
-    id: string;
-    content?: string;
-    category?: Category;
-    project?: string;
-    tags?: string[];
-    done?: boolean;
-  } = { id: req.params.id };
-  if (typeof b.content === "string") patch.content = b.content;
-  if (typeof b.category === "string" && CATEGORIES.includes(b.category as Category)) {
-    patch.category = b.category as Category;
-  }
-  if (typeof b.project === "string") patch.project = b.project;
-  if (Array.isArray(b.tags)) patch.tags = b.tags.filter((t): t is string => typeof t === "string");
-  if (typeof b.done === "boolean") patch.done = b.done;
-  try {
-    return await update(patch);
-  } catch (err) {
-    return replyCrudError(reply, err, "[memories]");
-  }
-});
-
-app.delete<{ Params: { id: string } }>("/memories/:id", async (req, reply) => {
-  try {
-    return await remove({ id: req.params.id });
-  } catch (err) {
-    return replyCrudError(reply, err, "[memories]");
-  }
-});
-
-const port = Number(process.env.PORT) || 3000;
-
-// 부팅 준비작업(마이그레이션/ensure)이 느리거나 멈춰도 listen 을 막지 않게 타임아웃을
-// 씌운다. DB 준비가 listen 을 무한정 지연시키면 /health 가 안 떠서 Railway 헬스체크가
-// 실패→컨테이너 재시작 루프가 난다. 시간 초과 시 그냥 진행(준비는 다음 부팅/ensure 가 받침).
-function bootStep(work: () => Promise<unknown>, ms: number, label: string): Promise<void> {
-  return Promise.race([
-    work().catch((err) => app.log.error({ err }, `[boot] ${label} 실패(계속 진행)`)),
-    new Promise<void>((resolve) =>
-      setTimeout(() => {
-        app.log.error(`[boot] ${label} ${ms}ms 초과 — 건너뛰고 부팅 계속`);
-        resolve();
-      }, ms),
-    ),
-  ]).then(() => undefined);
-}
-
-// 부팅 시퀀스: ① 정식 마이그레이션(미적용분 자동 반영 + 이력 기록 → 앞으로도 자동) →
-// ② conversations 테이블 멱등 보장(①이 이력 불일치 등으로 실패해도 받치는 안전망) →
-// ③ listen. ①② 는 타임아웃으로 묶여 listen 을 절대 막지 않는다.
-bootStep(runMigrations, 20_000, "migrate")
-  .then(() => bootStep(ensureConversationsTable, 10_000, "ensure"))
-  .then(() => app.listen({ port, host: "0.0.0.0" }))
-  .then(() => app.log.info(`namory listening on :${port}`))
-  .catch((err) => {
-    app.log.error(err);
-    process.exit(1);
-  });
+// ── 마이그레이션 (배포 파이프라인·관리 라우트에서 명시 호출) ────────────
+export { runMigrations } from "./db/migrate.js";
+export { ensureConversationsTable } from "./db/ensure.js";

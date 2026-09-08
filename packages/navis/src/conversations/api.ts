@@ -1,35 +1,32 @@
-import { namoryFetch } from "../namory-client.js";
-
-// namory의 대화 동기화 REST(/conversations) 클라이언트.
-// 대화 모음은 양이 커질 수 있어 호출부에서 25초 타임아웃을 명시한다(기본 10초로는 부족할 수 있음).
-
-const CONV_TIMEOUT_MS = 25_000;
+// 대화 동기화 — namory 함수 직접 호출.
+// 앱이 기기 간 채팅을 맞춘다: 전체 pull / 방 upsert(LWW) / 툼스톤 삭제.
+// 예전의 25초 타임아웃은 HTTP 왕복 때문이었고, 이제 필요 없다.
+import {
+  listConversations,
+  upsertConversation,
+  softDeleteConversation,
+} from "namory";
 
 export async function listConversationsRemote(): Promise<unknown[]> {
-  const res = await namoryFetch("/conversations", undefined, CONV_TIMEOUT_MS);
-  if (!res.ok) throw new Error(`대화 조회 실패: ${res.status}`);
-  const data = (await res.json()) as { conversations?: unknown[] };
-  return data.conversations ?? [];
+  return listConversations();
 }
 
 export async function upsertConversationRemote(id: string, body: unknown): Promise<void> {
-  const res = await namoryFetch(
-    `/conversations/${encodeURIComponent(id)}`,
-    {
-      method: "PUT",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-    },
-    CONV_TIMEOUT_MS,
-  );
-  if (!res.ok) throw new Error(`대화 저장 실패: ${res.status}`);
+  const b = (body ?? {}) as Record<string, unknown>;
+  const title = typeof b.title === "string" ? b.title : "";
+  if (!title) throw new Error("title 필요");
+  await upsertConversation({
+    id,
+    title,
+    kind: b.kind === "report" ? "report" : "chat",
+    messages: Array.isArray(b.messages) ? b.messages : [],
+    sessionId: typeof b.sessionId === "string" ? b.sessionId : null,
+    unread: typeof b.unread === "number" ? b.unread : 0,
+    hidden: typeof b.hidden === "boolean" ? b.hidden : false,
+    updatedAt: typeof b.updatedAt === "string" ? new Date(b.updatedAt) : new Date(),
+  });
 }
 
 export async function deleteConversationRemote(id: string): Promise<void> {
-  const res = await namoryFetch(
-    `/conversations/${encodeURIComponent(id)}`,
-    { method: "DELETE" },
-    CONV_TIMEOUT_MS,
-  );
-  if (!res.ok) throw new Error(`대화 삭제 실패: ${res.status}`);
+  await softDeleteConversation(id);
 }
