@@ -32,7 +32,6 @@ export async function askClaude(opts: AskClaudeOptions): Promise<AskResult> {
     images = [],
     allowProfileUpdate = false,
     projectContext,
-    localExecution = false,
     historyContext,
     onTextDelta,
     onThinkingDelta,
@@ -47,7 +46,7 @@ export async function askClaude(opts: AskClaudeOptions): Promise<AskResult> {
   // 프롬프트 조립(너지·history·이미지) — 단일 헬퍼로 추출(buildPromptInput).
   const promptInput = buildPromptInput({ prompt, historyContext, images });
 
-  // in-process MCP 서버들(cron/repo/self_modify/settings/google)은 모듈 최상단에서
+  // in-process MCP 서버들(cron/settings/google)은 모듈 최상단에서
   // 한 번만 초기화한 캐시를 그대로 쓴다 — askClaude 가 호출될 때마다 다시 짜지 않는다.
 
   // 동적 MCP 커넥터(claude.ai 스타일). namory DB 에 등록된 외부 HTTP MCP 서버들을
@@ -65,7 +64,6 @@ export async function askClaude(opts: AskClaudeOptions): Promise<AskResult> {
     baseSystemPrompt,
     guidance,
     projectContext,
-    localExecution,
   );
 
   // query() 시작 시각 — 첫 메시지까지가 CLI 스폰 + MCP 핸드셰이크 바닥(모델 무관).

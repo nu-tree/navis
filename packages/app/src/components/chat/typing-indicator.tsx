@@ -39,7 +39,6 @@ const TOOL_LABELS: Record<string, string> = {
   mcp__google__delete_event: '일정을 삭제하는 중',
   mcp__repo__read_repo_file: '코드를 확인하는 중',
   mcp__repo__list_repo_files: '파일 목록을 보는 중',
-  mcp__self_modify__request_self_modification: '개선 작업을 요청하는 중',
   mcp__cron__list_crons: '예약 작업을 확인하는 중',
   mcp__cron__create_cron: '예약 작업을 추가하는 중',
   Read: '파일을 읽는 중',

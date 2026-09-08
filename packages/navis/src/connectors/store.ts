@@ -17,8 +17,6 @@ const ID_RE = /^[a-z0-9_]{1,40}$/;
 const RESERVED_IDS = new Set([
   "namory",
   "cron",
-  "repo",
-  "self_modify",
   "settings",
   "google",
 ]);

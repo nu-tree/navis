@@ -136,17 +136,6 @@ export const config = {
   // 기본 150k = opus 200k 창의 75%. 모델 한계·SDK 자동압축 전에 우리가 제어.
   contextTokenLimit: 150_000,
 
-  // 자기 소스 조회용 GitHub 레포. navis가 대화 중 read_repo_file/list_repo_files
-  // 도구로 자기 코드를 보여줄 수 있게 한다. 컨테이너엔 src/가 없어서(dist만 복사)
-  // GitHub Contents API 경유가 유일한 경로.
-  //   GITHUB_REPO: "owner/repo" 형태 (예: nu-tree/namory). 미설정이면 도구가 친절한 에러.
-  //   GITHUB_TOKEN: 선택. private 레포면 필수, public이어도 있으면 rate limit 60→5000/h.
-  githubRepo: optional("GITHUB_REPO"),
-  githubToken: optional("GITHUB_TOKEN"),
-  // self-improve PR 생성 webhook 검증용 HMAC secret. GitHub repo Settings → Webhooks
-  // 등록 시 같은 값을 secret 으로 박는다. 미설정이면 webhook 라우트가 모든 요청을 거부.
-  githubWebhookSecret: optional("GITHUB_WEBHOOK_SECRET"),
-
   // 구글 캘린더 OAuth (refresh token 방식, 영구).
   // 셋 다 채워져야 캘린더 도구·스케줄러가 활성화됨. 미설정이면 조용히 비활성.
   // 발급: Google Cloud Console OAuth 동의 화면(테스트 모드) → Web app 클라이언트 →
@@ -178,12 +167,7 @@ export const config = {
   // 반드시 볼륨이어야 한다. 미설정이면 인스턴스 임시 디스크(.desktop-dist) — 재배포 시 사라짐.
   desktopDir: optional("DESKTOP_DIR") ?? ".desktop-dist",
 
-  // iOS 사이드로드 배포(.ipa + 아이콘)를 보관/서빙할 디렉터리.
-  // SideStore 가 source 피드(/api/ios/source.json)와 .ipa 를 폴링해 자동 재서명·업데이트한다.
-  // 데스크톱과 동일하게 Railway 볼륨 경로를 권장(미설정이면 재배포 시 사라지는 임시 디스크).
-  iosDir: optional("IOS_DIR") ?? ".ios-dist",
-
-  // HTTP 포트 — 앱 API(/api/*) + 헬스체크(/health) + webhook + 데스크톱 배포.
+  // HTTP 포트 — 앱 API(/api/*) + 헬스체크(/health) + 데스크톱 배포.
   port: Number(process.env.PORT) || 3000,
 
   // navis 백엔드의 공개 URL(예: https://navis.up.railway.app). 커넥터 OAuth 의

@@ -23,10 +23,10 @@ async function main(): Promise<void> {
   // env 미설정이면 조용히 비활성.
   startCalendarScheduler();
 
-  // Railway 등 호스팅 uptime 체크 + GitHub webhook 수신 + 앱 API. 라우팅은 http/router.
+  // 호스팅 uptime 체크 + 앱 API. 라우팅은 http/router.
   createServer((req, res) => route(req, res)).listen(config.port, "0.0.0.0", () => {
     console.log(
-      `[agent] http on :${config.port} (/health, /webhook/github, /api/chat, /api/reports, /api/crons, /api/memories)`,
+      `[agent] http on :${config.port} (/health, /api/chat, /api/reports, /api/crons, /api/memories)`,
     );
   });
 }

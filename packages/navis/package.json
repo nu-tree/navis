@@ -1,7 +1,7 @@
 {
   "name": "navis",
   "version": "0.1.0",
-  "description": "navis — namory 기반 양방향 에이전트 (앱 백엔드 HTTP 서버 + 두뇌). CLI 는 navis-cli 패키지.",
+  "description": "navis — namory 기반 양방향 에이전트 (앱 백엔드 HTTP 서버 + 두뇌).",
   "type": "module",
   "files": [
     "dist",

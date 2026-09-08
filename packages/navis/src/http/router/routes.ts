@@ -31,8 +31,6 @@ import {
   handleOAuthStart,
   handleOAuthCallback,
 } from "../connectors.js";
-import { handleGithubWebhook } from "../webhook.js";
-import { handleIosUpload, handleIosSource, handleIosFile, handleIosPrune } from "../../ios/serve.js";
 import type { Handler, Route } from "./types.js";
 import { exact, prefix, param } from "./matchers.js";
 
@@ -47,13 +45,6 @@ export const routes: Route[] = [
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify({ ok: true }));
     },
-  },
-
-  // GitHub webhook — POST 만 받는다.
-  {
-    method: "POST",
-    match: exact("/webhook/github"),
-    handler: (req, res) => void handleGithubWebhook(req, res),
   },
 
   // /api/chat — 동기 응답.
@@ -224,32 +215,5 @@ export const routes: Route[] = [
     method: "GET",
     match: prefix("/api/desktop/file/"),
     handler: (req, res, url) => void handleDesktopFile(req, res, url),
-  },
-
-  // /api/ios — 사이드로드 배포. 기존 코드와 동일하게 OPTIONS 핸들러는 두지 않는다(현 동작 보존).
-  {
-    method: "GET",
-    match: exact("/api/ios/source.json"),
-    handler: (req, res, url) => void handleIosSource(req, res, url),
-  },
-  {
-    method: "PUT",
-    match: exact("/api/ios/upload"),
-    handler: (req, res, url) => void handleIosUpload(req, res, url),
-  },
-  {
-    method: "POST",
-    match: exact("/api/ios/upload"),
-    handler: (req, res, url) => void handleIosUpload(req, res, url),
-  },
-  {
-    method: "POST",
-    match: exact("/api/ios/prune"),
-    handler: (req, res, url) => void handleIosPrune(req, res, url),
-  },
-  {
-    method: "GET",
-    match: prefix("/api/ios/file/"),
-    handler: (req, res, url) => void handleIosFile(req, res, url),
   },
 ];

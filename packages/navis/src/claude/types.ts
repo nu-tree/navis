@@ -22,17 +22,13 @@ export interface InputImage {
 //   abortController: 중지 전파(클라 중지 버튼 → SDK query 생성 실제 중단).
 export interface AskClaudeOptions {
   prompt: string;
-  // 채팅 환경(주입할 MCP 도구셋 + 커넥터/프롬프트 prefetch). 서버는 fullChatEnv,
-  // CLI 는 localChatEnv 를 넘긴다. 이 값이 도구 범위를 결정한다(두뇌는 도구를 모름).
+  // 채팅 환경(주입할 MCP 도구셋 + 커넥터/프롬프트 prefetch). 서버는 fullChatEnv 를
+  // 넘긴다. 이 값이 도구 범위를 결정한다(두뇌는 도구를 모름).
   env: ChatEnv;
   resumeSessionId?: string;
   images?: InputImage[];
   allowProfileUpdate?: boolean;
   projectContext?: string;
-  // 로컬 실행(navis CLI) 여부. true 면 "[원격 실행 안내]"(Railway 컨테이너 — 자기 코드
-  // 수정은 self_modify 로 위임) 대신 "[로컬 실행 안내]"(현재 폴더 코드를 Edit/Write/Bash 로
-  // 직접 작업)를 주입한다. 서버/앱 경로(워밍)는 기본 false 라 기존 동작 유지.
-  localExecution?: boolean;
   historyContext?: string;
   onTextDelta?: (delta: string) => void;
   onThinkingDelta?: (delta: string) => void;

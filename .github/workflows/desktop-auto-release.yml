@@ -1,7 +1,7 @@
 # navis 데스크톱 자동 릴리스 — main 에 앱/데스크톱 변경이 들어오면 자동 배포.
 #
 # 동작:
-#   1. self-improve PR(또는 일반 PR)이 main 에 머지돼 packages/app/** 또는
+#   1. PR 이 main 에 머지돼 packages/app/** 또는
 #      packages/desktop/** 가 바뀌면 이 워크플로가 발동한다.
 #   2. 최신 desktop-v* 태그 기준으로 patch 버전을 올려 새 태그를 찍어 push 한다(기록용).
 #   3. 같은 버전을 입력으로 desktop-release.yml(재사용 워크플로)을 호출해 맥/윈도우

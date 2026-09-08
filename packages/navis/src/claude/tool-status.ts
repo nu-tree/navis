@@ -33,12 +33,6 @@ export function richToolStatus(
   }
   if (name.startsWith("mcp__google__")) return "캘린더 작업 중";
 
-  if (name === "mcp__repo__read_repo_file") {
-    const p = input.path ?? input.file_path ?? "";
-    return p ? `코드 읽기: ${short(p)}` : "코드 확인 중";
-  }
-  if (name === "mcp__repo__list_repo_files") return "파일 목록 확인 중";
-  if (name.startsWith("mcp__self_modify__")) return "코드 개선 요청 중";
   if (name.startsWith("mcp__cron__")) return "예약 작업 설정 중";
 
   if (name === "Read") {

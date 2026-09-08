@@ -36,12 +36,11 @@ src/
 │   ├── images.ts        # 앱 첨부 이미지 디코드/리사이즈
 │   ├── allowed-tools.ts # 도구 화이트리스트
 │   └── types.ts         # InputImage, AskResult
-├── http/                # 앱 API 라우터/핸들러 (chat, reports, conversations, settings, connectors, crons, memories, webhook)
+├── http/                # 앱 API 라우터/핸들러 (chat, reports, conversations, settings, connectors, crons, memories)
 ├── reports/             # 선제 보고 기록(emit) + 인메모리 버퍼(store)
 ├── cron/                # node-cron 스케줄러 + namory REST + cron MCP 도구
 ├── settings/            # update_system_prompt MCP 도구
 ├── connectors/          # 동적 MCP 커넥터 — DB(store)→SDK 주입(mcp), OAuth(oauth), 제공자 프리셋(providers), 타입(types)
-├── self-modify/         # request_self_modification MCP 도구 + PR 검토
 ├── google/              # 캘린더 OAuth + 스케줄러 + MCP 도구
 └── conversations/       # 대화 동기화 namory REST 클라이언트
 ```
@@ -52,11 +51,7 @@ src/
 pnpm install
 cp .env.example .env             # 토큰들 채우기
 pnpm dev                          # HTTP 서버 모드(watch)
-pnpm cli                          # 터미널 REPL 모드(= navis-cli 패키지)
 ```
-
-> CLI 는 별도 패키지 `packages/navis-cli` 로 분리됨 — UI(Ink) + 이 패키지의 두뇌(claude/*, config)를
-> esbuild 로 단일 파일에 번들한다(google/cron/sharp 제외 → 가벼움). brew 릴리스도 navis-cli 를 빌드한다.
 
 ### env 우선순위 (자동 로드)
 
@@ -98,7 +93,7 @@ claude.ai 스타일 — 외부 HTTP MCP 서버(Notion·Linear 등)를 **코드 �
 `mcpServers`에 동적 주입한다(`buildEnabledConnectors`). 도구는 `mcp__<id>` 와일드카드로 자동 승인.
 
 - **인증 타입**: `none` / `apikey`(임의 헤더+값) / `oauth`(Authorization: Bearer access token + 자동 갱신).
-- **id**: 소문자/숫자/`_` 슬러그(=MCP 서버명). 내장 키(`namory`/`cron`/`repo`/`self_modify`/`settings`/`google`)는 예약어.
+- **id**: 소문자/숫자/`_` 슬러그(=MCP 서버명). 내장 키(`namory`/`cron`/`settings`/`google`)는 예약어.
 
 ### OAuth 연결 (MCP-스펙 OAuth — Claude Desktop 방식)
 
@@ -163,58 +158,9 @@ curl -X PUT "$NAVIS/api/connectors/linear" \
 ## 배포 (Railway)
 
 - `Dockerfile` + `railway.json` 제공
-- HTTP 서버: 앱 API(/api/*) + `/health` + `/webhook/github` + 데스크톱 배포(/download, /api/desktop/*)
+- HTTP 서버: 앱 API(/api/*) + `/health` + 데스크톱 배포(/download, /api/desktop/*)
 - 필수 env: `CLAUDE_CODE_OAUTH_TOKEN`, `NAMORY_MCP_URL`, `NAMORY_TOKEN`, `APP_API_TOKEN`
-- 선택 env: `SYSTEM_PROMPT`(폴백 — DB 비었을 때), `GITHUB_REPO`/`GITHUB_TOKEN`/`GITHUB_WEBHOOK_SECRET`(자기 개선), `GOOGLE_*`(캘린더), `DESKTOP_DIR`
-
-## 자기 개선 (멀티 에이전트)
-
-navis 가 자기 코드를 스스로 수정할 수 있는 4계층 흐름:
-
-```
-[너] → [① 메인 navis (오케스트레이터)]
-              ↓ repository_dispatch
-       [② Actions 안의 Claude Code (코드 수정 서브에이전트)]
-              ↓ webhook (PR 생성)
-       [③ navis 안의 검토 서브에이전트 (critic)]
-              ↓
-       [③ 검토 결과를 앱 보고로 기록] → [너]
-```
-
-비동기: ① 은 트리거만 던지고 즉시 응답, ② 는 격리 Actions 에서 작업, ③ 은 fire-and-forget. 앱 채팅은 막히지 않음.
-
-### 셋업 (1회)
-
-1. **GitHub PAT 권한 확장** — 기존 `GITHUB_TOKEN` PAT 에 **`Actions: Write`** 추가 (`Contents: Read` 는 이미 있음).
-2. **GitHub Actions secret 등록** — `CLAUDE_CODE_OAUTH_TOKEN`(Max 구독 OAuth 토큰).
-3. **Repo Settings → Actions → General → Workflow permissions** — `Read and write` + PR 생성 허용 체크.
-4. **GitHub webhook 등록** — Payload URL `https://<navis-railway-url>/webhook/github`, content type `application/json`, secret 은 navis env `GITHUB_WEBHOOK_SECRET` 과 동일, 이벤트는 `Pull requests` 만.
-
-### 사용
-
-앱에서 그냥 자연어로:
-
-```
-너: navis야, packages/navis/src/claude/ask.ts 의 maxTurns 16 을 20 으로 올려줘
-navis: 코드 수정 서브에이전트에게 작업 의뢰 전송 완료. 작업·검토가 끝나면 보고로
-       알려주고, PR 은 GitHub 에서도 확인할 수 있어요.
-
-[몇 분 뒤, 보고방에]
-
-navis: 검토 서브에이전트 — PR #42: navis self-improve: maxTurns 20
-       [요약] ask.ts maxTurns 16 → 20 한 줄 변경.
-       [권고] 머지 OK.
-       https://github.com/nu-tree/navis/pull/42
-```
-
-너는 PR 보고 머지만. Railway 자동 배포로 다음 응답부터 새 navis.
-
-### 안전 게이트
-
-- **변경 가능 경로 화이트리스트**: `packages/**/src/**` 만. `.github/**`, `Dockerfile`, `*.lock`, `.env*` 절대 금지.
-- **빌드 통과 강제**: `pnpm -r build` 실패 시 PR 생성 자체 차단.
-- **자동 머지 없음**: 항상 PR. 너 검토 강제.
-- **webhook HMAC 검증**: secret 모르는 외부 요청은 401 거부.
+- 선택 env: `SYSTEM_PROMPT`(폴백 — DB 비었을 때), `GOOGLE_*`(캘린더), `DESKTOP_DIR`
 
 ## 글로벌 설치 (Homebrew)
 

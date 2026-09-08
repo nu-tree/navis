@@ -8,7 +8,7 @@
 #      자동 수신 → 한 번 더 실행하면 적용(fallbackToCacheTimeout=0).
 #
 # → 사용자가 손으로 `pnpm ota` 를 돌리지 않아도 고친 JS 가 폰에 도달한다.
-# 네이티브가 바뀐 경우엔 OTA 로 안 되므로 `pnpm release:ios`(SideStore) 로 따로 배포.
+# 네이티브가 바뀐 경우엔 OTA 로 안 되므로 네이티브 빌드를 따로 배포해야 한다.
 #
 # 사전 준비(1회): 레포 Settings → Secrets → Actions 에 EXPO_TOKEN 추가
 #   (expo.dev → Account Settings → Access Tokens 에서 발급).
