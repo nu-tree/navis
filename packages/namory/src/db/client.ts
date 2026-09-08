@@ -10,15 +10,19 @@ import * as schema from "./schema.js";
 //   - max: 1          — 인스턴스당 커넥션 1개. 동시성은 인스턴스 수로 확장된다.
 //   - idle_timeout    — 얼려진 인스턴스가 붙잡고 있던 커넥션을 풀러가 회수하게 한다.
 //
-// 모듈 평가는 콜드스타트마다 한 번 일어나므로 이 파일 스코프의 클라이언트는 자연히
-// 인스턴스 단위 싱글턴이다. 다만 개발 중 HMR 은 모듈을 재평가해 커넥션을 누적시키므로
-// globalThis 에 캐시해 재사용한다.
+// ★ 연결은 반드시 "첫 쿼리 시점"에 만든다(모듈 로드 시점이 아니라).
+// Next.js 는 빌드 중에 라우트 모듈을 import 해 메타데이터를 수집한다. 모듈 최상단에서
+// DATABASE_URL 을 요구하면 그 단계에서 빌드가 깨진다 — 빌드 머신에 DB 자격이 있어야
+// 할 이유가 없는데도. 런타임에도 같은 이유로 lazy 가 맞다: import 만으로 커넥션을
+// 열어두면 DB 를 안 쓰는 요청(/api/health 등)까지 커넥션을 잡는다.
+//
+// 개발 중 HMR 은 모듈을 재평가해 커넥션을 누적시키므로 globalThis 에 캐시해 재사용한다.
 
-const globalRef = globalThis as unknown as {
-  __namoryDb?: ReturnType<typeof drizzle<typeof schema>>;
-};
+type Db = ReturnType<typeof drizzle<typeof schema>>;
 
-function connect() {
+const globalRef = globalThis as unknown as { __namoryDb?: Db };
+
+function connect(): Db {
   const url = process.env.DATABASE_URL;
   if (!url) {
     throw new Error("DATABASE_URL 환경변수가 필요합니다 (Supabase 연결 문자열)");
@@ -31,4 +35,16 @@ function connect() {
   return drizzle(queryClient, { schema });
 }
 
-export const db = (globalRef.__namoryDb ??= connect());
+function getDb(): Db {
+  return (globalRef.__namoryDb ??= connect());
+}
+
+// 호출부는 `db.select()...` 처럼 평범한 drizzle 인스턴스로 쓴다. 프록시가 첫 접근에서
+// 실제 연결을 만들어, import 시점에는 아무 것도 하지 않게 한다.
+export const db = new Proxy({} as Db, {
+  get(_t, prop, receiver) {
+    const target = getDb();
+    const value = Reflect.get(target as object, prop, receiver) as unknown;
+    return typeof value === "function" ? value.bind(target) : value;
+  },
+}) as Db;

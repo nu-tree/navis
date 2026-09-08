@@ -15,7 +15,7 @@ export async function runDailyFollowup(): Promise<void> {
     const { cal } = getCalendar();
     const now = new Date();
     // 오늘 00:00 KST ~ 지금까지 끝난 일정만 follow-up 대상.
-    // Railway 컨테이너는 UTC이므로 setHours(0,0,0,0) 은 UTC 자정 = KST 09:00 이 되어 틀림.
+    // 서버 런타임은 UTC이므로 setHours(0,0,0,0) 은 UTC 자정 = KST 09:00 이 되어 틀림.
     // KST 날짜 문자열로 자정을 직접 구성한다.
     const kstDateStr = now.toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" }); // "YYYY-MM-DD"
     const startOfDay = new Date(`${kstDateStr}T00:00:00+09:00`);

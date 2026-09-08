@@ -8,10 +8,11 @@
 //   - /mcp    : Claude 커스텀 커넥터·외부 MCP 클라이언트용 (buildMcpServer 사용)
 //   - /health : 헬스체크
 //
-// 서버리스에서는 부팅 훅이 없다(요청마다 인스턴스가 새로 뜨고 응답 후 얼려진다).
-// 그래서 예전의 "listen 전에 마이그레이션" 시퀀스는 사라졌다 — runMigrations 는
-// 그대로 내보내되, 배포 파이프라인이나 보호된 관리 라우트에서 명시적으로 부른다.
-// 콜드스타트마다 마이그레이션을 돌리면 안 된다(동시 실행 경쟁 + 지연).
+// 마이그레이션은 여기서 내보내지 않는다. 예전엔 부팅 시 runMigrations + 멱등
+// ensureConversationsTable 를 돌렸는데, 그건 컨테이너 배포의 CMD 가
+// drizzle-kit(devDependency)을 실행할 수 없어 만든 우회책이었다. 서버리스에는 부팅
+// 훅이 아예 없고, 콜드스타트마다 마이그레이션을 돌리면 동시 실행 경쟁 + 지연만 생긴다.
+// 이제 스키마 변경은 배포와 분리된 명시적 단계다: `pnpm db:generate` → `pnpm db:migrate`.
 
 // ── 기억 도구 (MCP 레지스트리 + 개별 함수) ──────────────────────────────
 export { MEMORY_TOOLS, type MemoryTool } from "./tools/registry.js";
@@ -29,7 +30,12 @@ export { graphify } from "./tools/graphify.js";
 
 // ── 프로젝트 / 설정 KV ──────────────────────────────────────────────────
 export { listProjects } from "./tools/projects.js";
-export { getSetting, setSetting } from "./tools/settings.js";
+export {
+  getSetting,
+  setSetting,
+  takeSetting,
+  sweepSettingsByPrefix,
+} from "./tools/settings.js";
 
 // ── 대화방 동기화 ───────────────────────────────────────────────────────
 export {
@@ -44,13 +50,19 @@ export { insertReport, listReports, type ReportRow } from "./tools/reports.js";
 // ── 크론 CRUD ───────────────────────────────────────────────────────────
 export { listCrons, createCron, deleteCron, updateCron } from "./tools/cron.js";
 
+// ── 챗 턴 제어 신호 (중지/핸드오프 — 인스턴스 간 전달) ──────────────────
+export {
+  setTurnSignal,
+  hasTurnSignal,
+  consumeTurnSignal,
+  clearTurnSignals,
+  sweepTurnSignals,
+  type TurnSignalKind,
+} from "./tools/turn-signals.js";
+
 // ── 스케줄 실행권 클레임 (틱 기반 스케줄러용) ───────────────────────────
 export { claimCronRun, claimSchedule, type ClaimedCron } from "./tools/schedule.js";
 
 // ── 스키마 / DB ─────────────────────────────────────────────────────────
 export { CATEGORIES, type Category } from "./db/schema.js";
 export { db } from "./db/client.js";
-
-// ── 마이그레이션 (배포 파이프라인·관리 라우트에서 명시 호출) ────────────
-export { runMigrations } from "./db/migrate.js";
-export { ensureConversationsTable } from "./db/ensure.js";

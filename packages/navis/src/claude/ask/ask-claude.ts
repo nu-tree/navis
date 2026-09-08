@@ -40,6 +40,13 @@ export async function askClaude(opts: AskClaudeOptions): Promise<AskResult> {
     modelOverride,
     abortController,
   } = opts;
+
+  // 구독 OAuth 토큰 존재 검증. SDK 는 process.env 에서 직접 읽으므로 이 값을 쓰지는
+  // 않지만, 누락 시 SDK 가 던지는 인증 실패보다 여기서 명확한 메시지로 끊는 게 낫다.
+  // config 쪽은 getter 라 "읽는 시점"에 검증된다 — 그 시점이 여기다(모듈 로드 시점에
+  // 검증하면 Next.js 빌드가 라우트를 import 하는 단계에서 깨진다).
+  void config.claudeOauthToken;
+
   // 지연 계측 — 채팅 속도 진단. 전 구간 시작점.
   const t0 = Date.now();
 
@@ -122,7 +129,7 @@ export async function askClaude(opts: AskClaudeOptions): Promise<AskResult> {
   }
 
   const totalMs = Date.now() - t0;
-  // 한 줄 진단 로그(Railway 로그에서 어디서 시간이 새는지 바로 확인).
+  // 한 줄 진단 로그(배포 로그에서 어디서 시간이 새는지 바로 확인).
   console.log(
     `[chat:timing] model=${modelOverride ?? config.model} prefetch=${prefetchMs}ms firstMsg=${acc.firstMsgMs}ms total=${totalMs}ms tools=${acc.toolsUsed.length}`,
   );

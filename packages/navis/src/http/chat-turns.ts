@@ -1,25 +1,32 @@
+import {
+  clearTurnSignals,
+  consumeTurnSignal,
+  hasTurnSignal,
+  setTurnSignal,
+} from "namory";
 import { upsertConversationRemote } from "../conversations/api.js";
-import { invalidateConversationsCache } from "./conversations.js";
 import { publishToNtfy } from "../reports/ntfy.js";
 
-// 진행 중인 챗 생성의 AbortController 레지스트리. 명시적 중지(/api/chat/cancel)만
-// 생성을 끊는다 — 클라 연결이 끊겨도(폰 백그라운드/잠금) 생성은 계속돼, 완료 후
-// 서버가 응답을 대화에 써넣고(영속) 폰으로 푸시한다(보고서와 동일 경로). 이로써
-// "질문 보내고 폰 내려놔도 답이 끝나면 알림 + 다시 열면 답변이 보임" 이 성립한다.
+// ── 진행 중인 챗 턴의 제어 ───────────────────────────────────────────────────
+// 두 층으로 나뉜다:
+//
+//  1) inflight (인스턴스 로컬) — AbortController 레지스트리. AbortController 는 같은
+//     프로세스 안의 생성만 끊을 수 있으니 이건 로컬일 수밖에 없다.
+//  2) turn_signals (DB) — "중지를 눌렀다"·"백그라운드로 갔다"는 *의도*. 서버리스에서
+//     /api/chat/cancel 은 스트림을 돌리는 인스턴스와 다른 인스턴스로 가는 게 보통이라,
+//     예전처럼 인메모리 Set 에만 적으면 중지 버튼이 조용히 무동작이 된다.
+//
+// 그래서 cancel 은 DB 에 의도를 적고(+ 운 좋게 같은 인스턴스면 즉시 abort), 스트림을
+// 돌리는 쪽이 짧은 주기로 그 의도를 읽어 자기 컨트롤러를 끊는다(watchCancel).
+//
+// 연결 종료 != 중지. 폰을 잠그거나 앱을 나가면 연결이 끊기지만 생성은 계속 돌려,
+// 완료 후 서버가 응답을 대화에 써넣고(영속) 폰으로 푸시한다. 실제 중지는 사용자가
+// 중지 버튼을 눌러 /api/chat/cancel 이 불릴 때만 일어난다.
 const inflight = new Map<string, AbortController>();
 
-// 중지 신호를 받은 turnId 들(짧은 TTL). 중지 요청이 생성 완료 '직후'에 도착해
-// abort 가 무의미해진 레이스에서도, 완료 분기가 이 셋을 확인해 영속/푸시를 건너뛴다
-// (사용자가 멈췄는데 답이 저장·푸시되는 걸 막는다).
-const cancelled = new Set<string>();
-const CANCEL_TTL_MS = 60_000;
-
-// 앱이 백그라운드로 전환되며 명시적으로 핸드오프를 알린 turnId 들(긴 TTL — 한 턴이
-// 끝날 때까지 살아 있어야 한다). Railway 프록시 뒤에선 폰이 끊겨도 req 'close'
-// (clientGone)가 안 뜨는 경우가 있어, TCP 끊김 감지만으로는 백그라운드 완주가 안 탄다.
-// 앱이 AppState 'background' 에서 이 신호를 보내, 완료 분기가 영속+푸시를 확실히 타게 한다.
-const handoff = new Set<string>();
-const HANDOFF_TTL_MS = 10 * 60_000;
+// DB 중지 의도 폴링 간격. 스트리밍 중에는 인스턴스가 깨어 있으므로 타이머가 정상 발화한다
+// (얼려진 인스턴스에서 타이머가 안 도는 문제는 요청 처리 중에는 해당되지 않는다).
+const CANCEL_POLL_MS = 2_000;
 
 export function registerTurn(turnId: string, ctrl: AbortController): void {
   if (turnId) inflight.set(turnId, ctrl);
@@ -29,12 +36,15 @@ export function clearTurn(turnId: string): void {
   if (turnId) inflight.delete(turnId);
 }
 
-// 명시적 중지 — 해당 턴 생성을 끊는다(진행 중이면). 완료 직후라 컨트롤러가 없어도
-// cancelled 에 표시해 두어, 완료 분기의 영속/푸시를 막는다. 항상 true 로 본다.
-export function cancelTurn(turnId: string): boolean {
+// 명시적 중지. DB 에 의도를 적어 다른 인스턴스의 스트림도 끊을 수 있게 하고,
+// 같은 인스턴스에 컨트롤러가 있으면 즉시 끊는다(폴링 지연 없이).
+export async function cancelTurn(turnId: string): Promise<boolean> {
   if (!turnId) return false;
-  cancelled.add(turnId);
-  setTimeout(() => cancelled.delete(turnId), CANCEL_TTL_MS);
+  try {
+    await setTurnSignal(turnId, "cancel");
+  } catch (err) {
+    console.error("[chat/cancel] 중지 신호 저장 실패:", err);
+  }
   const ctrl = inflight.get(turnId);
   if (ctrl) {
     ctrl.abort();
@@ -43,32 +53,74 @@ export function cancelTurn(turnId: string): boolean {
   return true;
 }
 
-// 이 턴이 중지됐는지 확인하고 표시를 소거한다(1회성). 완료 분기에서 호출.
-export function consumeCancelled(turnId: string): boolean {
-  if (!turnId || !cancelled.has(turnId)) return false;
-  cancelled.delete(turnId);
-  return true;
+// 스트리밍 턴이 켜는 중지 감시자. DB 의 중지 의도가 보이면 자기 컨트롤러를 끊는다.
+// 반환값을 호출해 정리(finally 1회).
+export function watchCancel(turnId: string, ctrl: AbortController): () => void {
+  if (!turnId) return () => undefined;
+  const timer = setInterval(() => {
+    void hasTurnSignal(turnId, "cancel")
+      .then((cancelled) => {
+        if (cancelled && !ctrl.signal.aborted) {
+          console.log(`[chat] 중지 신호 감지 — 턴 ${turnId} 생성 중단`);
+          ctrl.abort();
+        }
+      })
+      .catch(() => undefined);
+  }, CANCEL_POLL_MS);
+  return () => clearInterval(timer);
 }
 
-// 앱이 "백그라운드로 떠난다"고 명시적으로 알림 — 완료 분기가 clientGone 과 동등하게
-// 취급해 영속+푸시를 타게 한다(프록시가 끊김을 가려도 안전). TTL 로 자동 청소.
-export function markHandoff(turnId: string): void {
+// 이 턴이 중지됐는지 확인하고 표시를 소거한다(1회성). 완료 분기에서 호출 —
+// 중지 신호가 생성 완료 '직후'에 도착해 abort 가 무의미해진 레이스에서도,
+// 이걸로 영속/푸시를 건너뛴다(사용자가 멈췄는데 답이 저장·푸시되는 걸 막는다).
+export async function consumeCancelled(turnId: string): Promise<boolean> {
+  if (!turnId) return false;
+  try {
+    return await consumeTurnSignal(turnId, "cancel");
+  } catch (err) {
+    console.error("[chat] 중지 신호 조회 실패:", err);
+    return false;
+  }
+}
+
+// 앱이 "백그라운드로 떠난다"고 명시적으로 알림 — 완료 분기가 연결 종료와 동등하게
+// 취급해 영속+푸시를 타게 한다(프록시가 끊김을 가려도 안전).
+export async function markHandoff(turnId: string): Promise<void> {
   if (!turnId) return;
-  handoff.add(turnId);
-  setTimeout(() => handoff.delete(turnId), HANDOFF_TTL_MS);
+  await setTurnSignal(turnId, "handoff");
 }
 
-// 이 턴이 핸드오프됐는지 확인하고 표시를 소거한다(1회성). 완료 분기에서 호출.
-export function consumeHandoff(turnId: string): boolean {
-  if (!turnId || !handoff.has(turnId)) return false;
-  handoff.delete(turnId);
-  return true;
+// 이 턴이 핸드오프됐는지 확인하고 소거한다(1회성). 완료 분기에서 호출.
+export async function consumeHandoff(turnId: string): Promise<boolean> {
+  if (!turnId) return false;
+  try {
+    return await consumeTurnSignal(turnId, "handoff");
+  } catch (err) {
+    console.error("[chat] 핸드오프 신호 조회 실패:", err);
+    return false;
+  }
 }
 
 // 소거 없이 핸드오프 여부만 확인(peek). 연결 종료 후 "버려진 요청 vs 백그라운드 의도"를
 // 가르는 데 쓴다 — 완료 분기의 consumeHandoff 와 별개라 레이스가 없다.
-export function hasHandoff(turnId: string): boolean {
-  return !!turnId && handoff.has(turnId);
+export async function hasHandoff(turnId: string): Promise<boolean> {
+  if (!turnId) return false;
+  try {
+    return await hasTurnSignal(turnId, "handoff");
+  } catch {
+    return false;
+  }
+}
+
+// 턴이 정상 종료됐을 때 남은 신호 정리(중지/핸드오프 둘 다).
+export async function finishTurn(turnId: string): Promise<void> {
+  if (!turnId) return;
+  clearTurn(turnId);
+  try {
+    await clearTurnSignals(turnId);
+  } catch {
+    /* 남아도 틱의 sweep 이 지운다 */
+  }
 }
 
 // 대화 메시지의 최소 보존 형태. namory 동기화 머지(LWW) 가 신뢰할 수 있는 필드만.
@@ -163,8 +215,6 @@ export async function persistAndNotify(
       hidden: false,
       updatedAt,
     });
-    // 방금 영속한 답이 폰의 다음 pull(GET 캐시)에 즉시 반영되게 캐시 무효화.
-    invalidateConversationsCache();
   } catch (err) {
     console.error("[chat] 백그라운드 응답 영속 실패(무시):", err);
   }

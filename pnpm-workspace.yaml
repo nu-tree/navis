@@ -1,5 +1,6 @@
 packages:
   - "packages/*"
+  - "apps/*"
 
 # Expo/React Native(Metro)는 pnpm isolated 구조에서 트랜지티브 의존
 # (예: react-native-css-interop)을 못 찾는다. hoisted 로 평탄화한다.
@@ -12,7 +13,6 @@ overrides:
   react: "19.2.0"
 
 allowBuilds:
-  electron: set this to true or false
   esbuild: true
   msgpackr-extract: true
   sharp: true

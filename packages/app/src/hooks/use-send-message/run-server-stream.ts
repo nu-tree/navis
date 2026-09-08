@@ -40,7 +40,7 @@ export async function runServerStream(
     setAborter,
   } = useChatStore.getState();
 
-  // 일시적 연결 실패(Railway 콜드스타트·네트워크 블립)는 사용자에게 에러를
+  // 일시적 연결 실패(서버리스 콜드스타트·네트워크 블립)는 사용자에게 에러를
   // 띄우기 전에 조용히 몇 번 재시도한다. 단, 델타가 한 번이라도 도착한 뒤(스트림
   // 시작됨)의 실패는 재시도하면 본문이 중복되므로 그대로 올려보낸다.
   // 중지 버튼용 AbortController — 방별로 스토어에 등록해 stopGenerating 이 끊는다.

@@ -1,101 +1,76 @@
 import { timingSafeEqual } from "node:crypto";
-import type { IncomingMessage, ServerResponse } from "node:http";
 import { config } from "../config.js";
 
-// 앱(모바일/데스크톱)·외부 도구가 부르는 /api/* 응답 공통 유틸.
-// 네이티브 앱은 CORS 무관하지만 데스크톱(Electron/웹뷰) preflight 대비 헤더를 둔다.
-export const CORS_HEADERS = {
-  "access-control-allow-origin": "*",
-  "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "access-control-allow-headers": "authorization, content-type",
-} as const;
+// ── /api/* 응답 공통 유틸 (Web 표준 Request/Response) ────────────────────────
+// 예전에는 Node 의 IncomingMessage/ServerResponse 를 직접 다뤘다(`sendJson(res, ...)`
+// 처럼 res 를 변형하는 스타일). Next.js Route Handler 는 Web 표준을 쓰므로 전부
+// "Response 를 만들어 돌려주는" 형태로 바꿨다. 부수효과 대신 반환값이라, 핸들러가
+// 응답을 두 번 쓰거나(headersSent 검사) 응답 없이 끝나는 실수가 구조적으로 불가능해진다.
+//
+// 앱 API 계약(경로·상태코드·본문 형태)은 그대로다 — Expo 앱이 아직 이 API 를 쓴다.
 
-export const JSON_HEADERS = {
-  ...CORS_HEADERS,
-  "content-type": "application/json",
-} as const;
+// 네이티브 앱은 CORS 무관하지만 브라우저(웹 UI) preflight 대비 헤더를 둔다.
+export const CORS_HEADERS: Record<string, string> = {
+  "access-control-allow-origin": "*",
+  "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+  "access-control-allow-headers": "authorization, content-type",
+};
 
 // CORS preflight 공통 응답.
-export function handlePreflight(res: ServerResponse): void {
-  res.writeHead(204, CORS_HEADERS);
-  res.end();
+export function preflight(): Response {
+  return new Response(null, { status: 204, headers: CORS_HEADERS });
 }
 
 // JSON 한 방 응답.
-export function sendJson(res: ServerResponse, status: number, body: unknown): void {
-  res.writeHead(status, JSON_HEADERS);
-  res.end(JSON.stringify(body));
-}
-
-// 요청 본문 누적 상한(10MB). 인증 전 webhook 경로(connectors OAuth 등)도 이 함수를
-// 거치므로, 큰 페이로드로 메모리/이벤트루프를 뭉개려는 시도를 끊는다. 초과 시 413 으로
-// 즉시 응답하고 Promise 는 reject — 라우터가 별도 처리할 필요 없이 throw 가 전파된다.
-export const MAX_BODY_BYTES = 10 * 1024 * 1024;
-
-export function readBody(req: IncomingMessage, res?: ServerResponse): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    let total = 0;
-    let aborted = false;
-    req.on("data", (c: Buffer) => {
-      if (aborted) return;
-      total += c.length;
-      if (total > MAX_BODY_BYTES) {
-        aborted = true;
-        // 413 으로 끊는다. 호출자가 res 를 안 넘기면 헤더는 못 쓰고 reject 만.
-        try {
-          if (res && !res.headersSent) {
-            res.writeHead(413, JSON_HEADERS);
-            res.end(JSON.stringify({ error: "payload too large" }));
-          }
-        } catch {
-          /* ignore */
-        }
-        try {
-          req.destroy();
-        } catch {
-          /* ignore */
-        }
-        reject(new Error("payload too large"));
-        return;
-      }
-      chunks.push(c);
-    });
-    req.on("end", () => {
-      if (!aborted) resolve(Buffer.concat(chunks).toString("utf8"));
-    });
-    req.on("error", (e) => {
-      if (!aborted) reject(e);
-    });
+export function json(status: number, body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...CORS_HEADERS, "content-type": "application/json" },
   });
 }
 
-export function safeParse(raw: string): Record<string, unknown> | undefined {
-  try {
-    return JSON.parse(raw) as Record<string, unknown>;
-  } catch {
-    return undefined;
-  }
-}
+// 요청 본문 누적 상한(10MB). 인증 전 경로(connectors OAuth 콜백 등)도 본문을 읽으므로,
+// 큰 페이로드로 메모리를 뭉개려는 시도를 끊는다.
+export const MAX_BODY_BYTES = 10 * 1024 * 1024;
 
-// readBody + safeParse 를 합친 공통 헬퍼. 핸들러 곳곳에서 반복되던
-// `safeParse(await readBody(req,res)) ?? {}` 보일러플레이트를 한 군데로 모은다.
-//   - 413(페이로드 초과): readBody 가 직접 413 응답 후 reject → throw 가 그대로 위로 전파.
-//   - 빈 본문: 기존 동작 보존 — `{}` 로 본다(POST 가 빈 body 로 와도 핸들러의 필드 검증을 타도록).
-//   - 본문은 있는데 JSON 파싱 실패: 즉시 400 "invalid json" 응답 후 null 반환.
-// 호출 측은 null 일 때 즉시 return 하면 된다.
-export async function readJsonBody(
-  req: IncomingMessage,
-  res: ServerResponse,
-): Promise<Record<string, unknown> | null> {
-  const raw = await readBody(req, res);
-  if (!raw) return {};
-  const parsed = safeParse(raw);
-  if (!parsed) {
-    sendJson(res, 400, { error: "invalid json" });
-    return null;
+// 본문 파싱 결과. ok=false 면 그대로 돌려줄 Response 가 담겨 있다.
+export type BodyResult =
+  | { ok: true; body: Record<string, unknown> }
+  | { ok: false; response: Response };
+
+// JSON 본문 읽기 + 파싱.
+//   - 10MB 초과            → 413
+//   - 빈 본문              → {} (기존 동작 보존: POST 가 빈 body 로 와도 필드 검증을 타게)
+//   - 본문 있는데 파싱 실패 → 400 "invalid json"
+//
+// content-length 로 먼저 걸러 큰 본문을 아예 버퍼링하지 않는다. 헤더가 없거나 거짓일
+// 수 있으니 실제로 읽은 바이트도 다시 확인한다.
+export async function readJsonBody(req: Request): Promise<BodyResult> {
+  const declared = Number(req.headers.get("content-length") ?? "");
+  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) {
+    return { ok: false, response: json(413, { error: "payload too large" }) };
   }
-  return parsed;
+  let raw: string;
+  try {
+    raw = await req.text();
+  } catch (err) {
+    console.error("[http] 본문 읽기 실패:", err);
+    return { ok: false, response: json(400, { error: "invalid body" }) };
+  }
+  // content-length 를 못 믿는 경우(chunked 등)에 대한 실측 확인.
+  if (raw.length > MAX_BODY_BYTES) {
+    return { ok: false, response: json(413, { error: "payload too large" }) };
+  }
+  if (!raw) return { ok: true, body: {} };
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return { ok: false, response: json(400, { error: "invalid json" }) };
+    }
+    return { ok: true, body: parsed as Record<string, unknown> };
+  } catch {
+    return { ok: false, response: json(400, { error: "invalid json" }) };
+  }
 }
 
 // "Bearer <token>" 헤더를 상수시간 비교로 검증.
@@ -108,51 +83,41 @@ export function verifyBearer(token: string, header: string): boolean {
   return timingSafeEqual(a, b);
 }
 
-// 공통 에러 응답 헬퍼 — http/* 핸들러의 catch 블록을 통일한다.
-//  - sendUpstreamError: namory 등 업스트림 의존(프록시) 실패 → 502 "upstream error".
-//  - sendInternalError: navis 내부 처리 실패(SDK 호출/스트림 등) → 500 "internal error".
-// 둘 다 console.error 로그 + JSON 1회 응답. 이미 헤더가 나간 뒤(SSE 도중 등)면 본문만 생략한다.
-export function sendUpstreamError(res: ServerResponse, tag: string, err: unknown): void {
+// 공통 에러 응답 — http/* 핸들러의 catch 블록을 통일한다.
+//  - upstreamError: 외부 의존(구글·제3자 MCP 등) 실패 → 502
+//  - internalError: navis 내부 처리 실패(SDK 호출/DB 등) → 500
+export function upstreamError(tag: string, err: unknown): Response {
   console.error(tag, err);
-  if (!res.headersSent) sendJson(res, 502, { error: "upstream error" });
+  return json(502, { error: "upstream error" });
 }
 
-export function sendInternalError(res: ServerResponse, tag: string, err: unknown): void {
+export function internalError(tag: string, err: unknown): Response {
   console.error(tag, err);
-  if (!res.headersSent) sendJson(res, 500, { error: "internal error" });
+  return json(500, { error: "internal error" });
 }
 
-// 앱 API 인증 가드 — APP_API_TOKEN 설정 + Bearer 일치 검사.
-// 통과 못하면 503/401 응답을 직접 쓰고 false 를 반환한다(호출 측은 즉시 return).
-export function requireAppAuth(req: IncomingMessage, res: ServerResponse): boolean {
+// 앱 API 인증 검사. 통과하면 undefined, 실패하면 그대로 돌려줄 Response.
+export function checkAppAuth(req: Request): Response | undefined {
   const token = config.appApiToken;
-  if (!token) {
-    sendJson(res, 503, { error: "app api not configured" });
-    return false;
-  }
-  const auth = req.headers["authorization"];
-  if (typeof auth !== "string" || !verifyBearer(token, auth)) {
-    sendJson(res, 401, { error: "unauthorized" });
-    return false;
-  }
-  return true;
+  if (!token) return json(503, { error: "app api not configured" });
+  const auth = req.headers.get("authorization");
+  if (!auth || !verifyBearer(token, auth)) return json(401, { error: "unauthorized" });
+  return undefined;
 }
 
-// 앱 API 핸들러 공통 래퍼 — `requireAppAuth → try { handler } catch { onError(...) }`
-// 보일러플레이트를 한 곳에 모은다. 인증 실패 시 requireAppAuth 가 직접 응답을 쓰고
-// 핸들러는 호출되지 않는다(기존 동작과 동일). onError 는 기본 sendUpstreamError(502) —
-// 내부 처리 실패가 명확한 라우트는 sendInternalError(500) 를 명시적으로 넘긴다.
+// 앱 API 핸들러 공통 래퍼 — 인증 → try/catch 보일러플레이트를 한 곳에 모은다.
+// onError 기본값은 upstreamError(502); 내부 실패가 명확한 라우트는 internalError 를 넘긴다.
 export async function withAppAuth(
-  req: IncomingMessage,
-  res: ServerResponse,
+  req: Request,
   tag: string,
-  handler: () => void | Promise<void>,
-  onError: (res: ServerResponse, tag: string, err: unknown) => void = sendUpstreamError,
-): Promise<void> {
-  if (!requireAppAuth(req, res)) return;
+  handler: () => Promise<Response> | Response,
+  onError: (tag: string, err: unknown) => Response = upstreamError,
+): Promise<Response> {
+  const denied = checkAppAuth(req);
+  if (denied) return denied;
   try {
-    await handler();
+    return await handler();
   } catch (err) {
-    onError(res, tag, err);
+    return onError(tag, err);
   }
 }

@@ -4,11 +4,10 @@
 // 만든다. 이미지 개수/총량 상한, 모델 화이트리스트, 스냅샷 메시지 정규화를 여기서 끝낸다.
 // 순수 추출 — 동작/시그니처는 chat.ts 원본과 동일.
 
-import type { IncomingMessage, ServerResponse } from "node:http";
 import { config } from "../config.js";
 import { collectImagesFromDataUrls } from "../claude/images.js";
 import type { InputImage } from "../claude/types.js";
-import { readJsonBody, sendJson } from "./respond.js";
+import { json, readJsonBody } from "./respond.js";
 import { normalizeSnapshotMessages, type ChatSnapshot } from "./chat-turns.js";
 
 export type ChatRequest = {
@@ -43,14 +42,17 @@ function approxDataUrlBytes(u: string): number {
   return Math.max(0, Math.floor((b64.length * 3) / 4) - pad);
 }
 
+// 파싱 결과. ok=false 면 그대로 돌려줄 Response 가 담겨 있다.
+export type ParsedChat =
+  | { ok: true; value: ChatRequest }
+  | { ok: false; response: Response };
+
 // chat / chat-stream 공통 바디 파싱. text + 첨부 이미지(data URL) + resume(sessionId).
-// 텍스트도 이미지도 없으면 400 을 쓰고 null 을 반환한다(이미지-only 는 허용).
-export async function parseChatRequest(
-  req: IncomingMessage,
-  res: ServerResponse,
-): Promise<ChatRequest | null> {
-  const body = await readJsonBody(req, res);
-  if (!body) return null;
+// 텍스트도 이미지도 없으면 400(이미지-only 는 허용).
+export async function parseChatRequest(req: Request): Promise<ParsedChat> {
+  const parsed = await readJsonBody(req);
+  if (!parsed.ok) return parsed;
+  const body = parsed.body;
   const text = typeof body.text === "string" ? body.text.trim() : "";
 
   const imageUrls = Array.isArray(body.images)
@@ -58,24 +60,25 @@ export async function parseChatRequest(
     : [];
   // 개수/총량 상한 — 초과 시 디코드도 하지 않고 즉시 400.
   if (imageUrls.length > MAX_IMAGES_PER_REQUEST) {
-    sendJson(res, 400, {
-      error: `too many images (max ${MAX_IMAGES_PER_REQUEST})`,
-    });
-    return null;
+    return {
+      ok: false,
+      response: json(400, { error: `too many images (max ${MAX_IMAGES_PER_REQUEST})` }),
+    };
   }
   let total = 0;
   for (const u of imageUrls) total += approxDataUrlBytes(u);
   if (total > MAX_TOTAL_IMAGE_BYTES) {
-    sendJson(res, 400, {
-      error: `total image bytes too large (max ${MAX_TOTAL_IMAGE_BYTES})`,
-    });
-    return null;
+    return {
+      ok: false,
+      response: json(400, {
+        error: `total image bytes too large (max ${MAX_TOTAL_IMAGE_BYTES})`,
+      }),
+    };
   }
   const images = imageUrls.length > 0 ? await collectImagesFromDataUrls(imageUrls) : [];
 
   if (!text && images.length === 0) {
-    sendJson(res, 400, { error: "text or image required" });
-    return null;
+    return { ok: false, response: json(400, { error: "text or image required" }) };
   }
   const resume =
     typeof body.sessionId === "string" && body.sessionId ? body.sessionId : undefined;
@@ -107,5 +110,8 @@ export async function parseChatRequest(
       }
     : undefined;
 
-  return { text, images, resume, model, thinking, conversationId, turnId, snapshot };
+  return {
+    ok: true,
+    value: { text, images, resume, model, thinking, conversationId, turnId, snapshot },
+  };
 }

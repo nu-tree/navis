@@ -1,32 +1,30 @@
 # navis — 나비스
 
 > namory(기억 저장소)를 등에 업고 사용자와 양방향으로 대화하는 제2의 뇌 에이전트.
-> 같은 두뇌(askClaude)를 **앱 백엔드(HTTP 서버)** · **터미널 CLI** 두 경로에서 공유한다.
+> Claude Agent SDK 두뇌(askClaude) + Web 표준 HTTP 핸들러. namory(기억)를 in-process MCP 로 붙인다.
 
 - 이름: 라틴어 *navis*(배). namory(기억)를 싣고 오가는 배.
 - 두뇌: Claude Agent SDK + Claude Code 구독 OAuth 토큰 (모델 전부 Opus 4.8)
 - 기억: namory MCP (외부 HTTP)
 - 자동화: 사용자 트리거 크론 + 주간 다이제스트 + 캘린더 알림
 
-## 두 가지 실행 모드
+## 이 패키지의 위치
 
-| 모드 | 진입점 | 용도 |
-| --- | --- | --- |
-| HTTP 서버 | `src/index.ts` (`pnpm dev`, `pnpm start`) | always-on. 앱 API(/api/*) + 선제 보고 스케줄러(크론·다이제스트·캘린더) + GitHub webhook + 데스크톱 배포 |
-| 터미널 CLI | `src/cli.tsx` (`pnpm cli`, `navis`) | Ink 기반 REPL. 프로젝트 자동 태깅 |
+navis 는 **라이브러리**다 — 자체 서버(`listen`)가 없다. 두 층으로 나뉜다:
 
-두 모드 모두 같은 `askClaude` + 사후 큐레이터(`curateTurn`)를 거치므로 저장·맥락 동작이 일관.
+| 층 | 내용 |
+| --- | --- |
+| 두뇌 (`claude/*`) | Claude Agent SDK 호출, MCP 도구 조립, 시스템 프롬프트 |
+| HTTP 핸들러 (`http/*`) | Web 표준 `(Request) => Response`. 라우팅은 `apps/web` 의 파일 라우터가 한다 |
 
-앱(navis-app: 모바일/데스크톱)은 `/api/chat`·`/api/chat/stream`(SSE)으로 navis 두뇌와 대화하고,
-선제 보고는 `/api/reports`(폴링), 대화 동기화는 `/api/conversations`, 설정(시스템 프롬프트)은 `/api/settings`로 주고받는다.
+예전에는 `src/index.ts` 가 Node HTTP 서버를 띄우고 자체 라우터(`http/router/*`)로
+분기했으며, 터미널 CLI 모드도 있었다. 둘 다 삭제됐다 — 배포 단위는 `apps/web` 하나다.
 
 ## 폴더 구조
 
 ```
 src/
-├── cli.tsx              # CLI 진입점 (Ink REPL)
-├── index.ts             # HTTP 서버 진입점 (앱 API + cron + digest + calendar + webhook + health)
-├── config.ts            # env 로드 + 검증
+├── config.ts            # env 로드 + 검증 (필수값은 getter — 읽는 시점에 검증)
 ├── system-prompt.ts     # 봇 성격 — namory(DB)→env→기본값, 캐시
 ├── digest.ts            # 주간 기억 다이제스트
 ├── project.ts           # 프로젝트 자동 감지 (.navis | package.json)
@@ -36,22 +34,26 @@ src/
 │   ├── images.ts        # 앱 첨부 이미지 디코드/리사이즈
 │   ├── allowed-tools.ts # 도구 화이트리스트
 │   └── types.ts         # InputImage, AskResult
-├── http/                # 앱 API 라우터/핸들러 (chat, reports, conversations, settings, connectors, crons, memories)
-├── reports/             # 선제 보고 기록(emit) + 인메모리 버퍼(store)
+├── http/                # Web 표준 핸들러 (chat, reports, conversations, settings, connectors, crons, memories, scheduler)
+│                        #   index.ts 가 배럴 — apps/web 이 `navis/http` 로 가져간다
+├── reports/             # 선제 보고 기록(emit) + DB 저장(store) + ntfy 푸시
 ├── cron/                # 크론 CRUD + cron MCP 도구
 ├── scheduler/           # 틱 기반 스케줄러 (발동 판정 + 원자적 클레임 실행)
 ├── settings/            # update_system_prompt MCP 도구
 ├── connectors/          # 동적 MCP 커넥터 — DB(store)→SDK 주입(mcp), OAuth(oauth), 제공자 프리셋(providers), 타입(types)
 ├── google/              # 캘린더 OAuth + 스케줄러 + MCP 도구
-└── conversations/       # 대화 동기화 namory REST 클라이언트
+└── conversations/       # 대화 동기화 (namory 함수 직접 호출)
 ```
 
 ## 셋업
 
+라이브러리라 자체 실행이 없다 — 레포 루트에서 웹 앱을 띄운다.
+
 ```bash
 pnpm install
-cp .env.example .env             # 토큰들 채우기
-pnpm dev                          # HTTP 서버 모드(watch)
+# 환경변수는 apps/web/.env.local 에 둔다 (.env.example 의 키들 참고)
+pnpm --filter web dev            # 전체 API 로컬 실행
+pnpm --filter navis typecheck    # 이 패키지만 타입 검사
 ```
 
 ### env 우선순위 (자동 로드)
@@ -60,7 +62,7 @@ pnpm dev                          # HTTP 서버 모드(watch)
 
 1. `./.env` (개발용)
 2. `~/.config/navis/env` (글로벌 설치용 — XDG)
-3. 이미 export된 `process.env` (Railway 등 호스팅)
+3. 이미 export된 `process.env` (Vercel 등 호스팅)
 
 ## Claude에 허용된 도구
 
@@ -139,16 +141,10 @@ curl -X PUT "$NAVIS/api/connectors/linear" \
 
 등록 후 최대 30초(캐시 TTL) 안에 다음 대화부터 도구가 붙는다. 앱에선 **설정 → 커넥터 관리**에서 GUI 로 처리.
 
-## CLI 동작
-
-- Ink(React-for-CLI) REPL — `‹` 입력선, `Static`으로 과거 턴 보존
-- `Ctrl+C`로 종료, `/quit` `/reset` `/project` 슬래시 명령
-- 시작 디렉터리에서 프로젝트 자동 감지(`.navis` 파일 → `package.json name`) → 이 대화의 `save` 호출이 자동으로 `project` 태깅
-
 ## 자동화 (선제 보고)
 
 크론·다이제스트·캘린더 등 navis 가 먼저 보내는 메시지는 모두 `/api/reports` 에 기록되고,
-앱/데스크톱이 폴링해 보고 전용 방에 표시(네이티브 알림).
+앱이 폴링해 보고 전용 방에 표시(네이티브 알림). 저장은 namory 의 `reports` 테이블.
 
 ### 사용자 트리거 크론 (`cron/*`)
 앱 대화에서 "매일 ~ 해줘"라고 하면 모델이 `cron_create`로 등록하고, 영속화는 namory 의 `crons` 테이블이 한다.
@@ -158,40 +154,7 @@ curl -X PUT "$NAVIS/api/connectors/linear" \
 ### 주간 다이제스트 (`digest.ts`)
 기본 매주 월 09시 KST — 최근 7일 기억을 navis가 요약하고 자기이해 프로필을 `profile_update`로 갱신, 요약을 앱 보고로 기록. 이 경로에서만 `profile_update` 허용 (인젝션 방어).
 
-## 배포 (Railway)
+## 배포
 
-- `Dockerfile` + `railway.json` 제공
-- HTTP 서버: 앱 API(/api/*) + `/health`
-- 필수 env: `CLAUDE_CODE_OAUTH_TOKEN`, `DATABASE_URL`, `VOYAGE_API_KEY`, `NAMORY_TOKEN`, `APP_API_TOKEN`
-- 선택 env: `SYSTEM_PROMPT`(폴백 — DB 비었을 때), `GOOGLE_*`(캘린더)
-
-## 글로벌 설치 (Homebrew)
-
-```bash
-brew tap nu-tree/navis
-brew trust nu-tree/navis   # 서드파티 tap 신뢰(최신 brew 보안 요구 — 1회)
-brew install navis
-mkdir -p ~/.config/navis && $EDITOR ~/.config/navis/env  # env 채움
-navis                                                     # 어디서나 실행
-```
-
-업데이트: `brew update && brew upgrade navis`.
-
-### CLI 릴리스 자동화 (`.github/workflows/cli-release.yml`)
-
-formula 는 별도 tap 레포 `nu-tree/homebrew-navis` 의 `Formula/navis.rb` 에 있다.
-`main` 에 `packages/navis/**` 변경이 들어오면(또는 워크플로 수동 실행) 자동으로:
-
-1. tap formula 의 현재 버전 +patch 로 새 태그(`vX.Y.Z`)를 찍어 push(이미 있으면 재사용),
-2. 그 태그 소스 타르볼의 sha256 계산,
-3. tap 의 `url`·`sha256` 갱신(+ 진입 래퍼 `dist/cli.js` 멱등 정규화)을 **한 커밋**으로 push.
-
-버전 기준이 formula(마지막 성공 릴리스)라, 태그만 찍히고 갱신이 실패한 런도 다음 런이 같은
-버전을 재시도해 버전 구멍 없이 자기복구된다.
-
-→ 사용자는 `brew upgrade navis` 만 하면 새 버전을 받는다. 손으로 태그/sha 갱신 불필요.
-
-> **사전 준비(1회)**: repo secret `HOMEBREW_TAP_TOKEN` 등록 — `nu-tree/homebrew-navis` 에
-> `Contents: Read/Write` 권한이 있는 fine-grained PAT. 기본 `GITHUB_TOKEN` 은 현재 레포만
-> 접근 가능해 다른 레포(tap)에 push 할 수 없어 별도 토큰이 필요하다. 미설정 시 워크플로는
-> 태그까지만 찍고 tap 갱신 단계에서 에러로 멈춘다.
+배포 단위는 `apps/web` 이다 — 이 패키지는 그쪽에서 `navis/http` 로 import 된다.
+환경변수·스케줄러 설정은 [DEPLOY.md](../../DEPLOY.md).

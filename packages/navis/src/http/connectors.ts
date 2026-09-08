@@ -1,7 +1,6 @@
-import type { IncomingMessage, ServerResponse } from "node:http";
 import {
-  requireAppAuth,
-  sendJson,
+  checkAppAuth,
+  json,
   readJsonBody,
   CORS_HEADERS,
   withAppAuth,
@@ -47,52 +46,38 @@ function mask(s: string): string {
   return `${s.slice(0, 2)}••••${s.slice(-2)}`;
 }
 
-export async function handleGetConnectors(
-  req: IncomingMessage,
-  res: ServerResponse,
-): Promise<void> {
-  await withAppAuth(req, res, "[connectors] 목록 조회 실패:", async () => {
+export function handleGetConnectors(req: Request): Promise<Response> {
+  return withAppAuth(req, "[connectors] 목록 조회 실패:", async () => {
     const list = await listConnectors();
-    sendJson(res, 200, { connectors: list.map(redact) });
+    return json(200, { connectors: list.map(redact) });
   });
 }
 
-export async function handlePutConnector(
-  req: IncomingMessage,
-  res: ServerResponse,
-  id: string,
-): Promise<void> {
-  if (!requireAppAuth(req, res)) return;
+export async function handlePutConnector(req: Request, id: string): Promise<Response> {
+  const denied = checkAppAuth(req);
+  if (denied) return denied;
   if (!isValidConnectorId(id)) {
-    return sendJson(res, 400, { error: "invalid id (소문자/숫자/_, 예약어 불가)" });
+    return json(400, { error: "invalid id (소문자/숫자/_, 예약어 불가)" });
   }
   try {
-    const body = await readJsonBody(req, res);
-    if (!body) return;
+    const parsed = await readJsonBody(req);
+    if (!parsed.ok) return parsed.response;
     // URL 의 id 가 정본 — body 에 id 가 있어도 덮어쓴다.
-    const saved = await upsertConnector({ ...body, id });
-    sendJson(res, 200, { connector: redact(saved) });
+    const saved = await upsertConnector({ ...parsed.body, id });
+    return json(200, { connector: redact(saved) });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[connectors] 저장 실패:", msg);
     // 형식 오류는 400, 그 외(업스트림)는 502.
-    const status = msg.includes("형식 오류") ? 400 : 502;
-    sendJson(res, status, { error: msg });
+    return json(msg.includes("형식 오류") ? 400 : 502, { error: msg });
   }
 }
 
-export async function handleDeleteConnector(
-  req: IncomingMessage,
-  res: ServerResponse,
-  id: string,
-): Promise<void> {
-  await withAppAuth(req, res, "[connectors] 삭제 실패:", async () => {
+export function handleDeleteConnector(req: Request, id: string): Promise<Response> {
+  return withAppAuth(req, "[connectors] 삭제 실패:", async () => {
     const ok = await removeConnector(id);
-    if (!ok) {
-      sendJson(res, 404, { error: "not found" });
-      return;
-    }
-    sendJson(res, 200, { ok: true });
+    if (!ok) return json(404, { error: "not found" });
+    return json(200, { ok: true });
   });
 }
 
@@ -100,17 +85,15 @@ export async function handleDeleteConnector(
 
 // 앱이 "연결" 화면에 띄울 OAuth 제공자 목록. DCR 로 client_id 를 자동 발급하므로
 // 사전 자격 구성이 필요 없다 → 항상 available.
-export async function handleGetProviders(
-  req: IncomingMessage,
-  res: ServerResponse,
-): Promise<void> {
-  if (!requireAppAuth(req, res)) return;
+export function handleGetProviders(req: Request): Response {
+  const denied = checkAppAuth(req);
+  if (denied) return denied;
   const providers = listProviders().map((p) => ({
     key: p.key,
     label: p.label,
     available: isProviderAvailable(p),
   }));
-  sendJson(res, 200, { providers });
+  return json(200, { providers });
 }
 
 // navis 공개 base URL — 콜백 redirect_uri 구성용.
@@ -124,7 +107,7 @@ export async function handleGetProviders(
 // 비운영(개발/로컬)에서만 헤더 폴백을 허용한다(편의), 한 번 경고를 찍어 운영 누락이
 // 조용히 묻히지 않게 한다.
 let warnedHeaderFallback = false;
-function publicBaseUrl(req: IncomingMessage): string | null {
+function publicBaseUrl(req: Request): string | null {
   if (config.publicUrl) return config.publicUrl;
   if (process.env.NODE_ENV === "production") return null;
   if (!warnedHeaderFallback) {
@@ -133,66 +116,61 @@ function publicBaseUrl(req: IncomingMessage): string | null {
       "[connectors] NAVIS_PUBLIC_URL 미설정 — 비운영 환경의 헤더 추정 폴백 사용중(Host 주입 위험). 운영에선 NAVIS_PUBLIC_URL 을 설정하세요.",
     );
   }
-  const fwdProto = req.headers["x-forwarded-proto"];
-  const proto = (typeof fwdProto === "string" ? fwdProto.split(",")[0] : undefined) ?? "https";
-  const fwdHost = req.headers["x-forwarded-host"];
-  const host = (typeof fwdHost === "string" ? fwdHost : undefined) ?? req.headers.host ?? "";
+  const proto = req.headers.get("x-forwarded-proto")?.split(",")[0] ?? "https";
+  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "";
   return host ? `${proto}://${host}` : "";
 }
 
 // 앱이 authed 로 호출 → (발견+DCR 후) 동의 URL 을 받아 브라우저로 연다. 토큰은 URL 에 싣지 않는다
 // (제공자 도메인으로 가는 표준 OAuth 동의 링크라 navis 인증이 필요 없음 — state 가 CSRF 방어).
-export async function handleOAuthStart(
-  req: IncomingMessage,
-  res: ServerResponse,
-): Promise<void> {
-  if (!requireAppAuth(req, res)) return;
+export async function handleOAuthStart(req: Request): Promise<Response> {
+  const denied = checkAppAuth(req);
+  if (denied) return denied;
   try {
-    const body = await readJsonBody(req, res);
-    if (!body) return;
-    const provider = typeof body.provider === "string" ? body.provider : "";
-    if (!provider) return sendJson(res, 400, { error: "provider required" });
+    const parsed = await readJsonBody(req);
+    if (!parsed.ok) return parsed.response;
+    const provider = typeof parsed.body.provider === "string" ? parsed.body.provider : "";
+    if (!provider) return json(400, { error: "provider required" });
     const base = publicBaseUrl(req);
     if (base === null) {
       console.error(
         "[connectors] 운영 환경에서 NAVIS_PUBLIC_URL 미설정 — OAuth 시작 거부(Host 주입 방어)",
       );
-      return sendJson(res, 503, { error: "NAVIS_PUBLIC_URL not configured" });
+      return json(503, { error: "NAVIS_PUBLIC_URL not configured" });
     }
     const { authUrl } = await startOAuth(provider, base);
-    sendJson(res, 200, { authUrl });
+    return json(200, { authUrl });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[connectors] OAuth 시작 실패:", msg);
-    sendJson(res, 400, { error: msg });
+    return json(400, { error: msg });
   }
 }
 
 // 제공자가 동의 후 code 와 함께 리다이렉트하는 콜백(브라우저가 직접 연다 → HTML 응답).
 // state 로 진행 중 인가를 찾으므로 navis 토큰 인증은 불필요.
-export async function handleOAuthCallback(
-  req: IncomingMessage,
-  res: ServerResponse,
-  url: URL,
-): Promise<void> {
+export async function handleOAuthCallback(req: Request): Promise<Response> {
+  const url = new URL(req.url);
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
   const provErr = url.searchParams.get("error");
-  if (provErr) return sendHtml(res, 400, page("연결 취소됨", `제공자 오류: ${provErr}`));
-  if (!code || !state) return sendHtml(res, 400, page("연결 실패", "code/state 누락"));
+  if (provErr) return html(400, page("연결 취소됨", `제공자 오류: ${provErr}`));
+  if (!code || !state) return html(400, page("연결 실패", "code/state 누락"));
   try {
     const c = await completeOAuth(code, state);
-    sendHtml(res, 200, page("연결 완료 ✓", `${c.label} 가 연결됐어요. 앱으로 돌아가세요.`));
+    return html(200, page("연결 완료 ✓", `${c.label} 가 연결됐어요. 앱으로 돌아가세요.`));
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[connectors] OAuth 콜백 실패:", msg);
-    sendHtml(res, 400, page("연결 실패", msg));
+    return html(400, page("연결 실패", msg));
   }
 }
 
-function sendHtml(res: ServerResponse, status: number, html: string): void {
-  res.writeHead(status, { ...CORS_HEADERS, "content-type": "text/html; charset=utf-8" });
-  res.end(html);
+function html(status: number, body: string): Response {
+  return new Response(body, {
+    status,
+    headers: { ...CORS_HEADERS, "content-type": "text/html; charset=utf-8" },
+  });
 }
 
 function esc(s: string): string {

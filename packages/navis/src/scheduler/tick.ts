@@ -17,7 +17,7 @@
 // 다 못 돌 수 있으므로 예산을 두고 초과하면 남긴다 — 클레임하지 않은 잡은 다음 틱이
 // 그대로 집어간다(클레임이 있으니 중복 없이 이어진다).
 
-import { claimCronRun, claimSchedule, listCrons } from "namory";
+import { claimCronRun, claimSchedule, listCrons, sweepTurnSignals } from "namory";
 import { config } from "../config.js";
 import { askClaude } from "../claude/ask.js";
 import { fullChatEnv } from "../claude/server-env.js";
@@ -31,6 +31,7 @@ import {
   TIMEZONE,
   UPCOMING_CHECK_CRON,
 } from "../google/scheduler/constants.js";
+import { sweepPending } from "../connectors/oauth/pending.js";
 import { dueFireTime } from "./due.js";
 
 // 한 틱의 실행 예산. 함수 상한(Hobby 300s)보다 넉넉히 짧게 둬, 예산을 넘겨도 응답을
@@ -48,6 +49,15 @@ export async function runSchedulerTick(now = new Date()): Promise<TickResult> {
   const result: TickResult = { ran: [], skipped: [], deferred: [], errors: [] };
   const deadline = now.getTime() + BUDGET_MS;
   const outOfBudget = () => Date.now() > deadline;
+
+  // ── 0. 단기 상태 청소 ─────────────────────────────────────────────────────
+  // 예전에는 각 모듈이 setInterval 로 자기 상태를 쓸었다(oauth pending 의 TTL 스윕 등).
+  // 서버리스에는 그 인터벌을 돌릴 프로세스가 없으니, 주기 작업의 유일한 진입점인
+  // 이 틱이 대신 쓸어낸다. 실패해도 스케줄 실행을 막지 않는다.
+  await Promise.all([
+    sweepPending().catch(() => 0),
+    sweepTurnSignals().catch(() => 0),
+  ]);
 
   // ── 1. 사용자 크론 ────────────────────────────────────────────────────────
   let rows: Awaited<ReturnType<typeof listCrons>> = [];

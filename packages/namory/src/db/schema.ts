@@ -8,6 +8,7 @@ import {
   boolean,
   integer,
   index,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 
 export const CATEGORIES = [
@@ -127,5 +128,32 @@ export const reports = pgTable(
     // 앱 폴링은 항상 "since 이후, 시간순" — 이 인덱스 하나로 커버된다.
     index("reports_created_at_idx").on(t.createdAt.desc()),
     index("reports_source_id_idx").on(t.sourceId),
+  ],
+);
+
+// 진행 중인 챗 턴에 대한 신호(중지/핸드오프). 수명이 짧은 제어 상태다.
+//
+// 예전엔 navis 프로세스의 Map/Set 이었다: inflight(AbortController), cancelled, handoff.
+// AbortController 는 같은 프로세스 안의 생성만 끊을 수 있으니 그건 인스턴스 로컬로
+// 남겨야 하지만, "중지를 눌렀다"·"백그라운드로 갔다"는 *의도*는 인스턴스를 넘어 전달돼야
+// 한다. 서버리스에서 /api/chat/cancel 은 스트림을 돌리는 인스턴스와 다른 인스턴스로
+// 가는 게 보통이라, 인메모리 Set 이면 중지 버튼이 조용히 무동작이 된다.
+//
+// 그래서 의도만 이 테이블에 적고, 스트림을 돌리는 인스턴스가 짧은 주기로 읽어 자기
+// AbortController 를 끊는다. 행은 소비 시 삭제하고, 남은 것은 스케줄러 틱이 쓸어낸다.
+export const turnSignals = pgTable(
+  "turn_signals",
+  {
+    // 클라이언트가 만든 턴 id + 신호 종류의 조합이 키.
+    turnId: text("turn_id").notNull(),
+    kind: text("kind").notNull(), // 'cancel' | 'handoff'
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.turnId, t.kind] }),
+    // 소비되지 않고 남은 행 청소용(틱에서 오래된 것 삭제).
+    index("turn_signals_created_at_idx").on(t.createdAt),
   ],
 );

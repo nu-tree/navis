@@ -16,7 +16,7 @@ import { getProvider } from "../providers.js";
 import { invalidateConnectorsCache, isValidConnectorId, upsertConnector } from "../store.js";
 import type { Connector } from "../types.js";
 import { discover, registerClient } from "./discovery.js";
-import { pending, sweep } from "./pending.js";
+import { putPending, takePending } from "./pending.js";
 import { assertAuthorizationCode, TokenError, tokenRequest } from "./token.js";
 import { b64url, callbackPath } from "./types.js";
 import type { ClientAuth } from "./types.js";
@@ -37,7 +37,6 @@ export async function startOAuth(
     );
   }
   if (!baseUrl) throw new Error("공개 URL 을 알 수 없어 redirect_uri 를 만들 수 없습니다.");
-  sweep();
 
   const redirectUri = `${baseUrl.replace(/\/+$/, "")}${callbackPath()}`;
   const disco = await discover(provider.mcpUrl);
@@ -67,7 +66,7 @@ export async function startOAuth(
 
   const state = b64url(randomBytes(24));
   const codeVerifier = b64url(randomBytes(48));
-  pending.set(state, {
+  await putPending(state, {
     connectorId: provider.key,
     label: provider.label,
     mcpUrl: provider.mcpUrl,
@@ -100,12 +99,10 @@ export async function startOAuth(
 
 // 콜백 — code+state 로 토큰 교환 후 커넥터 저장(enabled). 갱신에 필요한 좌표도 함께 보관.
 export async function completeOAuth(code: string, state: string): Promise<Connector> {
-  // 콜백은 사용자가 동의를 완료한 경로 — 다른 만료된 pending 항목도 함께 청소한다.
-  sweep();
   assertAuthorizationCode(code);
-  const p = pending.get(state);
+  // 읽고 지우기를 한 문장으로 — 같은 state 로 두 번 들어오는 리플레이를 DB 가 막는다.
+  const p = await takePending(state);
   if (!p) throw new Error("state 불일치/만료 — 다시 시도하세요.");
-  pending.delete(state);
 
   const tok = await tokenRequest(p.tokenEndpoint, p.clientId, p.clientSecret, p.clientAuth, p.bodyFormat, {
     grant_type: "authorization_code",

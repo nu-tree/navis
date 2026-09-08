@@ -4,7 +4,7 @@
 // required()/optional() 검증이 동작한다. 존재하는 후보를 모두 순서대로 로드해 '병합'한다:
 //   1) 현재 디렉터리의 .env  (개발용 — 먼저 로드해 우선)
 //   2) ~/.config/navis/env    (글로벌 설치용 XDG — 1)에 없는 키만 보충)
-//   3) 이미 export 된 process.env (둘 다보다 우선 — Railway 등 호스팅 환경)
+//   3) 이미 export 된 process.env (둘 다보다 우선 — Vercel 등 호스팅 환경)
 // process.loadEnvFile() 은 이미 설정된 키를 덮어쓰지 않으므로(검증함), 먼저 로드한 쪽이
 // 이기고 뒤는 빈칸만 채운다 → 위 우선순위가 자연히 성립.
 // Node 21.7+ 의 process.loadEnvFile()을 사용 — 별도 dotenv 의존성 불필요.
@@ -33,12 +33,18 @@ import { join } from "node:path";
   }
 })();
 
+// 필수 환경변수. 없으면 throw 한다 — 예전엔 process.exit(1) 이었다.
+//
+// 서버리스에서 process.exit 은 두 가지로 나쁘다: (1) 함수 인스턴스를 통째로 죽여
+// 요청이 원인 불명의 500 이 되고, (2) Next.js 는 빌드 중에 라우트 모듈을 import 해
+// 메타데이터를 수집하므로, 모듈 로드 시점에 죽으면 빌드 자체가 실패한다(빌드 머신에
+// 런타임 시크릿이 있어야 할 이유가 없는데도).
+//
+// 그래서 값은 아래 config 객체의 getter 로 감싸 "읽는 시점"에만 검증한다. 누락은
+// 그 값을 실제로 쓰는 요청에서만 에러가 되고, 상관없는 라우트(/api/health)는 영향받지 않는다.
 function required(name: string): string {
   const v = process.env[name];
-  if (!v) {
-    console.error(`[config] 필수 환경변수 누락: ${name}`);
-    process.exit(1);
-  }
+  if (!v) throw new Error(`[config] 필수 환경변수 누락: ${name}`);
   return v;
 }
 
@@ -100,12 +106,16 @@ export const config = {
   // Claude Code 구독 OAuth 토큰. SDK가 process.env에서 자동으로 읽으므로
   // 여기선 존재 여부만 검증한다 (없으면 인증 실패로 모든 호출이 깨짐).
   // `claude setup-token` 으로 발급.
-  claudeOauthToken: required("CLAUDE_CODE_OAUTH_TOKEN"),
+  get claudeOauthToken(): string {
+    return required("CLAUDE_CODE_OAUTH_TOKEN");
+  },
 
   // 공개 /mcp 라우트 보호 토큰. namory 는 이제 같은 배포 안의 라이브러리라 에이전트는
   // in-process 로 붙는다(HTTP 아님) — 이 토큰은 외부 MCP 클라이언트(Claude 커스텀
   // 커넥터, mcp-remote)가 /mcp 를 호출할 때의 인증에만 쓴다.
-  namoryToken: required("NAMORY_TOKEN"),
+  get namoryToken(): string {
+    return required("NAMORY_TOKEN");
+  },
 
   // 모델 — 메인 응답·검토는 Opus 4.8(최고 품질), 사후 큐레이터만 경량 Haiku(아래).
   // 운영 튜닝 상수 — 바꾸려면 코드 수정(보안·환경 무관 값은 env로 빼지 않는다).
@@ -113,11 +123,11 @@ export const config = {
   // body.model 로 보내고, 서버는 selectableModels 화이트리스트로만 검증한다. config.model
   // 은 모델 미지정 경로(크론 보고·다이제스트·CLI)의 폴백이다.
   model: "claude-opus-4-8",
-  // 큐레이터(사후 저장 판단) — 매 턴이 끝난 뒤 백그라운드로 한 번 더 도는 "그물"이다.
-  // 작은 인스턴스(Railway hobby)에선 이 호출이 메인 응답·바로 이어지는 다음 턴과
-  // CPU/동시성을 다퉈 체감 지연을 키운다. 저장 여부 판단은 가벼운 작업이므로 경량
-  // Haiku 로 둬 자원 점유·생성 시간을 최소화한다(속도·응답성 우선). 품질이 필요한
-  // 핵심 저장은 메인 턴의 save 너지가 이미 받쳐주므로 손실이 거의 없다.
+  // 큐레이터(사후 저장 판단) — 매 턴이 끝난 뒤 한 번 더 도는 "그물"이다. 서버리스에서는
+  // 응답 후 인스턴스가 얼려지므로 응답 전에 마쳐야 하고(http/chat.ts), 그만큼 사용자가
+  // 체감하는 지연에 직접 더해진다. 저장 여부 판단은 가벼운 작업이므로 경량 Haiku 로 둬
+  // 그 추가 지연을 최소화한다. 품질이 필요한 핵심 저장은 메인 턴의 save 너지가 이미
+  // 받쳐주므로 손실이 거의 없다.
   curatorModel: "claude-haiku-4-5-20251001",
   reviewModel: process.env.NAVIS_REVIEW_MODEL ?? "claude-opus-4-8",
 
@@ -164,7 +174,7 @@ export const config = {
   // HTTP 포트 — 앱 API(/api/*) + 헬스체크(/health).
   port: Number(process.env.PORT) || 3000,
 
-  // navis 백엔드의 공개 URL(예: https://navis.up.railway.app). 커넥터 OAuth 의
+  // navis 백엔드의 공개 URL(예: https://navis.vercel.app). 커넥터 OAuth 의
   // redirect_uri 를 만들 때 쓴다 — 제공자(구글/노션 등)에 등록한 콜백과 정확히 일치해야 함.
   // 미설정이면 OAuth 시작이 에러(정적 키 커넥터는 영향 없음). 끝의 슬래시는 제거.
   publicUrl: (optional("NAVIS_PUBLIC_URL") ?? "").replace(/\/+$/, "") || undefined,
