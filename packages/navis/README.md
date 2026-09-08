@@ -38,7 +38,8 @@ src/
 │   └── types.ts         # InputImage, AskResult
 ├── http/                # 앱 API 라우터/핸들러 (chat, reports, conversations, settings, connectors, crons, memories)
 ├── reports/             # 선제 보고 기록(emit) + 인메모리 버퍼(store)
-├── cron/                # node-cron 스케줄러 + namory REST + cron MCP 도구
+├── cron/                # 크론 CRUD + cron MCP 도구
+├── scheduler/           # 틱 기반 스케줄러 (발동 판정 + 원자적 클레임 실행)
 ├── settings/            # update_system_prompt MCP 도구
 ├── connectors/          # 동적 MCP 커넥터 — DB(store)→SDK 주입(mcp), OAuth(oauth), 제공자 프리셋(providers), 타입(types)
 ├── google/              # 캘린더 OAuth + 스케줄러 + MCP 도구
@@ -150,7 +151,9 @@ curl -X PUT "$NAVIS/api/connectors/linear" \
 앱/데스크톱이 폴링해 보고 전용 방에 표시(네이티브 알림).
 
 ### 사용자 트리거 크론 (`cron/*`)
-앱 대화에서 "매일 ~ 해줘"라고 하면 모델이 `cron_create`로 등록. 실제 스케줄링은 navis(`node-cron`)가 하고, 영속화는 namory(`/crons` REST)가 한다. 발동 결과는 앱 보고로 기록(크론마다 방 1개).
+앱 대화에서 "매일 ~ 해줘"라고 하면 모델이 `cron_create`로 등록하고, 영속화는 namory 의 `crons` 테이블이 한다.
+
+실제 발동은 **틱 모델**이다 — 상주 프로세스가 없어 `node-cron` 을 쓸 수 없으므로, 외부 트리거(`.github/workflows/scheduler-tick.yml`, 5분 간격)가 `POST /api/scheduler/tick` 을 치고 `scheduler/tick.ts` 가 "직전 예정 발동시각 > 마지막 실행" 인 잡을 골라 DB 조건부 UPDATE 로 실행권을 클레임한 뒤 실행한다. 트리거가 몇 번 빠져도 다음 틱이 밀린 발동을 잡고, 중복 호출은 클레임에서 걸러진다. 발동 결과는 앱 보고로 기록(크론마다 방 1개).
 
 ### 주간 다이제스트 (`digest.ts`)
 기본 매주 월 09시 KST — 최근 7일 기억을 navis가 요약하고 자기이해 프로필을 `profile_update`로 갱신, 요약을 앱 보고로 기록. 이 경로에서만 `profile_update` 허용 (인젝션 방어).

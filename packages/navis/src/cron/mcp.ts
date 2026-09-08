@@ -4,9 +4,8 @@ import {
   type McpSdkServerConfigWithInstance,
 } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
-import cron from "node-cron";
 import { createCronRemote, deleteCronRemote, fetchCrons, patchCronRemote } from "./api.js";
-import { scheduleCron, unscheduleCron } from "./scheduler.js";
+import { isValidCron } from "../scheduler/due.js";
 
 const ok = (text: string) => ({ content: [{ type: "text" as const, text }] });
 const err = (text: string) => ({
@@ -45,14 +44,14 @@ export function buildCronTools(): McpSdkServerConfigWithInstance {
           timezone: z.string().optional().describe("타임존 (기본 Asia/Seoul)"),
         },
         async (args) => {
-          if (!cron.validate(args.schedule)) {
+          if (!isValidCron(args.schedule)) {
             return ok(`잘못된 cron 식입니다: ${args.schedule}`);
           }
           try {
             // timezone 미지정 시 Asia/Seoul 폴백 — 빈 값으로 저장되면 UTC 발동(9시간 어긋남).
             const tz = args.timezone ?? "Asia/Seoul";
             const row = await createCronRemote({ ...args, timezone: tz });
-            scheduleCron(row);
+            // 스케줄러 등록 절차가 따로 없다 — 틱이 매번 DB 를 읽으므로 다음 틱부터 발동한다.
             return ok(
               `등록 완료 — '${row.title}' (${row.schedule}, ${row.timezone}), id=${row.id}`,
             );
@@ -80,7 +79,6 @@ export function buildCronTools(): McpSdkServerConfigWithInstance {
         async (args) => {
           try {
             await deleteCronRemote(args.id);
-            unscheduleCron(args.id);
             return ok(`삭제 완료 — ${args.id}`);
           } catch (e) {
             return err(cronErr("삭제", e));
@@ -96,15 +94,8 @@ export function buildCronTools(): McpSdkServerConfigWithInstance {
         },
         async (args) => {
           try {
+            // enabled 플래그만 바꾸면 끝 — 틱이 enabledOnly 로 읽으므로 즉시 반영된다.
             await patchCronRemote(args.id, { enabled: args.enabled });
-            if (args.enabled) {
-              // 활성화 시 스케줄러에도 즉시 반영
-              const rows = await fetchCrons();
-              const row = rows.find((r) => r.id === args.id);
-              if (row) scheduleCron(row);
-            } else {
-              unscheduleCron(args.id);
-            }
             return ok(`${args.enabled ? "활성화" : "비활성화"} 완료 — ${args.id}`);
           } catch (e) {
             return err(cronErr("토글", e));

@@ -1,0 +1,58 @@
+# 스케줄러 심장박동 — navis 의 /api/scheduler/tick 을 주기적으로 호출한다.
+#
+# 왜 GitHub Actions 인가: Vercel 함수에는 상주 프로세스가 없어 node-cron 이 발화하지
+# 않고, Vercel Cron 은 Hobby 플랜에서 "하루 1회, ±59분 오차" 제한이 있어 30분 단위
+# 캘린더 확인이나 사용자 정의 크론을 걸 수 없다. Actions cron 은 무료이고 5분 단위를
+# 받아준다(다만 러너 부하에 따라 수분 지연될 수 있다 — 정시 발동은 보장되지 않는다).
+#
+# 밀린 발동은 유실되지 않는다: 틱은 "직전 예정 발동시각"을 계산해 마지막 실행과
+# 비교하므로, 트리거가 몇 번 빠져도 다음 틱이 그 발동을 한 번 잡아준다.
+# 중복 호출도 무해하다 — DB 조건부 UPDATE 로 실행권을 클레임하기 때문(scheduler/tick.ts).
+#
+# 필요한 secret:
+#   NAVIS_URL   — 배포된 navis 의 공개 URL (예: https://navis.vercel.app)
+#   NAVIS_TOKEN — navis 의 APP_API_TOKEN 과 같은 값
+name: scheduler tick
+
+on:
+  schedule:
+    # 5분마다. cron 해상도가 곧 스케줄 해상도다 — 더 촘촘히 원하면 간격을 줄인다.
+    - cron: "*/5 * * * *"
+  # 수동 발동(디버깅용) — Actions 탭에서 Run workflow.
+  workflow_dispatch:
+
+# 앞선 틱이 아직 도는 중이면 새 틱을 큐에 쌓지 않고 건너뛴다. 클레임이 중복 실행을
+# 막아주긴 하지만, 굳이 겹쳐 돌려 러너 시간을 쓸 이유가 없다.
+concurrency:
+  group: scheduler-tick
+  cancel-in-progress: false
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: POST /api/scheduler/tick
+        env:
+          NAVIS_URL: ${{ secrets.NAVIS_URL }}
+          NAVIS_TOKEN: ${{ secrets.NAVIS_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${NAVIS_URL:-}" ] || [ -z "${NAVIS_TOKEN:-}" ]; then
+            echo "::error::NAVIS_URL / NAVIS_TOKEN secret 이 설정되지 않았습니다."
+            exit 1
+          fi
+          # 틱은 잡을 실제로 실행하므로 응답이 수 분 걸릴 수 있다(예산 4분 + 여유).
+          # 응답 본문(ran/skipped/deferred/errors)을 로그에 남겨 진단 가능하게 한다.
+          code=$(curl -sS -X POST "${NAVIS_URL%/}/api/scheduler/tick" \
+            -H "Authorization: Bearer ${NAVIS_TOKEN}" \
+            -H "content-type: application/json" \
+            --max-time 330 \
+            -o tick.json -w '%{http_code}')
+          echo "HTTP $code"
+          cat tick.json || true
+          echo
+          if [ "$code" != "200" ]; then
+            echo "::error::틱 실패 (HTTP $code)"
+            exit 1
+          fi

@@ -1,31 +1,21 @@
 import { createServer } from "node:http";
 import { config } from "./config.js";
-import { startCronScheduler } from "./cron/scheduler.js";
-import { startDigestScheduler } from "./digest.js";
-import { startCalendarScheduler } from "./google/scheduler.js";
 import { route } from "./http/router.js";
 
-async function main(): Promise<void> {
-  // 선제적 알림 스케줄러 시작 (namory에서 잡 로드 → node-cron 등록).
-  // 모든 선제 보고는 /api/reports 로 기록돼 앱/데스크톱이 폴링해 받는다.
-  void startCronScheduler();
-
-  // 주간 기억 다이제스트 스케줄러 시작 (최근 기억 요약 → 프로필 자동 갱신 + 보고).
-  startDigestScheduler();
-
-  // 캘린더 스케줄러 시작 (다가오는 일정 알림 + 매일 23시 follow-up 정리).
-  // env 미설정이면 조용히 비활성.
-  startCalendarScheduler();
-
-  // 호스팅 uptime 체크 + 앱 API. 라우팅은 http/router.
+// 로컬 개발용 HTTP 서버. 배포 대상은 Vercel(Next.js Route Handlers)이며, 그쪽은
+// 같은 http/* 핸들러를 재사용한다 — 이 파일은 `node dist/index.js` 로 로컬에서
+// 전체 API 를 띄워보는 용도다.
+//
+// 스케줄러는 여기서 시작하지 않는다. 예전에는 부팅 시 node-cron 스케줄러 3개를
+// 등록했지만(사용자 크론·다이제스트·캘린더), 서버리스에는 타이머를 들고 있을 프로세스가
+// 없어 그 모델을 버렸다. 이제 외부 트리거가 POST /api/scheduler/tick 을 주기적으로
+// 치고, scheduler/tick.ts 가 발동 대상을 계산해 DB 클레임으로 중복 없이 실행한다.
+function main(): void {
   createServer((req, res) => route(req, res)).listen(config.port, "0.0.0.0", () => {
     console.log(
-      `[agent] http on :${config.port} (/health, /api/chat, /api/reports, /api/crons, /api/memories)`,
+      `[agent] http on :${config.port} (/health, /api/chat, /api/reports, /api/crons, /api/memories, /api/scheduler/tick)`,
     );
   });
 }
 
-main().catch((err) => {
-  console.error("[agent] startup failed:", err);
-  process.exit(1);
-});
+main();

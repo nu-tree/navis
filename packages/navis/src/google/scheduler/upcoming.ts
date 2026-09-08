@@ -29,7 +29,7 @@ export async function runUpcomingCheck(): Promise<void> {
     });
     const events = res.data.items ?? [];
     for (const e of events) {
-      if (!e.id || isNotified(e.id)) continue;
+      if (!e.id || (await isNotified(e.id))) continue;
       // 종일 일정은 start.date 만 있고 시간 정보 없음 → 임박 알림 대상에서 제외.
       if (!e.start?.dateTime) continue;
       try {
@@ -37,7 +37,8 @@ export async function runUpcomingCheck(): Promise<void> {
       } catch (err) {
         console.error("[calendar] 일정 알림 발송 실패:", e.id, err);
       }
-      markNotified(e.id); // 성공/실패 모두 mark — 실패해도 다음 cron에서 중복 알림 방지
+      // 성공/실패 모두 mark — 실패해도 다음 틱에서 중복 알림이 나가지 않게.
+      await markNotified(e.id);
     }
   } catch (err) {
     await reportCalendarError("다가오는 일정 확인", err);

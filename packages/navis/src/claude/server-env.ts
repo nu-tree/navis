@@ -1,5 +1,5 @@
 // 서버(앱 채팅·크론·다이제스트) 전체 도구셋 환경. 무거운 in-process MCP 서버
-// (cron→node-cron, google→googleapis)와 동적 커넥터 prefetch 를 한 곳에 모은다.
+// (google→googleapis)와 동적 커넥터 prefetch 를 한 곳에 모은다.
 // askClaude 에 env 로 주입된다 — 두뇌(query-options)는 이 파일을 모른다.
 //
 // in-process MCP 서버 빌더들은 상태가 변하지 않아 모듈 로드 시 한 번만 만든다(첫 토큰

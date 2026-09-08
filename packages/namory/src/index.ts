@@ -44,6 +44,9 @@ export { insertReport, listReports, type ReportRow } from "./tools/reports.js";
 // ── 크론 CRUD ───────────────────────────────────────────────────────────
 export { listCrons, createCron, deleteCron, updateCron } from "./tools/cron.js";
 
+// ── 스케줄 실행권 클레임 (틱 기반 스케줄러용) ───────────────────────────
+export { claimCronRun, claimSchedule, type ClaimedCron } from "./tools/schedule.js";
+
 // ── 스키마 / DB ─────────────────────────────────────────────────────────
 export { CATEGORIES, type Category } from "./db/schema.js";
 export { db } from "./db/client.js";

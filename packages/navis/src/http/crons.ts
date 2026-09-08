@@ -1,6 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { fetchCrons, deleteCronRemote } from "../cron/api.js";
-import { unscheduleCron } from "../cron/scheduler.js";
 import { sendJson, withAppAuth } from "./respond.js";
 
 // 앱이 크론 목록을 받아 크론마다 보고방을 미리 만든다(한눈에 보기). 프롬프트 등 민감
@@ -32,8 +31,7 @@ export async function handleDeleteCron(
       sendJson(res, 400, { error: "cron id required" });
       return;
     }
-    await deleteCronRemote(id); // namory DELETE /crons/:id
-    unscheduleCron(id); // 등록된 node-cron 잡 중단(있으면)
+    await deleteCronRemote(id);
     sendJson(res, 200, { ok: true, id });
   });
 }

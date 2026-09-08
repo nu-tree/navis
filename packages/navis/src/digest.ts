@@ -1,4 +1,3 @@
-import cron from "node-cron";
 import { config } from "./config.js";
 import { askClaude } from "./claude/ask.js";
 import { fullChatEnv } from "./claude/server-env.js";
@@ -48,18 +47,4 @@ export async function runDigest(): Promise<void> {
       "digest",
     );
   }
-}
-
-// 부팅 시 호출. digestSchedule(cron 식)에 맞춰 주기 실행을 등록한다.
-export function startDigestScheduler(): void {
-  if (!cron.validate(config.digestSchedule)) {
-    console.error(`[digest] 잘못된 cron 식, 스케줄러 미시작: ${config.digestSchedule}`);
-    return;
-  }
-  cron.schedule(config.digestSchedule, () => void runDigest(), {
-    timezone: config.digestTimezone,
-  });
-  console.log(
-    `[digest] 스케줄러 시작 (${config.digestSchedule} ${config.digestTimezone}, 최근 ${config.digestDays}일)`,
-  );
 }

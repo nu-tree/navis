@@ -14,6 +14,7 @@ import {
   handleDeleteConversation,
 } from "../conversations.js";
 import { handleGetSystemPrompt, handlePutSystemPrompt } from "../settings.js";
+import { handleSchedulerTick } from "../scheduler.js";
 import {
   handleGetConnectors,
   handlePutConnector,
@@ -90,6 +91,14 @@ export const routes: Route[] = [
     method: "DELETE",
     match: param("/api/crons/"),
     handler: (req, res, _url, m) => void handleDeleteCron(req, res, m.id!),
+  },
+
+  // /api/scheduler/tick — 외부 트리거가 치는 스케줄러 심장박동(node-cron 대체).
+  { method: "OPTIONS", match: exact("/api/scheduler/tick"), handler: preflight },
+  {
+    method: "POST",
+    match: exact("/api/scheduler/tick"),
+    handler: (req, res) => void handleSchedulerTick(req, res),
   },
 
   // /api/memories — 메서드 라우팅은 핸들러 내부에서. OPTIONS 만 따로 잡고 나머지 위임.
