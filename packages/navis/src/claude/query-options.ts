@@ -7,11 +7,11 @@ import {
 } from "./allowed-tools.js";
 import type { ChatEnv, ConnectorBundle } from "./chat-env.js";
 
-// ── 채팅 query 설정 빌더 (콜드 askClaude · 워밍 세션이 공유) ──────────────────────
-// in-process MCP 서버(cron/google/...)는 여기서 모르고, 호출부가 넘기는 env 로 주입된다
-// (server-env.ts). namory MCP 와 내장 도구만 이 파일의 공통 베이스.
-// mcpServers/allowedTools/systemPrompt 는 보안·동작에 직결되므로 한 곳에서 만들어
-// 두 경로(매 메시지 askClaude, 지속 워밍 세션 warm.ts)가 절대 어긋나지 않게 한다.
+// ── 채팅 query 설정 빌더 ─────────────────────────────────────────────────────
+// in-process MCP 서버(namory/cron/google/...)는 여기서 모르고, 호출부가 넘기는 env 로
+// 주입된다(server-env.ts). namory MCP 와 내장 도구만 이 파일의 공통 베이스.
+// mcpServers/allowedTools/systemPrompt 는 보안·동작에 직결되므로 여기 한 곳에서만
+// 만든다 — 채팅·크론·다이제스트가 각자 옵션을 조립하면 도구 권한이 조용히 갈라진다.
 
 // 시스템 프롬프트: 기본 + (프로젝트 컨텍스트) + 프로젝트 표기 가이던스.
 export function buildChatSystemPrompt(
@@ -58,11 +58,8 @@ export function buildChatAllowedTools(
   ];
 }
 
-// 콜드(askClaude) / 워밍(warm.ts createSession) 공유 query options 빌더.
-// SDK 옵션 객체를 양쪽이 거의 동일하게 구성하던 중복을 제거한다 — maxTurns 같은
-// 한 값만 바뀌어도 두 경로가 어긋나면 채팅 동작이 달라지는 위험(파일 상단 주석이
-// 명시적으로 막으려던 위험)을 단일 출처로 보장. model·thinking·effort 처럼 경로별로
-// 다른 옵션은 호출부에서 spread 로 덧붙인다.
+// query options 빌더. model·thinking·effort 처럼 호출 경로별로 다른 옵션은
+// 호출부에서 spread 로 덧붙인다.
 export function buildChatQueryOptions(
   env: ChatEnv,
   connectors: ConnectorBundle,

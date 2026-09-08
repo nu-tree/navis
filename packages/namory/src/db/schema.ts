@@ -97,3 +97,35 @@ export const conversations = pgTable("conversations", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });
+
+// 선제 보고(크론/다이제스트/캘린더) 로그. 앱이 폴링해 보고 전용 방에 표시한다.
+//
+// 예전에는 navis 프로세스의 인메모리 배열이었고 settings KV 한 칸에 JSON 블롭으로
+// 디바운스 저장했다. 서버리스에서는 둘 다 성립하지 않는다: 인스턴스마다 배열이
+// 따로라 크론이 쓴 보고가 앱 폴링을 받는 인스턴스에서 안 보이고, 디바운스 타이머는
+// 응답 직후 인스턴스가 얼려져 발화하지 않아 보고가 유실된다. 또 블롭 read-modify-write
+// 는 동시에 발동한 크론 둘이 서로를 덮어쓴다. 그래서 제대로 테이블로 만든다.
+//
+// sourceId/sourceTitle 로 "출처별 방"을 만든다. 크론은 크론마다 방 1개(sourceId=크론 id),
+// 다이제스트/캘린더는 각각 고정 방.
+export const reports = pgTable(
+  "reports",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    // logTag: "cron" | "calendar" | "digest" | ...
+    type: text("type").notNull(),
+    // 방 라우팅 키 (크론 id / "digest" / "calendar")
+    sourceId: text("source_id").notNull(),
+    // 방 제목 (DB 기반)
+    sourceTitle: text("source_title").notNull(),
+    text: text("text").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    // 앱 폴링은 항상 "since 이후, 시간순" — 이 인덱스 하나로 커버된다.
+    index("reports_created_at_idx").on(t.createdAt.desc()),
+    index("reports_source_id_idx").on(t.sourceId),
+  ],
+);

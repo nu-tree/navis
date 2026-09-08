@@ -14,7 +14,20 @@ function defaultMeta(logTag: string): ReportMeta {
 }
 
 // 보고 1건을 기록. meta 를 주면 그 출처(방)로, 없으면 logTag 기본 출처로.
-export function emitReport(text: string, logTag = "report", meta?: ReportMeta): void {
+//
+// async 다 — 반드시 await 할 것. 예전엔 동기 fire-and-forget 이었지만(인메모리 배열에
+// push 하면 끝이었으니까), 이제는 DB INSERT 라 서버리스에서 await 하지 않으면 응답 후
+// 인스턴스가 얼려져 쓰기가 완료되지 않는다.
+export async function emitReport(
+  text: string,
+  logTag = "report",
+  meta?: ReportMeta,
+): Promise<void> {
   const source = meta ?? defaultMeta(logTag);
-  recordReport({ type: logTag, text, sourceId: source.sourceId, sourceTitle: source.sourceTitle });
+  await recordReport({
+    type: logTag,
+    text,
+    sourceId: source.sourceId,
+    sourceTitle: source.sourceTitle,
+  });
 }

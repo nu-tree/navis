@@ -40,10 +40,10 @@ export async function runDigest(): Promise<void> {
       allowProfileUpdate: true,
     });
     // 보고로 기록 — 앱이 /api/reports 로 받아 보고방에 표시.
-    emitReport(`**주간 기억 다이제스트**\n\n${text}`, "digest");
+    await emitReport(`**주간 기억 다이제스트**\n\n${text}`, "digest");
   } catch (err) {
     console.error("[digest] 실행 실패:", err);
-    emitReport(
+    await emitReport(
       `[다이제스트] 실행 실패: ${err instanceof Error ? err.message : String(err)}`,
       "digest",
     );

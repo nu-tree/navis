@@ -4,14 +4,8 @@ import { startCronScheduler } from "./cron/scheduler.js";
 import { startDigestScheduler } from "./digest.js";
 import { startCalendarScheduler } from "./google/scheduler.js";
 import { route } from "./http/router.js";
-import { loadReports } from "./reports/store.js";
 
 async function main(): Promise<void> {
-  // 저장된 보고를 namory(DB)에서 먼저 복원 — 서버 재시작에도 보고 내용이 유지된다.
-  // listen 전에 await 해, 복원 완료 전 폴링이 빈 결과를 받는 부팅 레이스를 없앤다.
-  // (namory 불통이면 최대 10초 후 빈 채로 진행 — loadReports 내부 타임아웃.)
-  await loadReports();
-
   // 선제적 알림 스케줄러 시작 (namory에서 잡 로드 → node-cron 등록).
   // 모든 선제 보고는 /api/reports 로 기록돼 앱/데스크톱이 폴링해 받는다.
   void startCronScheduler();

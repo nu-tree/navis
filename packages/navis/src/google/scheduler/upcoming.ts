@@ -40,7 +40,7 @@ export async function runUpcomingCheck(): Promise<void> {
       markNotified(e.id); // 성공/실패 모두 mark — 실패해도 다음 cron에서 중복 알림 방지
     }
   } catch (err) {
-    reportCalendarError("다가오는 일정 확인", err);
+    await reportCalendarError("다가오는 일정 확인", err);
   }
 }
 
@@ -65,7 +65,7 @@ async function notifyUpcoming(e: {
     verdict,
   ];
   if (e.htmlLink) lines.push("", e.htmlLink);
-  emitReport(lines.join("\n"), "calendar");
+  await emitReport(lines.join("\n"), "calendar");
 }
 
 // 다가오는 일정 1건에 대해 sub-agent 가 namory 컨텍스트 보고 짧게 평가.

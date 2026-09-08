@@ -38,6 +38,9 @@ export {
   softDeleteConversation,
 } from "./tools/conversations.js";
 
+// ── 선제 보고 로그 ─────────────────────────────────────────────────────
+export { insertReport, listReports, type ReportRow } from "./tools/reports.js";
+
 // ── 크론 CRUD ───────────────────────────────────────────────────────────
 export { listCrons, createCron, deleteCron, updateCron } from "./tools/cron.js";
 

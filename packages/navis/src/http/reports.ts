@@ -18,10 +18,10 @@ export async function handleReports(
     req,
     res,
     "[reports] 조회 실패:",
-    () => {
+    async () => {
       const url = new URL(req.url ?? "/api/reports", "http://localhost");
       const since = url.searchParams.get("since") ?? undefined;
-      sendJson(res, 200, { reports: getReports(since) });
+      sendJson(res, 200, { reports: await getReports(since) });
     },
     sendInternalError,
   );
@@ -53,7 +53,7 @@ export async function handlePostReport(
         typeof body.sourceId === "string" && body.sourceId ? body.sourceId : "claude-code";
       const sourceTitle =
         typeof body.title === "string" && body.title ? body.title : "🤖 작업 보고";
-      recordReport({ type: "claude-code", text, sourceId, sourceTitle });
+      await recordReport({ type: "claude-code", text, sourceId, sourceTitle });
       sendJson(res, 200, { ok: true });
     },
     sendInternalError,

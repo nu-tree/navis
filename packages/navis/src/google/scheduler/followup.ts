@@ -34,10 +34,10 @@ export async function runDailyFollowup(): Promise<void> {
     }
     const summary = await runFollowupAgent(events);
     if (summary) {
-      emitReport(`**오늘 일정 follow-up**\n\n${summary}`, "calendar");
+      await emitReport(`**오늘 일정 follow-up**\n\n${summary}`, "calendar");
     }
   } catch (err) {
-    reportCalendarError("일정 follow-up", err);
+    await reportCalendarError("일정 follow-up", err);
   }
 }
 

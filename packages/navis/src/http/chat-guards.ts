@@ -11,7 +11,7 @@ const ABANDON_GRACE_MS = 15_000;
 // 한 챗 턴의 wall-clock 상한. 백그라운드 완주 턴은 연결 종료로 끊지 않으므로(위), 어떤
 // 이유로든(모델 API 스톨 등) result 가 영영 안 오는 생성이 inflight 슬롯을 무한히
 // 점유하지 않도록 모든 챗 스트림 턴에 두는 안전 backstop. 정상 답변은 도구 루프를
-// 포함해도 여기 닿지 않게 넉넉히 잡는다(워밍 경로의 TURN_TIMEOUT_MS 와 동일 5분).
+// 포함해도 여기 닿지 않게 넉넉히 잡는다(5분).
 const MAX_TURN_MS = 5 * 60_000;
 
 // 스트림 가드 상태 — req 'close' 콜백이 mutate 하는 clientGone 을 본문으로 노출.

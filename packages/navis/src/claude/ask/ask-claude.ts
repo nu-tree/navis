@@ -1,7 +1,7 @@
 // ── askClaude 오케스트레이션 ──────────────────────────────────────────────────
 // 역할: 콜드 경로 한 턴의 조립부. 프롬프트 입력 조립(prompt-input) → prefetch →
 // 시스템프롬프트/쿼리옵션 빌드 → query() for-await 실행(메시지 처리는
-// message-processing 으로 위임) → 타이밍 로그/결과 반환. 워밍 경로(warm.ts)는
+// message-processing 으로 위임) → 타이밍 로그/결과 반환. (예전의 워밍 경로는
 // 동일한 빌더/처리기를 공유하되 세션을 유지한다.
 
 import { query } from "@anthropic-ai/claude-agent-sdk";
@@ -59,7 +59,7 @@ export async function askClaude(opts: AskClaudeOptions): Promise<AskResult> {
   const [connectors, baseSystemPrompt, guidance] = await env.prefetch();
   const prefetchMs = Date.now() - tPrefetch;
 
-  // 시스템 프롬프트 + MCP/도구 — 콜드/워밍 공유 빌더로 동일 설정 보장.
+  // 시스템 프롬프트 + MCP/도구 — 공유 빌더(query-options)로 단일 출처 보장.
   const systemPromptFinal = buildChatSystemPrompt(
     baseSystemPrompt,
     guidance,
@@ -89,7 +89,7 @@ export async function askClaude(opts: AskClaudeOptions): Promise<AskResult> {
           ? { thinking: { type: "adaptive" as const }, effort: "medium" as const }
           : {}),
         // 공통 옵션(systemPrompt/mcpServers/allowedTools/settingSources/maxTurns/
-        // includePartialMessages/abortController/resume)은 콜드/워밍 공유 빌더로 통일.
+        // includePartialMessages/abortController/resume)은 공유 빌더로 통일.
         ...buildChatQueryOptions(env, connectors, systemPromptFinal, {
           resume: resumeSessionId,
           abortController,
@@ -99,7 +99,7 @@ export async function askClaude(opts: AskClaudeOptions): Promise<AskResult> {
         }),
       },
     })) {
-      // 메시지 처리(델타·도구·result)는 콜드/워밍 공유 처리기로.
+      // 메시지 처리(델타·도구·result)는 message-processing 으로.
       processChatMessage(message, acc, cb);
     }
   } catch (err) {

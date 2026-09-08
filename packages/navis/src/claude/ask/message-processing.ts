@@ -1,6 +1,6 @@
 // ── 턴 메시지 처리 ────────────────────────────────────────────────────────────
-// 역할: 한 턴(콜드/워밍 공통)의 누적 상태 타입과, SDK 메시지를 한 개씩 받아
-// accumulator 를 갱신하고 콜백을 호출하는 처리기. ask.ts 메인 턴과 warm.ts 워밍
+// 역할: 한 턴의 누적 상태 타입과, SDK 메시지를 한 개씩 받아
+// accumulator 를 갱신하고 콜백을 호출하는 처리기. ask.ts 메인 턴과 크론/다이제스트
 // 세션이 동일한 처리 로직을 공유하도록 한 곳에 모은다.
 
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
@@ -18,7 +18,7 @@ export class ResultFailureError extends Error {
   }
 }
 
-// 한 턴의 누적 상태. 콜드/워밍 공통.
+// 한 턴의 누적 상태.
 export interface TurnAccumulator {
   text: string;
   sessionId: string;

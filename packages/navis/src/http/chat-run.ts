@@ -1,16 +1,23 @@
-// 역할: 한 챗 스트림 턴의 실행 엔진 — 워밍/콜드 경로 선택.
-// 워밍 가능하면 warm 시도, WarmFallback(스트리밍 시작 전 신호)이면 콜드로 같은 턴을
-// 재실행한다. 호출부(handleChatStream)는 워밍/콜드 분기를 모르게 한다.
-// 순수 추출 — 동작/시그니처는 chat.ts 원본과 동일.
+// 역할: 한 챗 스트림 턴의 실행 엔진.
+//
+// 예전에는 여기서 "워밍/콜드" 두 경로를 골랐다. 워밍 세션은 대화별로 query() 세션을
+// streaming-input 모드로 살려둬 CLI 스폰+MCP 핸드셰이크(첫 토큰 ~1.6s 바닥)를 아끼는
+// 최적화였는데, 그건 프로세스가 요청 사이에도 계속 살아 있어야 성립한다.
+// 서버리스에는 그 전제가 없다 — 응답을 보내면 인스턴스가 얼려지고, 다음 요청은 다른
+// 인스턴스로 갈 수 있어 세션 Map 이 비어 있다. 그래서 워밍 계층은 통째로 걷어냈다
+// (원래도 NAVIS_WARM_SESSIONS=1 일 때만 켜지는 기본 비활성 경로였고, 실패 시 폴백
+//  대상이 바로 이 콜드 경로였다).
+//
+// 콜드스타트 비용을 되찾는 건 다른 층에서 해야 한다: namory 가 in-process MCP 로
+// 바뀌어 MCP 핸드셰이크 왕복이 이미 사라졌고, 대화 맥락은 resume 대신 namory 에
+// 저장된 이력을 매 턴 재생해 잇는다.
 
-import { config } from "../config.js";
 import { askClaude } from "../claude/ask.js";
 import { fullChatEnv } from "../claude/server-env.js";
-import { warmEnabled, runWarmTurn, WarmFallback, dropWarmSession } from "../claude/warm.js";
 import type { AskResult } from "../claude/types.js";
 import type { ChatRequest } from "./chat-request.js";
 
-// 스트리밍 콜백 묶음. 워밍/콜드 경로 양쪽에서 동일하게 쓴다(thinking 은 콜드 전용).
+// 스트리밍 콜백 묶음.
 export type StreamCallbacks = {
   onTextDelta: (delta: string) => void;
   onStatus: (toolName: string) => void;
@@ -18,58 +25,21 @@ export type StreamCallbacks = {
   onThinkingDelta?: (delta: string) => void;
 };
 
-// 워밍/콜드 선택 — 워밍 가능하면 warm 시도, WarmFallback(스트리밍 시작 전 신호)이면
-// 콜드로 같은 턴 재실행. 콜드 폴백은 사용자가 멈추지 않은 경우에만(abort 후엔 던진다).
-// 워밍 경로는 중지(/api/chat/cancel → abort)에 대응해 워밍 세션을 폐기한다.
-// 호출부(handleChatStream) 는 워밍/콜드 분기 자체를 모르게 한다.
 export async function runChatTurn(
   parsed: ChatRequest,
   callbacks: StreamCallbacks,
   abortController: AbortController,
 ): Promise<AskResult> {
-  const askCold = (): Promise<AskResult> =>
-    askClaude({
-      prompt: parsed.text,
-      env: fullChatEnv,
-      resumeSessionId: parsed.resume,
-      images: parsed.images,
-      onTextDelta: callbacks.onTextDelta,
-      onStatus: callbacks.onStatus,
-      onToolComplete: callbacks.onToolComplete,
-      modelOverride: parsed.model,
-      onThinkingDelta: callbacks.onThinkingDelta,
-      abortController,
-    });
-
-  // 워밍 경로 조건: 켜짐 + 대화 id 있음 + 이미지/확장사고 아님(이 둘은 턴마다 세션
-  // 옵션이 달라 콜드로 처리). 워밍이 폴백을 던지면(스트리밍 시작 전) 콜드로 재시도.
-  const canWarm =
-    warmEnabled() && !!parsed.conversationId && parsed.images.length === 0 && !parsed.thinking;
-  if (!canWarm) return askCold();
-
-  const convId = parsed.conversationId as string;
-  // 중지(/api/chat/cancel → abort) 시 워밍 세션을 폐기해 SDK 생성을 끊는다.
-  const onAbort = () => dropWarmSession(convId);
-  abortController.signal.addEventListener("abort", onAbort);
-  try {
-    return await runWarmTurn({
-      conversationId: convId,
-      prompt: parsed.text,
-      model: parsed.model ?? config.model,
-      resume: parsed.resume,
-      callbacks: {
-        onTextDelta: callbacks.onTextDelta,
-        onStatus: callbacks.onStatus,
-        onToolComplete: callbacks.onToolComplete,
-      },
-    });
-  } catch (err) {
-    // 스트리밍 시작 전 폴백 신호이고 사용자가 멈춘 게 아니면 콜드로 같은 턴 재실행.
-    if (err instanceof WarmFallback && !abortController.signal.aborted) {
-      return askCold();
-    }
-    throw err;
-  } finally {
-    abortController.signal.removeEventListener("abort", onAbort);
-  }
+  return askClaude({
+    prompt: parsed.text,
+    env: fullChatEnv,
+    resumeSessionId: parsed.resume,
+    images: parsed.images,
+    onTextDelta: callbacks.onTextDelta,
+    onStatus: callbacks.onStatus,
+    onToolComplete: callbacks.onToolComplete,
+    modelOverride: parsed.model,
+    onThinkingDelta: callbacks.onThinkingDelta,
+    abortController,
+  });
 }

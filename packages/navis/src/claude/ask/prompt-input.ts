@@ -1,16 +1,12 @@
 // ── 프롬프트 입력 조립 ────────────────────────────────────────────────────────
 // 역할: askClaude 가 SDK query() 에 넘길 prompt 입력을 만든다. 너지 키워드 →
 // history 합성 → 이미지가 있으면 user content block 배열로 감싼 async iterable.
-// askClaude 안에 인라인으로 흩어져 있던 조립 단계를 한 곳에 모아 가독성을 높이고,
-// 워밍 경로가 이 단계를 우회한다는 사실도 한눈에 보이게 한다.
+// askClaude 안에 인라인으로 흩어져 있던 조립 단계를 한 곳에 모았다.
 
 import type { SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import { applySaveNudge } from "../nudge.js";
 import type { InputImage } from "../types.js";
 
-// askClaude 의 프롬프트 조립을 한 곳에 모은다: 너지 키워드 → history 합성 → 이미지가
-// 있으면 user content block 배열로 감싼 async iterable. 옛 askClaude 안에서 인라인으로
-// 흩어져 있어 가독성이 낮았고, 워밍 경로가 이 단계를 우회한다는 사실도 한눈에 안 보였다.
 // 반환은 SDK 가 받는 string 또는 AsyncIterable<SDKUserMessage> 둘 중 하나.
 export function buildPromptInput(opts: {
   prompt: string;

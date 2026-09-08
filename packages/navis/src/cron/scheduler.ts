@@ -60,7 +60,7 @@ async function runCron(c: CronRow): Promise<void> {
   const meta = { sourceId: c.id, sourceTitle: `⏰ ${c.title}` };
   try {
     const { text } = await askClaude({ prompt: c.prompt, env: fullChatEnv });
-    emitReport(text, "cron", meta);
+    await emitReport(text, "cron", meta);
     // 성공한 실행 시각을 기록 (lastRunAt 업데이트). 실패해도 흐름은 유지.
     // namoryFetch 네트워크 거부 시 unhandled rejection 으로 새지 않게 catch.
     void patchCronRemote(c.id, { lastRunAt: new Date().toISOString() }).catch(
@@ -69,7 +69,7 @@ async function runCron(c: CronRow): Promise<void> {
   } catch (err) {
     console.error(`[cron] '${c.title}' 실행 실패:`, err);
     // 사용자가 실패를 인지할 수 있도록 보고방에도 알림.
-    emitReport(
+    await emitReport(
       `⚠️ 크론 '${c.title}' 실행에 실패했어요. Railway 로그를 확인해주세요.`,
       "cron",
       meta,

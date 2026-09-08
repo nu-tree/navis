@@ -36,6 +36,13 @@
       "when": 1780647573893,
       "tag": "0004_talented_yellow_claw",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1788853086809,
+      "tag": "0005_dusty_butterfly",
+      "breakpoints": true
     }
   ]
 }
