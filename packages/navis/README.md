@@ -158,9 +158,9 @@ curl -X PUT "$NAVIS/api/connectors/linear" \
 ## 배포 (Railway)
 
 - `Dockerfile` + `railway.json` 제공
-- HTTP 서버: 앱 API(/api/*) + `/health` + 데스크톱 배포(/download, /api/desktop/*)
+- HTTP 서버: 앱 API(/api/*) + `/health`
 - 필수 env: `CLAUDE_CODE_OAUTH_TOKEN`, `NAMORY_MCP_URL`, `NAMORY_TOKEN`, `APP_API_TOKEN`
-- 선택 env: `SYSTEM_PROMPT`(폴백 — DB 비었을 때), `GOOGLE_*`(캘린더), `DESKTOP_DIR`
+- 선택 env: `SYSTEM_PROMPT`(폴백 — DB 비었을 때), `GOOGLE_*`(캘린더)
 
 ## 글로벌 설치 (Homebrew)
 

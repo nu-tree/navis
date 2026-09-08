@@ -1,7 +1,6 @@
 // 메시지 전송 훅(use-send-message)의 공유 타입 정의.
 // SendVars: mutation 입력 변수. 분리된 러너 모듈들이 함께 참조한다.
 import { type Attachment } from "../../api/navis";
-import { type NamoryMcp } from "../../lib/local-agent";
 
 export type SendVars = {
   text: string;
@@ -13,8 +12,6 @@ export type SendVars = {
   resume?: string;
   // 코드 세션의 작업 폴더(세션별) — 로컬 에이전트가 이 폴더에서 돈다.
   workdir?: string;
-  // 코드 세션 기억 연결 — namory MCP 좌표(있으면 recall/save 도구 연결).
-  namory?: NamoryMcp | null;
 };
 
 // 스트림 단계에서 말풍선 생성·typing 상태·텍스트 누적을 다루는 공유 컨텍스트.

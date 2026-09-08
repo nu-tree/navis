@@ -8,4 +8,3 @@ export { ConversationList, type ConversationListProps } from './conversation-lis
 export { ChatDrawer, type ChatDrawerProps } from './chat-drawer';
 export { ReactionPicker, type ReactionPickerProps } from './reaction-picker';
 export { MessageReactions, type MessageReactionsProps } from './message-reactions';
-export { UpdateBanner } from './update-banner';

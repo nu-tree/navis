@@ -162,12 +162,7 @@ export const config = {
   // ntfy 푸시 대상(모바일 알림). NTFY_TOPIC 설정 시 모든 선제 보고를 폰 ntfy 앱으로 푸시.
   ntfy: optionalNtfy(),
 
-  // 데스크톱 설치파일(.dmg/.exe + latest*.yml)을 보관/서빙할 디렉터리.
-  // Railway 볼륨을 마운트한 경로를 넣는다(예: /data/desktop). 재배포에도 유지되려면
-  // 반드시 볼륨이어야 한다. 미설정이면 인스턴스 임시 디스크(.desktop-dist) — 재배포 시 사라짐.
-  desktopDir: optional("DESKTOP_DIR") ?? ".desktop-dist",
-
-  // HTTP 포트 — 앱 API(/api/*) + 헬스체크(/health) + 데스크톱 배포.
+  // HTTP 포트 — 앱 API(/api/*) + 헬스체크(/health).
   port: Number(process.env.PORT) || 3000,
 
   // navis 백엔드의 공개 URL(예: https://navis.up.railway.app). 커넥터 OAuth 의

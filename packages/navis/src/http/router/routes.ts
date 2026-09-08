@@ -3,20 +3,11 @@
 // 첫 매치를 실행. 메서드 미스매치는 다음 라우트로 넘어가, 끝까지 미스면 404 폴백.
 // 등록 순서·매칭 우선순위가 동작에 의미가 있으므로 순서를 그대로 보존한다.
 
-import {
-  handleDesktopUpload,
-  handleDesktopList,
-  handleDesktopLatest,
-  handleDesktopFile,
-  handleDesktopPrune,
-  handleDownloadPage,
-} from "../../desktop/serve.js";
 import { handlePreflight } from "../respond.js";
 import { handleChat, handleChatStream, handleChatCancel, handleChatHandoff } from "../chat.js";
 import { handleReports, handlePostReport } from "../reports.js";
 import { handleCrons, handleDeleteCron } from "../crons.js";
 import { handleMemories } from "../memories.js";
-import { handleAgentNamory } from "../agent.js";
 import {
   handleGetConversations,
   handlePutConversation,
@@ -109,14 +100,6 @@ export const routes: Route[] = [
     handler: (req, res) => void handleMemories(req, res),
   },
 
-  // /api/agent/namory — 데스크톱이 namory MCP 좌표를 받음.
-  { method: "OPTIONS", match: prefix("/api/agent/namory"), handler: preflight },
-  {
-    method: "GET",
-    match: prefix("/api/agent/namory"),
-    handler: (req, res) => handleAgentNamory(req, res),
-  },
-
   // /api/settings/system-prompt — 시스템 프롬프트 조회/저장.
   { method: "OPTIONS", match: prefix("/api/settings/system-prompt"), handler: preflight },
   {
@@ -179,41 +162,5 @@ export const routes: Route[] = [
     method: "DELETE",
     match: param("/api/conversations/"),
     handler: (req, res, _url, m) => void handleDeleteConversation(req, res, m.id!),
-  },
-
-  // /download — 데스크톱 배포 페이지. 메서드 무관(기존 동작 보존).
-  { method: "*", match: exact("/download"), handler: (_req, res) => handleDownloadPage(res) },
-
-  // /api/desktop — 데스크톱 배포 API. 데스크톱 렌더러가 authorization 헤더로 호출 → 프리플라이트 필요.
-  { method: "OPTIONS", match: prefix("/api/desktop/"), handler: preflight },
-  {
-    method: "PUT",
-    match: exact("/api/desktop/upload"),
-    handler: (req, res, url) => void handleDesktopUpload(req, res, url),
-  },
-  {
-    method: "POST",
-    match: exact("/api/desktop/upload"),
-    handler: (req, res, url) => void handleDesktopUpload(req, res, url),
-  },
-  {
-    method: "GET",
-    match: exact("/api/desktop/list"),
-    handler: (req, res, url) => void handleDesktopList(req, res, url),
-  },
-  {
-    method: "GET",
-    match: exact("/api/desktop/latest"),
-    handler: (req, res, url) => void handleDesktopLatest(req, res, url),
-  },
-  {
-    method: "POST",
-    match: exact("/api/desktop/prune"),
-    handler: (req, res, url) => void handleDesktopPrune(req, res, url),
-  },
-  {
-    method: "GET",
-    match: prefix("/api/desktop/file/"),
-    handler: (req, res, url) => void handleDesktopFile(req, res, url),
   },
 ];

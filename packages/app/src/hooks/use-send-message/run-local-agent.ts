@@ -19,7 +19,7 @@ export async function runLocalAgent(
   ctx: StreamContext,
   isCode: boolean,
 ): Promise<LocalRunResult> {
-  const { text, conversationId, attachments, resume, workdir, namory } = vars;
+  const { text, conversationId, attachments, resume, workdir } = vars;
   const { assistantId, ensureBubble, isStarted, setStatus } = ctx;
   const {
     addMessage,
@@ -32,7 +32,6 @@ export async function runLocalAgent(
   const res = await localAgent!.run(text, {
     resume,
     workdir,
-    namory: namory ?? undefined,
     // 첨부 이미지를 data URL 로 전달 — 없으면 텍스트만. 로컬 에이전트(SDK)가 비전
     // 입력으로 처리. uri 는 표시용(blob:/file:)이라 신뢰 불가 → 서버 경로(toDataUrls)와
     // 동일하게 mimeType+base64 로 구성한다.

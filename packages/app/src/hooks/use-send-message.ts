@@ -1,6 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
 import { sendMessageStream, type Attachment } from "../api/navis";
-import { fetchNamoryMcp } from "../api/agent";
 import { useChatStore } from "../store/chat-store";
 import { useUiStore } from "../store/ui-store";
 import { localAgent, hasLocalAgent } from "../lib/local-agent";
@@ -139,9 +138,8 @@ export function useSendMessage() {
     },
   });
 
-  // 현재 활성 대화방으로 전송. 코드 세션(kind==='code')만 데스크톱 로컬 에이전트로
-  // 실행(내 맥 폴더 — 세션별 작업 폴더 + 세션 이어가기 + 프로젝트 기억 연결). 일반
-  // 채팅은 항상 서버 navis 로 보낸다(별도 '로컬 모드' 토글 없음).
+  // 현재 활성 대화방으로 전송. 코드 세션(kind==='code')은 로컬 에이전트 브리지가
+  // 있을 때만 로컬 실행(세션별 작업 폴더 + 세션 이어가기). 그 외엔 항상 서버 navis.
   const send = (text: string, attachments?: Attachment[]) => {
     const { activeId, conversations } = useChatStore.getState();
     const active = conversations.find((c) => c.id === activeId);
@@ -149,23 +147,14 @@ export function useSendMessage() {
     const local = hasLocalAgent && isCode;
     const resume = isCode ? active?.sessionId : undefined;
     const workdir = isCode ? active?.workdir : undefined;
-    const conversationId = activeId;
-    if (isCode) {
-      // 코드 세션: namory 좌표를 먼저 받아 기억을 물린 뒤 전송(실패해도 순정으로 진행).
-      void fetchNamoryMcp().then((namory) =>
-        mutation.mutate({
-          text,
-          conversationId,
-          attachments,
-          local,
-          resume,
-          workdir,
-          namory,
-        }),
-      );
-      return;
-    }
-    mutation.mutate({ text, conversationId, attachments, local, resume });
+    mutation.mutate({
+      text,
+      conversationId: activeId,
+      attachments,
+      local,
+      resume,
+      ...(isCode ? { workdir } : {}),
+    });
   };
 
   return { send };

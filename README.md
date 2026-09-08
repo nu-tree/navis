@@ -5,9 +5,8 @@
 | 패키지 | 한 줄 요약 | 자세히 |
 | --- | --- | --- |
 | [`namory`](./packages/namory) | 기억 저장소 — Fastify + MCP 서버. Supabase Postgres + pgvector, Voyage 임베딩 | [README](./packages/namory/README.md) |
-| [`navis`](./packages/navis) | 에이전트 — 앱 백엔드(HTTP 서버) + 터미널 CLI. Claude Agent SDK + namory MCP | [README](./packages/navis/README.md) |
+| [`navis`](./packages/navis) | 에이전트 — 앱 백엔드(HTTP 서버). Claude Agent SDK + namory MCP | [README](./packages/navis/README.md) |
 | [`app`](./packages/app) | 모바일/웹 앱 (Expo, React Native). navis 와 대화하는 UI | — |
-| [`desktop`](./packages/desktop) | 데스크톱 앱 (Electron). app 의 웹 빌드를 셸로 감쌈 | — |
 
 ## 역할 분담
 
@@ -15,7 +14,7 @@
 - **navis** = 두뇌(에이전트). 사용자와 대화하고 namory에 저장·조회. 자동화(크론·다이제스트)도 여기서.
 
 ```
-[앱(navis-app) / 터미널 CLI]
+[앱(navis-app)]
         ↓
      [navis] ─── Claude Agent SDK (OAuth)
         ↓ MCP
