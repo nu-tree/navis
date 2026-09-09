@@ -145,9 +145,14 @@
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
 
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-geist-sans);
+  /* Geist 는 subsets:["latin"] 이라 한글 글리프가 없다. 폰트 대체는 글자 단위로
+     일어나므로 라틴은 Geist, 한글은 뒤의 시스템 폰트가 받는다. 이 체인이 없으면
+     한글이 브라우저 기본 산세리프로 떨어져 라틴과 인상이 어긋난다.
+     (Pretendard 를 웹폰트로 올리면 한글까지 한 벌로 맞출 수 있다 — 눈으로 보고 결정.) */
+  --font-sans: var(--font-geist-sans), "Pretendard Variable", Pretendard,
+    "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), "SFMono-Regular", Menlo, Consolas, monospace;
+  --font-heading: var(--font-sans);
 
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
