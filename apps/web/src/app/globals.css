@@ -1,26 +1,191 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ── 디자인 토큰 ──────────────────────────────────────────────────────────────
+   구조는 shadcn 규약을 그대로 따른다(`:root` = 라이트, `.dark` = 다크). 값만 navis
+   팔레트로 바꿨다 — 딥 스페이스 네이비 + 인디고. 규약을 지키면 앞으로 추가하는
+   shadcn 컴포넌트가 손대지 않고 그대로 맞는다.
+
+   토큰은 채널 문자열("13 14 26")이 아니라 일반 CSS 색상이다. 옛 앱은 `rgb(var(--x) /
+   <alpha>)` 트릭을 썼는데, 그건 Tailwind v3 에서 `bg-primary/50` 같은 알파 조절을
+   하려면 채널을 쪼개야 했기 때문이다. v4 는 어떤 색 형식에든 color-mix() 로 알파를
+   적용하므로 그 우회가 필요 없다.
+
+   다크가 기본 경험이다 — layout.tsx 의 <html> 에 `dark` 클래스가 박혀 있다.
+   ────────────────────────────────────────────────────────────────────────── */
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --radius: 0.75rem;
+
+  --background: #f7f7fb;
+  --foreground: #1a1a22;
+  /* navis 고유 토큰 — 배경보다 한 단 올린 면(사이드바·입력창·떠 있는 요소). */
+  --surface: #ffffff;
+
+  --card: #ffffff;
+  --card-foreground: #1a1a22;
+  --popover: #ffffff;
+  --popover-foreground: #1a1a22;
+
+  --primary: #6366f1;
+  --primary-foreground: #ffffff;
+  --secondary: #ececf2;
+  --secondary-foreground: #2a2a33;
+  --muted: #eeeef3;
+  --muted-foreground: #6b6b7b;
+  --accent: #8b5cf6;
+  --accent-foreground: #ffffff;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+
+  --border: #e2e2ea;
+  --input: #eeeef3;
+  --ring: #6366f1;
+
+  --sidebar: #ffffff;
+  --sidebar-foreground: #1a1a22;
+  --sidebar-primary: #6366f1;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #ececf2;
+  --sidebar-accent-foreground: #2a2a33;
+  --sidebar-border: #e2e2ea;
+  --sidebar-ring: #6366f1;
+
+  --chart-1: #6366f1;
+  --chart-2: #8b5cf6;
+  --chart-3: #22d3ee;
+  --chart-4: #f59e0b;
+  --chart-5: #f43f5e;
 }
 
+.dark {
+  /* 순검정(#000) 대신 딥 스페이스 네이비로 살짝 띄웠다 — 장시간 보기 편하게. */
+  --background: #0d0e1a;
+  --foreground: #fafafa;
+  --surface: #161827;
+
+  --card: #181a28;
+  --card-foreground: #fafafa;
+  --popover: #181a28;
+  --popover-foreground: #fafafa;
+
+  --primary: #6366f1;
+  --primary-foreground: #ffffff;
+  --secondary: #262a3b;
+  --secondary-foreground: #e5e5ea;
+  --muted: #1e2030;
+  --muted-foreground: #9b9cb2;
+  --accent: #8b5cf6;
+  --accent-foreground: #ffffff;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+
+  --border: #2a2c3c;
+  --input: #1e2030;
+  --ring: #6366f1;
+
+  --sidebar: #161827;
+  --sidebar-foreground: #fafafa;
+  --sidebar-primary: #6366f1;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #262a3b;
+  --sidebar-accent-foreground: #e5e5ea;
+  --sidebar-border: #2a2c3c;
+  --sidebar-ring: #6366f1;
+
+  --chart-1: #818cf8;
+  --chart-2: #a78bfa;
+  --chart-3: #67e8f9;
+  --chart-4: #fbbf24;
+  --chart-5: #fb7185;
+}
+
+/* Tailwind v4 는 CSS 우선 설정이다 — tailwind.config.js 가 아니라 여기서 토큰을
+   유틸리티로 노출한다. `inline` 이라 var() 가 그대로 남아 .dark 교체가 런타임에 먹는다. */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-geist-sans);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  /* 옛 앱의 곡률을 유지한다(xl 14px, 2xl 20px) — 버블·입력창의 인상을 만드는 값. */
+  --radius-xl: 14px;
+  --radius-2xl: 20px;
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
   }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  html {
+    @apply font-sans;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  /* 스크롤바를 배경에 녹인다 — 채팅은 스크롤이 상시 보이는 화면이다. */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border: 3px solid transparent;
+    border-radius: 9999px;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in oklab, var(--muted-foreground) 50%, transparent);
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
 }

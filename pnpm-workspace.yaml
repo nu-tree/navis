@@ -8,3 +8,9 @@ packages:
 allowBuilds:
   esbuild: true
   unrs-resolver: true
+
+# pnpm 은 갓 배포된 버전을 기본적으로 보류한다(공급망 공격 완화 — 악성 버전은 보통
+# 배포 직후 짧게 살아있다). 아래는 그 유예를 면제한 항목이다. 새 줄을 추가할 때는
+# 정말 지금 필요한 버전인지 한 번 보고 넣을 것.
+minimumReleaseAgeExclude:
+  - lucide-react@1.43.0
