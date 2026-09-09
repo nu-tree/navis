@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { cn } from "cn";
 
 // 응답 대기 표시. 세 가지를 보여준다:
 //   ① 무언가 돌고 있다 (점 애니메이션)

@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/layout/app-shell";
+import { ChatInput } from "@/features/chat/chat-input";
 
 export default function Home() {
   return (
@@ -15,14 +16,7 @@ export default function Home() {
           </div>
           {/* 스크롤 경계 확인용 블록. 이게 페이지를 늘리지 않고 이 영역만
               스크롤해야 정상이다. */}
-          {Array.from({ length: 12 }, (_, i) => (
-            <div
-              key={i}
-              className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground"
-            >
-              스크롤 확인용 블록 {i + 1}
-            </div>
-          ))}
+          <ChatInput />
         </div>
       </div>
     </AppShell>

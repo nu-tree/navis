@@ -16,14 +16,7 @@ import {
   SidebarMenuItem,
   SidebarSeparator,
 } from "@/components/ui/sidebar";
-
-// navis 사이드바 — shadcn sidebar 프리미티브 위에 얹는다.
-//
-// 손으로 만들었던 버전을 버린 이유: 대화방에 필요한 것(안읽음 배지, 호버 액션,
-// 로딩 스켈레톤)이 이미 프리미티브로 있고, 무엇보다 모바일 드로어가 Sheet(Radix
-// Dialog)라 포커스 트랩·Escape 가 공짜로 해결된다. 손수 오버레이는 그게 없었다.
-//
-// 지금은 골격이라 목록이 더미다. 배선 시 PLACEHOLDER_ROOMS 를 props 로 교체한다.
+import Image from "next/image";
 
 export function NavisSidebar() {
   return (
@@ -31,14 +24,8 @@ export function NavisSidebar() {
     // 대화 전환이 잦은 화면이라 완전히 숨기는 offcanvas 보다 이게 낫다.
     <Sidebar collapsible="icon">
       <SidebarHeader>
-        <div className="flex items-center gap-2 px-1 py-1">
-          <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-primary">
-            <Brain className="size-4 text-primary-foreground" />
-          </div>
-          {/* 아이콘 모드에서는 이름을 숨긴다 — 폭이 3rem 밖에 없다. */}
-          <span className="font-heading text-[15px] font-semibold tracking-tight group-data-[collapsible=icon]:hidden">
-            navis
-          </span>
+        <div className="flex items-center gap-2 px-2 py-1 text-lg font-extrabold">
+          나비스
         </div>
 
         <Button
@@ -54,7 +41,7 @@ export function NavisSidebar() {
 
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>대화</SidebarGroupLabel>
+          <SidebarGroupLabel>채팅</SidebarGroupLabel>
           <SidebarMenu>
             {PLACEHOLDER_ROOMS.map((room) => (
               <SidebarMenuItem key={room.id}>
