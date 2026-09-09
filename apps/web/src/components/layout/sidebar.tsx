@@ -1,108 +1,109 @@
 "use client";
 
-import { Brain, MessageSquare, Plus, Settings } from "lucide-react";
+import { Brain, MessageSquare, Plus, Settings, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import { cn } from "cn";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuAction,
+  SidebarMenuBadge,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarSeparator,
+} from "@/components/ui/sidebar";
 
-// 사이드바 내용. 지금은 골격이라 대화 목록이 자리만 잡고 있다 —
-// 실제 목록은 도메인 배선 후 이 파일에서 conversation 목록을 받아 렌더한다.
+// navis 사이드바 — shadcn sidebar 프리미티브 위에 얹는다.
+//
+// 손으로 만들었던 버전을 버린 이유: 대화방에 필요한 것(안읽음 배지, 호버 액션,
+// 로딩 스켈레톤)이 이미 프리미티브로 있고, 무엇보다 모바일 드로어가 Sheet(Radix
+// Dialog)라 포커스 트랩·Escape 가 공짜로 해결된다. 손수 오버레이는 그게 없었다.
+//
+// 지금은 골격이라 목록이 더미다. 배선 시 PLACEHOLDER_ROOMS 를 props 로 교체한다.
 
-export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
+export function NavisSidebar() {
   return (
-    // min-h-0 이 없으면 목록 영역이 부모를 넘어 자라서 자기 스크롤을 잃는다.
-    <div className="flex h-full min-h-0 flex-col bg-sidebar">
-      <div className="flex items-center gap-2 px-3 py-3.5">
-        <div className="flex size-7 items-center justify-center rounded-lg bg-primary">
-          <Brain className="size-4 text-primary-foreground" />
+    // collapsible="icon": 접으면 사라지지 않고 아이콘 레일로 남는다.
+    // 대화 전환이 잦은 화면이라 완전히 숨기는 offcanvas 보다 이게 낫다.
+    <Sidebar collapsible="icon">
+      <SidebarHeader>
+        <div className="flex items-center gap-2 px-1 py-1">
+          <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-primary">
+            <Brain className="size-4 text-primary-foreground" />
+          </div>
+          {/* 아이콘 모드에서는 이름을 숨긴다 — 폭이 3rem 밖에 없다. */}
+          <span className="font-heading text-[15px] font-semibold tracking-tight group-data-[collapsible=icon]:hidden">
+            navis
+          </span>
         </div>
-        <span className="font-heading text-[15px] font-semibold tracking-tight">
-          navis
-        </span>
-      </div>
 
-      <div className="px-3 pb-2">
-        <Button variant="outline" size="lg" className="w-full justify-start">
+        <Button
+          variant="outline"
+          className="w-full justify-start group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
+        >
           <Plus />
-          새 대화
+          <span className="group-data-[collapsible=icon]:hidden">새 대화</span>
         </Button>
-      </div>
+      </SidebarHeader>
 
-      <Separator className="bg-sidebar-border" />
+      <SidebarSeparator />
 
-      {/* 대화 목록 — 여기만 스크롤한다. 헤더/푸터는 고정. */}
-      <nav className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
-        <p className="px-2 pt-1 pb-1.5 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
-          대화
-        </p>
-        <ul className="space-y-0.5">
-          {PLACEHOLDER_ROOMS.map((room) => (
-            <li key={room.id}>
-              <ConversationRow
-                title={room.title}
-                active={room.active}
-                onClick={onNavigate}
-              />
-            </li>
-          ))}
-        </ul>
-      </nav>
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupLabel>대화</SidebarGroupLabel>
+          <SidebarMenu>
+            {PLACEHOLDER_ROOMS.map((room) => (
+              <SidebarMenuItem key={room.id}>
+                <SidebarMenuButton isActive={room.active} tooltip={room.title}>
+                  <MessageSquare />
+                  <span>{room.title}</span>
+                </SidebarMenuButton>
 
-      <Separator className="bg-sidebar-border" />
+                {/* 안읽음 배지. 액션과 같은 자리라 둘이 겹치는데, 배지는
+                    호버 시 액션에 자리를 내준다. */}
+                {room.unread ? (
+                  <SidebarMenuBadge className="group-hover/menu-item:hidden">
+                    {room.unread}
+                  </SidebarMenuBadge>
+                ) : null}
 
-      <div className="p-2">
-        <SidebarLink icon={<Brain className="size-4" />} label="기억" />
-        <SidebarLink icon={<Settings className="size-4" />} label="설정" />
-      </div>
-    </div>
-  );
-}
+                <SidebarMenuAction showOnHover aria-label="대화 삭제">
+                  <Trash2 />
+                </SidebarMenuAction>
+              </SidebarMenuItem>
+            ))}
+          </SidebarMenu>
+        </SidebarGroup>
+      </SidebarContent>
 
-function ConversationRow({
-  title,
-  active,
-  onClick,
-}: {
-  title: string;
-  active?: boolean;
-  onClick?: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm transition-colors",
-        active
-          ? "bg-sidebar-accent text-sidebar-accent-foreground"
-          : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
-      )}
-    >
-      <MessageSquare className="size-4 shrink-0 opacity-70" />
-      {/* truncate 가 먹으려면 부모 flex 아이템에 min-w-0 이 필요하다. */}
-      <span className="min-w-0 flex-1 truncate">{title}</span>
-    </button>
-  );
-}
-
-function SidebarLink({
-  icon,
-  label,
-}: {
-  icon: React.ReactNode;
-  label: string;
-}) {
-  return (
-    <button className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground">
-      {icon}
-      <span>{label}</span>
-    </button>
+      <SidebarFooter>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton tooltip="기억">
+              <Brain />
+              <span>기억</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton tooltip="설정">
+              <Settings />
+              <span>설정</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
+    </Sidebar>
   );
 }
 
 // 골격 확인용 더미. 배선 시 제거한다.
 const PLACEHOLDER_ROOMS = [
-  { id: "1", title: "리팩터링 계획 정리", active: true },
-  { id: "2", title: "Tailwind v4 토큰 형식 질문" },
-  { id: "3", title: "모노레포 의존 방향" },
-  { id: "4", title: "이번 주에 배운 것들 정리해줘" },
+  { id: "1", title: "리팩터링 계획 정리", active: true, unread: 0 },
+  { id: "2", title: "Tailwind v4 토큰 형식 질문", unread: 2 },
+  { id: "3", title: "모노레포 의존 방향", unread: 0 },
+  { id: "4", title: "이번 주에 배운 것들 정리해줘", unread: 0 },
 ];
