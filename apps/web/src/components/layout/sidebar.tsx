@@ -16,12 +16,9 @@ import {
   SidebarMenuItem,
   SidebarSeparator,
 } from "@/components/ui/sidebar";
-import Image from "next/image";
 
 export function NavisSidebar() {
   return (
-    // collapsible="icon": 접으면 사라지지 않고 아이콘 레일로 남는다.
-    // 대화 전환이 잦은 화면이라 완전히 숨기는 offcanvas 보다 이게 낫다.
     <Sidebar collapsible="icon">
       <SidebarHeader>
         <div className="flex items-center gap-2 px-2 py-1 text-lg font-extrabold">
