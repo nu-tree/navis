@@ -1,0 +1,22 @@
+{
+  "name": "@navis/validation",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./memory": "./src/memory.ts",
+    "./chat": "./src/chat.ts",
+    "./conversation": "./src/conversation.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@navis/config": "workspace:*",
+    "typescript": "^5.9.3"
+  }
+}

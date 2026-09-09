@@ -1,0 +1,41 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1779112591770,
+      "tag": "0000_aspiring_mauler",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1779888463758,
+      "tag": "0001_stormy_venom",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1779889503580,
+      "tag": "0002_shocking_revanche",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1780643093253,
+      "tag": "0003_ancient_saracen",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1780647573893,
+      "tag": "0004_talented_yellow_claw",
+      "breakpoints": true
+    }
+  ]
+}

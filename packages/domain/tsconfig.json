@@ -1,0 +1,4 @@
+{
+  "extends": "@navis/config/tsconfig.node.json",
+  "include": ["src"]
+}

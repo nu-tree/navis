@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+
+    // 확장자 없는 relative import 를 쓴다 (`./schema`, not `./schema.js`).
+    // NodeNext 규약(.js 가 .ts 를 가리킴)을 쓰면 번들러가 그 매핑을 모르기 때문에
+    // Next 쪽에 webpack extensionAlias 같은 우회를 박아야 한다. 새로 짜는 코드에
+    // 그 부채를 물려받지 않는다. 대신 apps/server 는 tsx/번들러로 실행한다.
+    "module": "preserve",
+    "moduleResolution": "bundler",
+
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "noEmit": true
+  }
+}
