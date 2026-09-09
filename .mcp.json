@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "navis-notify": {
-      "command": "node",
-      "args": ["scripts/navis-notify-mcp.mjs"]
-    }
-  }
-}

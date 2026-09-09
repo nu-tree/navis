@@ -1,19 +1,10 @@
 packages:
+  - "apps/*"
   - "packages/*"
 
-# Expo/React Native(Metro)는 pnpm isolated 구조에서 트랜지티브 의존
-# (예: react-native-css-interop)을 못 찾는다. hoisted 로 평탄화한다.
-nodeLinker: hoisted
-
-# react 를 워크스페이스 전체에서 한 버전(=앱/Expo 가 쓰는 19.2.0)으로 강제한다.
-# 안 그러면 ink·navis-cli 가 19.2.6 자체 copy 를 따로 깔아 react 인스턴스가 둘이 되고,
-# tsx 개발 경로(pnpm cli)에서 "Invalid hook call"(more than one copy of React) 이 난다.
-# (번들은 esbuild alias 로 이미 단일화돼 영향 없음.)
-overrides:
-  react: "19.2.0"
-
+# 네이티브 빌드 스크립트 허용 목록 — pnpm 은 기본적으로 전부 막는다.
+#   esbuild        : tsx(서버 dev watch) 와 eslint 가 쓴다
+#   unrs-resolver  : eslint-config-next 의 resolver
 allowBuilds:
-  electron: true
   esbuild: true
-  msgpackr-extract: true
-  sharp: true
+  unrs-resolver: true

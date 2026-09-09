@@ -1,23 +1,23 @@
 {
   "name": "navis",
   "version": "0.0.0",
-  "description": "navis — 제2의 뇌 + 에이전트 모노레포 (namory: 기억 백엔드, navis: 에이전트/CLI)",
+  "description": "navis — 제2의 뇌. 기억 저장/불러오기 + 대화",
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "pnpm -r build",
-    "dev": "pnpm --filter namory-mcp dev",
-    "dev:navis": "pnpm --filter navis dev",
-    "cli": "pnpm --filter navis-cli cli",
-    "namory": "pnpm --filter namory-mcp",
-    "navis": "pnpm --filter navis",
-    "release:desktop": "node scripts/release-desktop.mjs",
-    "ipa:build": "node scripts/build-ios-ipa.mjs",
-    "release:ios": "node scripts/release-ios.mjs",
-    "ota": "cd packages/app && eas update --branch preview"
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "lint": "turbo run lint",
+    "db:generate": "pnpm --filter @navis/db generate",
+    "db:migrate": "pnpm --filter @navis/db migrate"
+  },
+  "devDependencies": {
+    "turbo": "^2.10.12",
+    "typescript": "^5.9.3"
   },
   "engines": {
     "node": ">=22"
   },
-  "packageManager": "pnpm@11.0.8"
+  "packageManager": "pnpm@11.5.0"
 }
