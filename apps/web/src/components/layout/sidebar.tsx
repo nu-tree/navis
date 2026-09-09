@@ -19,7 +19,7 @@ import {
 
 export function NavisSidebar() {
   return (
-    <Sidebar collapsible="icon">
+    <Sidebar collapsible="offcanvas">
       <SidebarHeader>
         <div className="flex items-center gap-2 px-2 py-1 text-lg font-extrabold">
           나비스
