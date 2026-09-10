@@ -70,3 +70,6 @@ pnpm db:migrate     # 적용
 - 파일·폴더명은 **kebab-case** (`use-send-message.ts`)
 - relative import 는 **확장자 없이** (`./schema`, not `./schema.js`)
   → NodeNext 규약을 쓰면 번들러가 그 매핑을 몰라 Next 쪽에 우회를 박아야 한다
+
+
+<!-- Security scan triggered at 2026-09-10 04:08:31 -->
