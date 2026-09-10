@@ -1,5 +1,5 @@
 import type { ChatEvent } from "@navis/validation";
-import { chatEventSchema } from "@navis/validation";
+import { parseChatEvents } from "./sse";
 
 // ── apps/server 를 부르는 타입 있는 클라이언트 ───────────────────────────────
 // 소비자 둘: apps/web 의 **서버 사이드**(BFF), 그리고 나중의 apps/mobile.
@@ -74,32 +74,7 @@ export function createClient(opts: ClientOptions) {
         throw new ApiError(res.status, await res.text().catch(() => res.statusText));
       }
 
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-
-        // SSE 프레임 구분은 빈 줄. 마지막 조각은 미완성이므로 버퍼에 남긴다.
-        const frames = buffer.split("\n\n");
-        buffer = frames.pop() ?? "";
-
-        for (const frame of frames) {
-          const data = frame
-            .split("\n")
-            .filter((l) => l.startsWith("data:"))
-            .map((l) => l.slice(5).trim())
-            .join("\n");
-          if (!data) continue; // `: ping` 같은 주석 프레임
-          const parsed = chatEventSchema.safeParse(JSON.parse(data));
-          // 모르는 이벤트는 조용히 버린다 — 서버가 새 이벤트를 추가해도
-          // 구버전 클라이언트가 깨지지 않게.
-          if (parsed.success) yield parsed.data;
-        }
-      }
+      yield* parseChatEvents(res.body);
     },
   };
 }

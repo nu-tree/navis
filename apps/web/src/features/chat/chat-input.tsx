@@ -1,20 +1,28 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowUp, ImagePlus } from "lucide-react";
+import { ArrowUp, ImagePlus, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "cn";
 
 type Props = React.HTMLAttributes<HTMLElement> & {
   onSend: (text: string) => void;
+  /** 턴이 도는 중 — 전송 버튼이 중지 버튼으로 바뀐다. */
+  busy?: boolean;
+  onStop?: () => void;
 };
 
-export const ChatInput = ({ onSend, className }: Readonly<Props>) => {
+export const ChatInput = ({
+  onSend,
+  busy = false,
+  onStop,
+  className,
+}: Readonly<Props>) => {
   const [draft, setDraft] = useState("");
 
   const trimmed = draft.trim();
-  const canSend = trimmed.length > 0;
+  const canSend = trimmed.length > 0 && !busy;
 
   const send = () => {
     if (!canSend) return;
@@ -60,14 +68,20 @@ export const ChatInput = ({ onSend, className }: Readonly<Props>) => {
 
           <div className="flex-1" />
 
-          <Button
-            size="icon-lg"
-            aria-label="전송"
-            disabled={!canSend}
-            onClick={send}
-          >
-            <ArrowUp className="size-4.5" />
-          </Button>
+          {busy ? (
+            <Button size="icon-lg" aria-label="중지" onClick={onStop}>
+              <Square className="size-4 fill-current" />
+            </Button>
+          ) : (
+            <Button
+              size="icon-lg"
+              aria-label="전송"
+              disabled={!canSend}
+              onClick={send}
+            >
+              <ArrowUp className="size-4.5" />
+            </Button>
+          )}
         </div>
       </div>
     </div>

@@ -23,6 +23,9 @@ const nextConfig: NextConfig = {
   // 판을 쓸 수 있다. 이 규모에서는 빌드 시간 차이가 측정되지 않아(3.9s vs 3.8s)
   // 안정판을 쓴다 — 빌드가 실제로 느려지면 그때 바꾼다.
   reactCompiler: true,
+  // 워크스페이스 패키지는 빌드 산출물 없이 .ts 소스를 그대로 export 한다.
+  // Next 는 기본적으로 node_modules 를 컴파일하지 않으므로 명시해야 한다.
+  transpilePackages: ["@navis/api", "@navis/validation"],
   typescript: {
     ignoreBuildErrors: false,
   },

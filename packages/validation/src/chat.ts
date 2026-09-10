@@ -4,12 +4,15 @@ import { messageSchema } from "./conversation";
 // 사용자가 고를 수 있는 모델. 서버의 화이트리스트 검증과 UI 의 선택기가 같은 목록을 봐야
 // 한다 — 갈라지면 "UI 엔 있는데 서버가 거부하는" 모델이 생긴다.
 export const SELECTABLE_MODELS = [
-  "claude-opus-4-8",
-  "claude-sonnet-4-6",
+  "claude-opus-5",
+  "claude-sonnet-5",
   "claude-haiku-4-5-20251001",
 ] as const;
 export const modelSchema = z.enum(SELECTABLE_MODELS);
 export type Model = z.infer<typeof modelSchema>;
+
+// model 없이 온 요청에 서버가 쓰는 기본값. UI 선택기의 초기값도 여기를 본다.
+export const DEFAULT_MODEL: Model = "claude-opus-5";
 
 export const chatRequestSchema = z.object({
   conversationId: z.string().min(1),

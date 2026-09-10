@@ -11,6 +11,7 @@ type Props = React.ComponentProps<"div"> & {
 export const MessageList = ({
   messages,
   className,
+  children,
   ...props
 }: Readonly<Props>) => {
   return (
@@ -25,6 +26,9 @@ export const MessageList = ({
         {messages.map((message) => (
           <MessageBubble key={message.id} message={message} />
         ))}
+
+        {/* 스트리밍 중인 답변·진행 표시 — 확정된 메시지 뒤에 붙는다. */}
+        {children}
       </div>
     </div>
   );
