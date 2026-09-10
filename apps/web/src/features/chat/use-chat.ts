@@ -66,6 +66,7 @@ export function useChat() {
             break;
           case "done":
             // 최종 전문은 서버가 권위다 — 델타를 이어 붙인 것과 다를 수 있다.
+            // message 에 saved 가 실려 오므로 저장 표시도 여기서 함께 확정된다.
             setMessages((prev) => [...prev, event.message]);
             break;
           case "aborted":

@@ -7,6 +7,7 @@
 // 소비자는 apps/server 하나다. 웹·모바일은 HTTP 로 server 를 부른다(@navis/api).
 // 그래서 DATABASE_URL 과 CLAUDE_CODE_OAUTH_TOKEN 을 아는 배포 단위가 하나로 유지된다.
 
+export * from "./errors";
 export * as memory from "./memory/index";
 export * as chat from "./chat/index";
 export * as conversation from "./conversation/index";

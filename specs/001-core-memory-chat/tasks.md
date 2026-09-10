@@ -37,18 +37,18 @@ description: "핵심 나비스 — 기억과 대화 구현 작업 목록"
 
 **Purpose**: 새로 들이는 것을 세우고, 계약을 바꿀 수 있는 실측을 먼저 끝낸다
 
-- [ ] T001 Vitest 를 루트 devDependency 로 추가하고 `package.json` 에 `"test": "turbo run test"` 스크립트를 넣는다
-- [ ] T002 `turbo.json` 의 `tasks` 에 `test` 를 추가한다 (`dependsOn: ["^build"]`, 캐시 허용)
-- [ ] T003 [P] `packages/domain/package.json` 과 `apps/server/package.json` 에 `"test": "vitest run"` 스크립트와 vitest devDependency 를 추가한다
-- [ ] T004 [P] `apps/server/src/env.ts` 에 `VOYAGE_API_KEY` 를 `required()` 로 추가한다 — 환경변수는 부팅 때 한 번 확인한다(헌장 보안 절)
-- [ ] T005 [P] `apps/server/.env.example` 과 `apps/web/.env.example` 에 로그인 · 임베딩용 항목을 추가한다. `apps/web` 쪽 값에 `NEXT_PUBLIC_` 을 붙이지 않는다
-- [ ] T006 `apps/web/package.json` 에 `@supabase/ssr` 을 추가하고 `pnpm-workspace.yaml` 의 `minimumReleaseAgeExclude` 가 필요한지 확인한다
+- [X] T001 Vitest 를 루트 devDependency 로 추가하고 `package.json` 에 `"test": "turbo run test"` 스크립트를 넣는다
+- [X] T002 `turbo.json` 의 `tasks` 에 `test` 를 추가한다 (`dependsOn: ["^build"]`, 캐시 허용)
+- [X] T003 [P] `packages/domain/package.json` 과 `apps/server/package.json` 에 `"test": "vitest run"` 스크립트와 vitest devDependency 를 추가한다
+- [X] T004 [P] `apps/server/src/env.ts` 에 `VOYAGE_API_KEY` 를 `required()` 로 추가한다 — 환경변수는 부팅 때 한 번 확인한다(헌장 보안 절)
+- [X] T005 [P] `apps/server/.env.example` 과 `apps/web/.env.example` 에 로그인 · 임베딩용 항목을 추가한다. `apps/web` 쪽 값에 `NEXT_PUBLIC_` 을 붙이지 않는다
+- [X] T006 `apps/web/package.json` 에 `@supabase/ssr` 을 추가하고 `pnpm-workspace.yaml` 의 `minimumReleaseAgeExclude` 가 필요한지 확인한다
 
 ### 실측 스파이크 (계약을 바꿀 수 있으므로 먼저)
 
-- [ ] T007 **[R3 실측]** `allowedTools` 없이 프로세스 내 MCP 도구가 자동 실행되는지 확인한다. 최소 도구 하나를 `apps/server` 에 임시로 붙여 한 턴 돌린다. 승인 프롬프트가 걸리면 `allowedTools: ['mcp__memory__*']` 를 계약에 확정하고 `specs/001-core-memory-chat/contracts/memory-mcp.md` 를 갱신한다
-- [ ] T008 **[R4 실측]** Haiku 모델 id 를 확정한다. `claude-haiku-4-5` 와 `claude-haiku-4-5-20251001` 을 각각 한 턴 돌려 어느 쪽이 유효한지 확인하고 `packages/validation/src/chat.ts` 의 `SELECTABLE_MODELS` 를 고친다. 확정 전까지 화면 선택기에는 `DEFAULT_MODEL` 만 노출한다(FR-007)
-- [ ] T009 **[R5 실측]** Voyage AI 에서 **1024차원**을 내는 모델명을 확인한다. `packages/db/src/schema.ts` 가 `vector("embedding", { dimensions: 1024 })` 로 고정되어 있어 차원이 다르면 삽입이 실패한다
+- [X] T007 **[R3 실측]** `allowedTools` 없이 프로세스 내 MCP 도구가 자동 실행되는지 확인한다. 최소 도구 하나를 `apps/server` 에 임시로 붙여 한 턴 돌린다. 승인 프롬프트가 걸리면 `allowedTools: ['mcp__memory__*']` 를 계약에 확정하고 `specs/001-core-memory-chat/contracts/memory-mcp.md` 를 갱신한다
+- [X] T008 **[R4 실측]** Haiku 모델 id 를 확정한다. `claude-haiku-4-5` 와 `claude-haiku-4-5-20251001` 을 각각 한 턴 돌려 어느 쪽이 유효한지 확인하고 `packages/validation/src/chat.ts` 의 `SELECTABLE_MODELS` 를 고친다. 확정 전까지 화면 선택기에는 `DEFAULT_MODEL` 만 노출한다(FR-007)
+- [X] T009 **[R5 실측]** Voyage AI 에서 **1024차원**을 내는 모델명을 확인한다. `packages/db/src/schema.ts` 가 `vector("embedding", { dimensions: 1024 })` 로 고정되어 있어 차원이 다르면 삽입이 실패한다
 
 ---
 
@@ -60,27 +60,27 @@ description: "핵심 나비스 — 기억과 대화 구현 작업 목록"
 
 ### 계약 정리 — 소비자를 잃은 것을 먼저 지운다 (헌장 원칙 I)
 
-- [ ] T010 `packages/validation/src/memory.ts` 에서 `graphifyInputSchema` 와 `GraphifyInput` 을 삭제한다 — 기억 그래프는 범위 밖(Q2)
-- [ ] T011 `packages/validation/src/memory.ts` 의 `saveResultSchema` 를 판별 유니온에서 **단일 갈래로 접는다**. `skipped` / `duplicates` 갈래는 중복 판정을 하지 않기로 해 소비자가 없다(Q2, FR-011)
-- [ ] T012 `packages/validation/src/memory.ts` 의 `saveInputSchema` 에서 `skipIfDuplicate` 와 `source` 를, `memorySchema` 에서 출처 관련 필드를 삭제한다 — 출처 미기록 확정(Q1, FR-015)
-- [ ] T013 `packages/validation/src/memory.ts` 에 `memoryExportSchema` 를 추가한다: `{ exportedAt: string, count: number, memories: Memory[] }` (R8, FR-050)
-- [ ] T014 `apps/server/src/app.ts` 의 라우트 목록 주석에서 `/mcp` 예고를 삭제한다 — 부를 소비자가 없다(Q3)
+- [X] T010 `packages/validation/src/memory.ts` 에서 `graphifyInputSchema` 와 `GraphifyInput` 을 삭제한다 — 기억 그래프는 범위 밖(Q2)
+- [X] T011 `packages/validation/src/memory.ts` 의 `saveResultSchema` 를 판별 유니온에서 **단일 갈래로 접는다**. `skipped` / `duplicates` 갈래는 중복 판정을 하지 않기로 해 소비자가 없다(Q2, FR-011)
+- [X] T012 `packages/validation/src/memory.ts` 의 `saveInputSchema` 에서 `skipIfDuplicate` 와 `source` 를, `memorySchema` 에서 출처 관련 필드를 삭제한다 — 출처 미기록 확정(Q1, FR-015)
+- [X] T013 `packages/validation/src/memory.ts` 에 `memoryExportSchema` 를 추가한다: `{ exportedAt: string, count: number, memories: Memory[] }` (R8, FR-050)
+- [X] T014 `apps/server/src/app.ts` 의 라우트 목록 주석에서 `/mcp` 예고를 삭제한다 — 부를 소비자가 없다(Q3)
 
 ### 오류 · 임베딩 · 스키마
 
-- [ ] T015 `packages/domain/src/errors.ts` 를 만들고 **타입 있는 오류**를 정의한다 (`NotFoundError`, `EmbeddingError`). 없는 id 에 대한 오류를 한국어 메시지 문자열로 판정하지 않는다 — 문구를 다듬으면 404 가 500 이 된다(FR-041, `STRUCTURE.md` 7항)
-- [ ] T016 `packages/domain/src/memory/embed.ts` 에 `embed()` 를 구현한다. **`json.data[0].embedding` 을 무가드로 읽지 않는다** — 200 + 빈 `data` 면 `EmbeddingError` 를 던진다(FR-042, `STRUCTURE.md` 8항, R5)
-- [ ] T017 [P] `packages/domain/src/memory/embed.test.ts` — 빈 `data`, 오류 응답, 차원 불일치 각각에서 `EmbeddingError` 가 나오는지 검증한다
-- [ ] T018 `packages/db/src/schema.ts` 의 `memories` 에서 `source` 컬럼을 삭제하고 `pnpm db:generate` → `pnpm db:migrate` 를 돌린다 — 부팅 시 자동 마이그레이션은 없다(헌장). **데이터 유실이므로 선택 사항이다**; 남겨두고 쓰지 않아도 동작에 지장이 없다
-- [ ] T019 `packages/domain/src/memory/mapping.ts` 에 저장↔와이어 매핑을 만든다. `tags: string[]` 와 `done: boolean` 은 DB 의 `metadata` jsonb 안에 살고 밖으로는 일급 필드로 나간다. `relatedIds` 도 `metadata` 에 둔다 — 조인 테이블을 만들지 않는다(data-model.md)
-- [ ] T020 [P] `packages/domain/src/memory/mapping.test.ts` — jsonb ↔ 일급 필드 왕복이 손실 없는지, `category` 가 `decision·learning·idea·feeling·people·todo` 중 하나이거나 `null` 인지, `project` 가 `null` 일 때 개인 · 전역 기억으로 취급되는지 검증한다
+- [X] T015 `packages/domain/src/errors.ts` 를 만들고 **타입 있는 오류**를 정의한다 (`NotFoundError`, `EmbeddingError`). 없는 id 에 대한 오류를 한국어 메시지 문자열로 판정하지 않는다 — 문구를 다듬으면 404 가 500 이 된다(FR-041, `STRUCTURE.md` 7항)
+- [X] T016 `packages/domain/src/memory/embed.ts` 에 `embed()` 를 구현한다. **`json.data[0].embedding` 을 무가드로 읽지 않는다** — 200 + 빈 `data` 면 `EmbeddingError` 를 던진다(FR-042, `STRUCTURE.md` 8항, R5)
+- [X] T017 [P] `packages/domain/src/memory/embed.test.ts` — 빈 `data`, 오류 응답, 차원 불일치 각각에서 `EmbeddingError` 가 나오는지 검증한다
+- [ ] T018 ⛔ **[차단 — DB 연결 불가]** `packages/db/src/schema.ts` 의 `memories` 에서 `source` 컬럼을 삭제하고 `pnpm db:generate` → `pnpm db:migrate` 를 돌린다 — 부팅 시 자동 마이그레이션은 없다(헌장). **데이터 유실이므로 선택 사항이다**; 남겨두고 쓰지 않아도 동작에 지장이 없다
+- [X] T019 `packages/domain/src/memory/mapping.ts` 에 저장↔와이어 매핑을 만든다. `tags: string[]` 와 `done: boolean` 은 DB 의 `metadata` jsonb 안에 살고 밖으로는 일급 필드로 나간다. `relatedIds` 도 `metadata` 에 둔다 — 조인 테이블을 만들지 않는다(data-model.md)
+- [X] T020 [P] `packages/domain/src/memory/mapping.test.ts` — jsonb ↔ 일급 필드 왕복이 손실 없는지, `category` 가 `decision·learning·idea·feeling·people·todo` 중 하나이거나 `null` 인지, `project` 가 `null` 일 때 개인 · 전역 기억으로 취급되는지 검증한다
 
 ### 기억 MCP 골격 · BFF 중계
 
-- [ ] T021 `packages/domain/src/memory/mcp.ts` 에 `createSdkMcpServer({ name: 'memory', tools: [] })` 골격을 만든다. 도구는 이후 이야기에서 채운다. 서버명을 `memory` 로 두면 도구가 `mcp__memory__<도구명>` 으로 노출된다(R3)
-- [ ] T022 `packages/domain/src/chat/index.ts` 의 `query()` 옵션에 `mcpServers: { memory: <config> }` 를 넘긴다. **`tools: []` 는 그대로 둔다** — 그 배열은 내장 도구 집합이므로 MCP 도구와 충돌하지 않는다(R3, 헌장 보안 절)
-- [ ] T023 `apps/web/src/lib/bff.ts` 에 업스트림 중계 헬퍼를 만든다. `apiServer.token` 을 붙이고 오류를 그대로 전달한다. 세션 검증 자리는 비워둔다 — US6 에서 채운다
-- [ ] T024 [P] `apps/server/src/app.test.ts` — `/health` 는 토큰 없이 200, 그 밖의 모든 경로는 토큰 없이 **401** 임을 `app.fetch()` 로 검증한다. 기본 잠금이 깨지면 여기서 잡힌다(헌장 보안 절)
+- [X] T021 `packages/domain/src/memory/mcp.ts` 에 `createSdkMcpServer({ name: 'memory', tools: [] })` 골격을 만든다. 도구는 이후 이야기에서 채운다. 서버명을 `memory` 로 두면 도구가 `mcp__memory__<도구명>` 으로 노출된다(R3)
+- [X] T022 `packages/domain/src/chat/index.ts` 의 `query()` 옵션에 `mcpServers: { memory: <config> }` 를 넘긴다. **`tools: []` 는 그대로 둔다** — 그 배열은 내장 도구 집합이므로 MCP 도구와 충돌하지 않는다(R3, 헌장 보안 절)
+- [X] T023 `apps/web/src/lib/bff.ts` 에 업스트림 중계 헬퍼를 만든다. `apiServer.token` 을 붙이고 오류를 그대로 전달한다. 세션 검증 자리는 비워둔다 — US6 에서 채운다
+- [X] T024 [P] `apps/server/src/app.test.ts` — `/health` 는 토큰 없이 200, 그 밖의 모든 경로는 토큰 없이 **401** 임을 `app.fetch()` 로 검증한다. 기본 잠금이 깨지면 여기서 잡힌다(헌장 보안 절)
 
 **Checkpoint**: `pnpm typecheck` · `pnpm lint` · `pnpm test` 통과. 서버가 뜨고 `/health` 가 200, 나머지가 401.
 
@@ -95,17 +95,17 @@ description: "핵심 나비스 — 기억과 대화 구현 작업 목록"
 한 턴 보낸 뒤, 기억 목록 조회에 그 내용이 `decision` 분류로 있고 화면에 저장 표시가 보이면
 통과. (`quickstart.md` S1)
 
-- [ ] T025 [US1] `packages/domain/src/memory/save.ts` 에 `save()` 를 구현한다. `content` 는 **최소 1자**, `category` 는 6개 값 중 하나이거나 없음, `project` 는 없으면 `null`(개인 · 전역 기억). **중복 판정을 하지 않는다** — 비슷한 기억이 있어도 항상 새로 저장한다(FR-011, Q2)
-- [ ] T026 [P] [US1] `packages/domain/src/memory/save.test.ts` — 중복 판정을 하지 않는다는 것을 명시적으로 검증한다(같은 내용을 3번 저장하면 3건). `content` 빈 문자열 거부, 분류 밖 값 거부
-- [ ] T027 [US1] `packages/domain/src/memory/mcp.ts` 에 `save` 도구를 등록한다. 입력 스키마는 `@navis/validation` 의 `saveInputSchema` 를 그대로 쓰고, 모델을 향한 설명문만 등록부에 둔다(contracts/memory-mcp.md)
-- [ ] T028 [US1] `packages/domain/src/chat/index.ts` 의 시스템 프롬프트에 저장 판단 기준을 넣는다: 기억할 가치가 있는 사실(결정 · 배움 · 아이디어 · 감정 · 사람 · 할 일)을 들으면 `save` 를 부르고, 잡담은 저장하지 않는다(FR-009, US1 시나리오 2)
-- [ ] T029 [US1] `packages/domain/src/chat/index.ts` 의 `runTurn` 이 이 턴에 기억 도구를 실제로 불렀는지 세어 `TurnResult` 로 돌려준다 — `done.saved` 의 유일한 근거다(FR-010, contracts/chat-stream.md)
-- [ ] T030 [US1] `apps/server/src/routes/chat.ts` 의 `done` 이벤트에서 `saved: false` 하드코딩을 T029 의 값으로 바꾼다
-- [ ] T031 [US1] `packages/domain/src/memory/recent.ts` 에 `recent()` 를 구현한다 — 이 이야기의 검증에 필요한 **최소 조회**만. 필터 전체는 US4 에서 채운다
-- [ ] T032 [US1] `apps/server/src/routes/memories.ts` 를 만들고 `GET /memories`(목록) · `POST /memories`(수동 추가)를 붙인다. `app.ts` 에 라우트를 등록한다(contracts/server-http.md)
-- [ ] T033 [P] [US1] `apps/server/src/routes/memories.test.ts` — `POST /memories` 가 `Memory` 를 바로 돌려주는지(판별 유니온이 아님), 잘못된 본문에 400 + `detail: issues` 인지 검증한다
-- [ ] T034 [US1] `apps/web/src/features/chat/message-bubble.tsx` 에 저장 표시를 넣는다. `done.saved` 가 참인 턴에만 보인다. props 를 늘리지 않고 메시지에 담긴 값으로 판단한다(헌장 원칙 V)
-- [ ] T035 [US1] `apps/web/src/features/chat/use-chat.ts` 가 `done` 이벤트의 `saved` 를 메시지에 실어 목록으로 옮긴다
+- [X] T025 [US1] `packages/domain/src/memory/save.ts` 에 `save()` 를 구현한다. `content` 는 **최소 1자**, `category` 는 6개 값 중 하나이거나 없음, `project` 는 없으면 `null`(개인 · 전역 기억). **중복 판정을 하지 않는다** — 비슷한 기억이 있어도 항상 새로 저장한다(FR-011, Q2)
+- [X] T026 [P] [US1] `packages/domain/src/memory/save.test.ts` — 중복 판정을 하지 않는다는 것을 명시적으로 검증한다(같은 내용을 3번 저장하면 3건). `content` 빈 문자열 거부, 분류 밖 값 거부
+- [X] T027 [US1] `packages/domain/src/memory/mcp.ts` 에 `save` 도구를 등록한다. 입력 스키마는 `@navis/validation` 의 `saveInputSchema` 를 그대로 쓰고, 모델을 향한 설명문만 등록부에 둔다(contracts/memory-mcp.md)
+- [X] T028 [US1] `packages/domain/src/chat/index.ts` 의 시스템 프롬프트에 저장 판단 기준을 넣는다: 기억할 가치가 있는 사실(결정 · 배움 · 아이디어 · 감정 · 사람 · 할 일)을 들으면 `save` 를 부르고, 잡담은 저장하지 않는다(FR-009, US1 시나리오 2)
+- [X] T029 [US1] `packages/domain/src/chat/index.ts` 의 `runTurn` 이 이 턴에 기억 도구를 실제로 불렀는지 세어 `TurnResult` 로 돌려준다 — `done.saved` 의 유일한 근거다(FR-010, contracts/chat-stream.md)
+- [X] T030 [US1] `apps/server/src/routes/chat.ts` 의 `done` 이벤트에서 `saved: false` 하드코딩을 T029 의 값으로 바꾼다
+- [X] T031 [US1] `packages/domain/src/memory/recent.ts` 에 `recent()` 를 구현한다 — 이 이야기의 검증에 필요한 **최소 조회**만. 필터 전체는 US4 에서 채운다
+- [X] T032 [US1] `apps/server/src/routes/memories.ts` 를 만들고 `GET /memories`(목록) · `POST /memories`(수동 추가)를 붙인다. `app.ts` 에 라우트를 등록한다(contracts/server-http.md)
+- [X] T033 [P] [US1] `apps/server/src/routes/memories.test.ts` — `POST /memories` 가 `Memory` 를 바로 돌려주는지(판별 유니온이 아님), 잘못된 본문에 400 + `detail: issues` 인지 검증한다
+- [X] T034 [US1] `apps/web/src/features/chat/message-bubble.tsx` 에 저장 표시를 넣는다. `done.saved` 가 참인 턴에만 보인다. props 를 늘리지 않고 메시지에 담긴 값으로 판단한다(헌장 원칙 V)
+- [X] T035 [US1] `apps/web/src/features/chat/use-chat.ts` 가 `done` 이벤트의 `saved` 를 메시지에 실어 목록으로 옮긴다
 
 **Checkpoint**: `quickstart.md` S1 통과. 잡담에 기억이 늘지 않고, 같은 말을 반복하면 기억이 한 건 더 생긴다.
 
@@ -342,6 +342,40 @@ Foundational 완료 후:
 - 개발자 B: US3 (대화 이력 · 기록 시점)
 - 개발자 C: US6 → US5 (인증과 설정. 둘 다 표면이 작다)
 - US4 는 US1 이 끝난 뒤 A 또는 C 가 잡는다
+
+---
+
+## 실측 결과 (2026-09-10)
+
+### T007 — `allowedTools` 는 **필수**다
+
+| 조건 | 모델이 호출 시도 | 핸들러 실제 실행 |
+| --- | --- | --- |
+| `allowedTools` 없음 | `mcp__memory__save` | **0회** |
+| `allowedTools: ['mcp__memory__save']` | `mcp__memory__save` | **1회** |
+
+승인할 사람이 없는 서버에서는 도구 호출이 **조용히 막힌다**. 없으면 모델이 "저장했다"고
+답하는데 실제로는 저장되지 않는다 — `contracts/memory-mcp.md` 가 지목한 최악의 실패다.
+`mcpServers` 로 등록하는 모든 도구를 `allowedTools` 에 명시한다.
+
+**R3 의 핵심 가정도 확인됐다**: `tools: []` 인 상태에서 모델이 MCP 도구를 보고 호출을
+시도했다. 내장 도구 차단이 MCP 도구를 막지 않는다.
+
+### T008 — 모델 id 는 **고칠 필요가 없다**
+
+응답이 보고하는 실제 모델을 읽어 확인했다(단순 성공 여부로는 판별되지 않는다 — 존재하지
+않는 id 도 조용히 성공으로 보이는 경로가 있었다).
+
+| 요청한 id | 결과 | 실제 사용된 모델 |
+| --- | --- | --- |
+| `claude-haiku-4-5` | success | `claude-haiku-4-5-20251001` |
+| `claude-haiku-4-5-20251001` | success | `claude-haiku-4-5-20251001` |
+| `claude-opus-5` | success | `claude-opus-5` |
+| (존재하지 않는 id) | **throw** | — |
+
+저장소의 `SELECTABLE_MODELS` 값이 유효하다. 별칭이 그 스냅샷으로 해석된다.
+`packages/validation/src/chat.ts` 는 그대로 둔다. **T008 의 "확정 전까지 기본 모델만
+노출한다" 제약은 해제된다** — 모델 선택기를 정상 범위로 만들 수 있다(analyze C2).
 
 ---
 

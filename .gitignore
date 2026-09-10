@@ -12,3 +12,10 @@ next-env.d.ts
 .claude/settings.local.json
 
 package-lock.json
+
+# OS 산출물
+.DS_Store
+Thumbs.db
+
+# 테스트 커버리지
+coverage/

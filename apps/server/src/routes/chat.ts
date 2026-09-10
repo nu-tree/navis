@@ -65,10 +65,12 @@ export const chatRoute = new Hono()
             text: result.text,
             createdAt: new Date().toISOString(),
             ...(result.toolsUsed.length ? { toolsUsed: result.toolsUsed } : {}),
+            // 메시지에도 담는다 — done 이벤트만 보면 방을 다시 열 때 표시가 사라진다.
+            ...(result.savedCount > 0 ? { saved: true } : {}),
           },
           sessionId: result.sessionId,
-          // TODO: 기억 MCP 가 붙으면 이 턴에 save 를 불렀는지로 채운다.
-          saved: false,
+          // 이 턴에 실제로 저장된 기억이 있는지. 화면의 저장 표시 조건이 이것뿐이다.
+          saved: result.savedCount > 0,
         });
       } catch (err) {
         if (abortController.signal.aborted) {

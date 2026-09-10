@@ -28,9 +28,6 @@ export const saveInputSchema = z.object({
   content: z.string().min(1),
   category: categorySchema.optional(),
   project: projectSchema,
-  source: z.string().optional(),
-  // 기본 true — 유사 기억이 있으면 저장하지 않고 후보만 반환한다.
-  skipIfDuplicate: z.boolean().optional(),
   tags: z.array(z.string()).optional(),
   relatedIds: z.array(z.string()).optional(),
 });
@@ -76,13 +73,6 @@ export const todosInputSchema = z.object({
 });
 export type TodosInput = z.infer<typeof todosInputSchema>;
 
-export const graphifyInputSchema = z.object({
-  project: projectSchema,
-  category: categorySchema.optional(),
-  limit: z.number().int().min(1).max(500).optional(),
-});
-export type GraphifyInput = z.infer<typeof graphifyInputSchema>;
-
 // ── 출력 ─────────────────────────────────────────────────────────────
 
 export const memorySchema = z.object({
@@ -96,11 +86,9 @@ export const memorySchema = z.object({
 });
 export type Memory = z.infer<typeof memorySchema>;
 
-// save 는 중복 방지 때문에 두 갈래로 갈린다 — UI 가 분기해야 하는 판별 유니온.
-export const saveResultSchema = z.discriminatedUnion("skipped", [
-  z.object({ skipped: z.literal(false), memory: memorySchema }),
-  z.object({ skipped: z.literal(true), duplicates: z.array(memorySchema) }),
-]);
+// 중복 판정을 하지 않으므로(FR-011) 저장은 항상 성공하고 갈래가 하나다.
+// 예전의 판별 유니온(skipped / duplicates)은 소비자를 잃어 접었다.
+export const saveResultSchema = memorySchema;
 export type SaveResult = z.infer<typeof saveResultSchema>;
 
 export const recallHitSchema = z.object({
@@ -108,3 +96,12 @@ export const recallHitSchema = z.object({
   score: z.number(),
 });
 export type RecallHit = z.infer<typeof recallHitSchema>;
+
+// 내보내기 (FR-050). 나비스 없이도 사람이 읽을 수 있어야 하므로 들여쓴 JSON 한 파일이다.
+// 기억이 0건이어도 유효한 파일을 만든다(FR-051) — count: 0, memories: [].
+export const memoryExportSchema = z.object({
+  exportedAt: z.string(), // ISO 8601
+  count: z.number().int().min(0),
+  memories: z.array(memorySchema),
+});
+export type MemoryExport = z.infer<typeof memoryExportSchema>;

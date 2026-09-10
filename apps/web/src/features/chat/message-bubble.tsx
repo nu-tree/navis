@@ -1,3 +1,4 @@
+import { Brain } from "lucide-react";
 import type { Message } from "@navis/validation";
 import { cn } from "cn";
 import { MarkdownText } from "./markdown-text";
@@ -26,7 +27,18 @@ export const MessageBubble = ({ message }: Readonly<Props>) => {
           {message.text}
         </p>
       ) : (
-        <MarkdownText text={message.text} />
+        <>
+          <MarkdownText text={message.text} />
+
+          {/* 이 턴에 기억이 남았을 때만. props 를 늘리지 않고 메시지가 들고 온
+              값으로 판단한다 — 부모가 저장 여부를 알 필요가 없다. */}
+          {message.saved ? (
+            <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Brain className="size-3.5" />
+              기억에 남겼어요
+            </p>
+          ) : null}
+        </>
       )}
     </div>
   );

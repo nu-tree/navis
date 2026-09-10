@@ -13,6 +13,13 @@ function required(name: string): string {
 export const env = {
   /** 이 서버를 부를 클라이언트(web BFF, mobile)의 Bearer 토큰. */
   apiToken: required("API_TOKEN"),
+  /**
+   * 기억 임베딩(Voyage AI). 기억 저장·검색 양쪽에 필요하다.
+   *
+   * DATABASE_URL 은 여기서 검증하지 않는다 — @navis/db 가 첫 질의에서 지연 연결하고
+   * 그 시점에 자기 오류를 던진다(packages/db/src/client.ts).
+   */
+  voyageApiKey: required("VOYAGE_API_KEY"),
 };
 
 // Agent SDK 는 process.env 에서 직접 집어가므로 여기서 값을 쓰진 않는다.
