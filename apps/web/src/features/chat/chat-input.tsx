@@ -1,11 +1,37 @@
+"use client";
+
+import { useState } from "react";
 import { ArrowUp, ImagePlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "cn";
 
-type Props = React.HTMLAttributes<HTMLElement>;
+type Props = React.HTMLAttributes<HTMLElement> & {
+  onSend: (text: string) => void;
+};
 
-export const ChatInput = ({ className }: Readonly<Props>) => {
+export const ChatInput = ({ onSend, className }: Readonly<Props>) => {
+  const [draft, setDraft] = useState("");
+
+  const trimmed = draft.trim();
+  const canSend = trimmed.length > 0;
+
+  const send = () => {
+    if (!canSend) return;
+    onSend(trimmed);
+    setDraft("");
+  };
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== "Enter" || event.shiftKey) return;
+    // 한글 입력 중의 Enter 는 조합을 확정하는 키다. 여기서 보내면 마지막 글자가
+    // 잘리거나 한 번 더 전송된다.
+    if (event.nativeEvent.isComposing) return;
+
+    event.preventDefault();
+    send();
+  };
+
   return (
     <div className={cn("mx-auto w-full max-w-3xl px-4 pb-4", className)}>
       {/* 테두리·배경·포커스 표시는 이 컨테이너가 갖는다 — textarea 와 툴바가
@@ -14,6 +40,9 @@ export const ChatInput = ({ className }: Readonly<Props>) => {
         <Textarea
           rows={1}
           placeholder="무엇이든 물어보세요"
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={handleKeyDown}
           className={cn(
             // shadcn Textarea 는 독립 필드용이라 자기 테두리·배경·포커스링·min-h-16 을
             // 갖는다. 상자를 컨테이너가 그리므로 여기선 지운다.
@@ -31,7 +60,12 @@ export const ChatInput = ({ className }: Readonly<Props>) => {
 
           <div className="flex-1" />
 
-          <Button size="icon-lg" aria-label="전송">
+          <Button
+            size="icon-lg"
+            aria-label="전송"
+            disabled={!canSend}
+            onClick={send}
+          >
             <ArrowUp className="size-4.5" />
           </Button>
         </div>
