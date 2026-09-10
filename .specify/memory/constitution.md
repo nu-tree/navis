@@ -1,50 +1,246 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+<!--
+Sync Impact Report — 2026-09-10
+  버전 변경: 1.0.0 → 1.1.0 (MINOR)
+  성격: 기존 절의 실질적 확장. 원칙의 제거나 재정의는 없다.
+
+  개정 계기: specs/001-core-memory-chat 의 명세·계획 과정에서 두 결정이 확정되었고
+            헌장이 그것을 담고 있지 않았다.
+              (1) 웹 로그인 도입 — 관리형 제공자의 인증 기능 사용
+              (2) 자동 테스트를 머지 게이트에 추가
+
+  수정된 원칙 (제목 변경 없음):
+    II. 의존은 아래로만 흐른다 — 인증의 계층 경계를 명시하는 항목 추가
+
+  수정된 절:
+    스택   — 인증 제공자 한 줄 추가
+    보안   — 브라우저가 쥐는 자격과 서버 자격의 구분, 인증 3층, 로그인 게이트 추가
+            `tools: []` 가 내장 도구만 가리킨다는 사실 명시(설치된 SDK 타입에서 확인)
+    성능   — 매 턴 고정 비용 금지 항목 추가
+    규약   — Next 16 의 미들웨어 개명(`proxy`) 추가
+    개발 워크플로 — 머지 조건에 `pnpm test` 추가 및 그 범위 규정
+
+  제거된 절: 없음
+
+  근거: specs/001-core-memory-chat/{spec.md, research.md, plan.md},
+        node_modules 의 @anthropic-ai/claude-agent-sdk sdk.d.ts,
+        node_modules 의 next/dist/docs/01-app/01-getting-started/16-proxy.md
+
+  이월 TODO: 없음
+
+  이 보고서는 개정 검토용 임시 메모다. 커밋 전에 지운다.
+-->
+
+# navis Constitution
+
+navis 는 제2의 뇌다. **기억 저장 / 기억 불러오기**, 그리고 그것을 쓰는 **대화**.
+이 문서는 그 골격을 지키는 규칙이며, 다른 관행보다 우선한다.
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. 핵심만 남긴다 (타협 불가)
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+기억 저장 · 기억 불러오기 · 대화. 이 셋 밖의 기능은 **만들지 않는다**.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+- 크론, 다이제스트, 캘린더 연동, 동적 커넥터, 알림, 자기수정 파이프라인, 기기 간
+  동기화는 의도적으로 제거된 기능이다. 다시 들여오려면 이 문서를 먼저 개정한다.
+- 소비자가 실재하지 않는 추상·라우트·패키지를 미리 만들지 않는다. `apps/server` 의
+  라우트 목록은 부를 곳이 생길 때 하나씩 늘린다.
+- 기능을 더하는 PR 은 "이게 셋 중 무엇인가"에 한 줄로 답할 수 있어야 한다.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+근거: 이전 구현이 느렸던 이유는 기능이 부족해서가 아니라 부수 기능이 매 턴 지연에
+직접 더해졌기 때문이다. 삭제가 이 프로젝트의 기본 동작이다.
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+### II. 의존은 아래로만 흐른다
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+계층 방향은 `validation ← {db, domain, api} ← {server, web, mobile}` 이다.
+역방향 import 는 **금지**한다.
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+- `packages/validation` 은 `zod` 외의 런타임 의존을 **갖지 않는다**. drizzle · Agent
+  SDK · React · Next 가 들어오는 순간 React Native 번들에서 못 쓰게 되고, 이 패키지가
+  분리된 이유가 사라진다.
+- DB 와 Agent SDK 를 아는 계층은 `packages/domain` **하나**다. 그래서 `DATABASE_URL`
+  과 `CLAUDE_CODE_OAUTH_TOKEN` 을 아는 배포 단위가 하나로 유지된다.
+- `apps/web` · `apps/mobile` 은 `@navis/db` · `@navis/domain` 을 import 하지 않는다.
+  HTTP(`@navis/api`)로만 서버를 부르고, `@navis/api` 는 web 의 **서버 사이드**에서만
+  쓴다.
+- 새 패키지를 만들 때는 이 그림에서 자기 자리를 먼저 지정한다. 자리가 없으면 만들지
+  않는다.
+- **인증은 `apps/web` 안에서 끝난다.** `packages/*` 와 `apps/server` 는 사용자 신원을
+  모른다. 기억 · 대화 · 설정에 사용자 식별자 열을 두지 않는다. 다중 사용자로 가려면 이
+  항목을 먼저 개정한다 — 세 테이블 전부에 마이그레이션이 필요한 결정이다.
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+검증: 각 `package.json` 의 `dependencies` 가 이 방향을 위반하지 않는지 본다.
+인증 관련 import 가 `apps/web` 밖에 나타나면 위반이다.
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+### III. UI 와 비즈니스 로직을 분리한다
+
+화면은 그리는 일만 하고, 판단은 화면 밖에서 한다.
+
+- 상태 · 네트워크 · 전이는 `features/<도메인>/use-<이름>.ts` 훅이 갖는다. `.tsx` 는
+  훅이 준 값을 렌더링만 한다.
+- `.tsx` 안에서 `fetch` 를 부르거나 SSE 를 파싱하거나 도메인 규칙을 분기하지
+  **않는다**.
+- 도메인 규칙(중복 임계값, 시스템 프롬프트, 세션 이어붙임, 벡터 검색 가중치)은
+  `packages/domain` 에 둔다. 화면이나 라우트에 흩뿌리지 않는다.
+- `components/ui/*` 는 재사용 프리미티브다. 도메인 타입을 import 하지 않는다.
+  도메인 타입을 아는 컴포넌트는 `features/` 에 둔다.
+- 라우트 핸들러는 조립만 한다: 검증 → 도메인 호출 → 직렬화. 그 안에 규칙을 쓰지 않는다.
+
+### IV. const 우선 — 재할당은 예외다
+
+모든 선언은 `const` 로 시작한다. `let` 은 예외이고, 예외에는 이유가 붙는다.
+
+- `var` 는 **금지**한다.
+- `let` 은 실제로 재할당이 필요한 **좁은 스코프의 누산기**에만 쓴다 — 스트림 델타
+  버퍼, SSE 파서의 잔여 버퍼, 프라미스 직렬화 큐. 쓸 때는 왜 필요한지 주석을 남긴다.
+- 현재 코드베이스의 `let` 은 5곳이며 전부 위 예외에 해당한다. 이 수가 늘어나는 PR 은
+  리뷰에서 근거를 요구한다.
+- 계층 경계를 넘는 값과 React 상태는 **새로 만들어** 넘긴다
+  (`setMessages((prev) => [...prev, m])`). 지역 누산기의 `push` 는 예외다.
+- 컴포넌트 props 는 `Readonly<Props>` 로 받는다.
+
+근거: 재할당되는 변수는 읽는 사람이 파일 전체를 훑어야 값을 알 수 있다. `const` 는
+선언 지점이 곧 정의다.
+
+### V. props 최소 · 합성 우선
+
+props 는 그 컴포넌트가 **직접 쓰는 것만** 받는다.
+
+- 아래로 흘려보내기 위한 props(prop drilling)를 만들지 않는다. 두 단계 이상 내려갈
+  값은 `children` 합성으로 옮기거나, 쓰는 컴포넌트가 훅에서 직접 가져온다.
+- 네이티브 요소를 감싸는 컴포넌트는 `React.ComponentProps<"div">` 같은 기본 타입을
+  확장한다. `className` · `ref` · `aria-*` 를 하나씩 다시 선언하지 않는다.
+- boolean props 로 모드를 분기하는 컴포넌트는 나눈다. 셋 이상이면 무조건 나눈다.
+- props 타입 이름은 `Props` 로 하고 파일 안에 두며 export 하지 않는다.
+- 부모가 자식의 내부 구조를 알아야 하는 props 는 설계 실패의 신호다 — 슬롯으로 바꾼다.
+
+근거: props 가 늘어난 컴포넌트는 재사용되지 않고, 통과만 하는 props 는 중간 컴포넌트를
+바꿀 이유 없이 계속 바꾸게 만든다.
+
+## 기술 스택 · 보안 · 성능 제약
+
+### 스택 (변경은 이 문서의 개정 사항이다)
+
+- 런타임: Node ≥ 22, pnpm 11, 전부 ESM(`"type": "module"`)
+- 모노레포: pnpm workspace + turbo (`apps/*`, `packages/*`)
+- 웹: Next 16 · React 19 · Tailwind v4(`@theme`, v3 의 `tailwind.config.js` 아님) ·
+  shadcn/radix
+- 서버: Hono + `@hono/node-server` — **상주 프로세스**. 분 단위 에이전트 턴과
+  진행 중인 `AbortController` 를 들고 있어야 하므로 서버리스 함수로 옮기지 않는다.
+- DB: Postgres + drizzle
+- 두뇌: `@anthropic-ai/claude-agent-sdk`, 기본 모델 `claude-opus-5`
+- TypeScript: `strict` + `noUncheckedIndexedAccess`,
+  `module: preserve` / `moduleResolution: bundler`
+- 인증: 관리형 Postgres 제공자(Supabase)의 인증 기능을 쓴다. 데이터베이스가 이미 그
+  제공자 위에 있어 계정 저장소와 인증 API 가 새 인프라 없이 딸려 온다. **비밀번호를 직접
+  저장하거나 해시하지 않는다.**
+- 배포: Railway 는 쓰지 않는다. 그 외 대상은 아직 결정하지 않으며, 배포 코드를 미리
+  넣지 않는다.
+
+### 보안 (타협 불가)
+
+- **브라우저에 서버 토큰을 노출하지 않는다.** `NAVIS_API_TOKEN` 에 `NEXT_PUBLIC_`
+  접두사를 붙이지 않는다. 경로는 항상 브라우저 → (세션) → web 서버 → (서버가 쥔 토큰)
+  → server 다. 브라우저는 `/api/*`(BFF)만 부른다.
+- **브라우저가 쥐는 자격과 서버 자격은 다른 것이다.** 브라우저는 **로그인 세션**을 갖는다 —
+  로그인 · 로그아웃에만 쓰이고 `apps/server` 를 부를 수 없다. 위 항목을 "브라우저에 아무
+  자격도 없어야 한다"로 읽지 말 것. 막아야 하는 것은 `apps/server` 를 부를 수 있는 자격
+  하나다.
+- **인증은 세 층으로 나눈다.** 브라우저(로그인 · 로그아웃만) / web 서버의 낙관적 리다이렉트 /
+  BFF 라우트 핸들러의 실제 인가. **프록시(구 미들웨어)를 인가 수단으로 쓰지 않는다** —
+  프리페치를 포함해 모든 라우트에서 돌기 때문에 세션 쿠키를 읽는 것까지만 한다. 데이터베이스를
+  보지 않는다.
+- 로그인하지 않은 상태에서는 어떤 화면도 내용을 보여주지 않는다. BFF 는 세션이 없으면
+  **401 JSON** 을 돌려준다 — 리다이렉트하지 않는다. `fetch` 호출자가 HTML 을 받으면 파싱이
+  깨진다.
+- `apps/server` 는 **기본 잠금**이다. `app.use("*")` 로 전부 막고 예외만 나열한다.
+  보호할 경로를 나열하는 방식은 쓰지 않는다 — 라우트를 추가하다 하나 빠뜨리면 공개된다.
+- Agent SDK 의 내장 파일 · 셸 도구(`Read`/`Write`/`Edit`/`Bash`)를 열지 않는다.
+  `tools: []` 가 기본이고, 기억 MCP 의 도구만 명시적으로 연다. 서버에 소스 트리가 없어
+  얻는 것이 없고, 토큰이 새면 그대로 임의 명령 실행이 된다.
+  `tools` 는 **내장 도구**의 집합이므로(설치된 SDK 타입 주석: *"the base set of available
+  built-in tools"*, `[]` = 전면 차단) MCP 도구와 충돌하지 않는다. `mcpServers` 로 들어오는
+  도구는 이 배열과 무관하다 — 둘을 같은 것으로 보고 `tools` 에 MCP 도구를 넣지 말 것.
+- `settingSources: []` 를 유지한다. 서버는 어느 디렉터리에서 뜨든 같게 동작해야 한다.
+- 환경변수는 **부팅 때** 검증한다. 첫 요청에서 500 으로 알게 되면 늦다.
+
+### 성능
+
+- **첫 토큰 지연이 예산이다.** 기억 MCP 는 in-process(`createSdkMcpServer`)로 붙인다.
+  HTTP MCP 로 자기 자신에게 왕복하지 않는다 — 이전 구현에서 측정된 ~1.6초 바닥의 원인이다.
+- 매 턴 뒤에 추가 모델 호출(사후 큐레이터)을 넣지 않는다.
+- BFF 는 스트림을 파싱하지 않고 그대로 흘린다. 중간에서 파싱·재직렬화하면 첫 토큰이
+  늦어지고 계약이 두 곳으로 갈라진다. `cache-control: no-transform` 과
+  `x-accel-buffering: no` 를 유지한다.
+- 목록 쿼리는 필요한 열만 읽는다. 대화 목록이 `messages` jsonb 를 싣지 않는다.
+- **매 턴 고정 비용을 늘리지 않는다.** 외부 서비스 왕복(임베딩 · 검색)을 모든 턴에 무조건
+  얹지 않는다. 필요한 턴에만 부른다 — 인사 한마디에 붙는 왕복은 취소할 수 없는 비용이다.
+- 응답성이 우선이라 `thinking: adaptive` · `effort: medium` 을 기본으로 둔다.
+
+### 규약
+
+- 파일 · 폴더명은 **kebab-case** (`use-send-message.ts`)
+- relative import 는 **확장자 없이** (`./schema`, `./schema.js` 아님)
+- id 는 `crypto.randomUUID()`. `` `a${Date.now()}` `` 는 같은 ms 안에서 충돌하므로
+  쓰지 않는다.
+- 계약은 `@navis/validation` 의 zod 스키마가 **유일한 출처**다. 스트림 이벤트처럼
+  갈래가 있는 것은 판별 유니온으로 둔다.
+- 에러는 **타입 있는 에러**로 던진다. 메시지 문자열로 HTTP status 를 결정하지 않는다 —
+  문구를 다듬으면 404 가 500 이 된다.
+- 문서 · UI 문구 · 주석은 **한국어**. 코드 식별자는 영어.
+- Next 16 에서 미들웨어는 **`proxy`** 다 (`apps/web/src/proxy.ts`). `middleware.ts` 를
+  만들지 않는다. 이 저장소의 Next 는 훈련 데이터와 다를 수 있으니, 프레임워크 API 를 쓰기 전에
+  `node_modules/next/dist/docs/` 의 해당 문서를 읽는다(`apps/web/AGENTS.md`).
+- 주석은 "무엇"이 아니라 **"왜"** 를 적는다. 되돌리려는 사람이 이유를 알아야 한다.
+
+## 개발 워크플로와 품질 게이트
+
+- **머지 조건**: `pnpm typecheck` · `pnpm lint` · `pnpm test` 통과. 웹을 건드린 PR 은
+  `pnpm --filter @navis/web build` 도 통과해야 한다.
+- **자동 테스트는 결정적인 것만 덮는다.** 대상은 두 층이다: `packages/domain` 의 순수
+  함수, 그리고 `apps/server` 의 계약(`app.fetch()` 직접 호출 — `app.ts` 가 `index.ts` 와
+  분리된 목적이 그것이다). 웹 컴포넌트 단위 테스트와 E2E 는 두지 않는다 — 상주 서버 · 외부
+  모델 · 외부 임베딩에 걸려 느리고 불안정하며, 단일 사용자 도구에 유지비가 과하다.
+- 모델 판단이 섞인 확률적 기준(저장 판단율, 검색 적중률)은 테스트로 고정하지 않는다. 기능별
+  검증 가이드의 수동 시나리오로 다룬다. 통과 여부를 사람이 판정하는 항목을 CI 게이트에 넣으면
+  게이트가 거짓말을 하게 된다.
+- 타입 에러를 `any` 나 `@ts-expect-error` 로 덮지 않는다. 불가피하면 이유를 주석으로
+  남긴다.
+- 스키마 변경은 `pnpm db:generate` → `pnpm db:migrate` **명시적 2단계**다. 부팅 시
+  자동 마이그레이션을 넣지 않는다 — 배포와 분리된 단계로 유지한다.
+- 옛 구현을 이관하는 PR 은 `STRUCTURE.md` 의 "이관하면서 반드시 반영할 것" 8개 항목을
+  확인한 뒤 커밋한다. 그대로 옮기면 같은 문제를 물려받는다.
+- 화면 작업 순서는 `plan-web.md` 를 따른다: 챗 UI → 기억 · 설정 화면 → 전체 다듬기 →
+  실제 채팅 기능 연결.
+- 커밋 메시지는 한국어 본문 + Conventional Commits 접두사(`feat:`, `fix:`,
+  `build(web):`).
+- 리뷰 체크리스트: 원칙 I~V 위반 여부, 의존 방향, 토큰 노출, `let` 추가 여부,
+  통과만 하는 props 유무.
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+이 문서는 다른 모든 관행보다 우선한다. 코드와 충돌하면 코드를 고친다. 문서가 틀렸으면
+코드를 고치기 전에 문서를 개정한다.
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+**개정 절차**
+
+1. 무엇을 · 왜 바꾸는지 PR 설명에 적는다.
+2. 영향받는 코드의 이관 계획을 함께 적는다. 계획 없는 개정은 승인하지 않는다.
+3. 버전을 올리고 `Last Amended` 를 갱신한다.
+
+**버전 정책** (유의적 버전)
+
+- **MAJOR**: 원칙의 제거 또는 하위 비호환 재정의
+- **MINOR**: 원칙 · 절의 추가, 또는 지침의 실질적 확장
+- **PATCH**: 표현 · 오타 · 비의미적 정리
+
+**준수 검토**
+
+- 모든 PR 리뷰는 원칙 I~V 준수를 확인한다. 위반이 필요하면 PR 에 이유를 적고 승인을
+  받는다 — 조용히 넘기지 않는다.
+- 복잡도는 정당화 대상이다. 더 단순한 방법이 있는데 고르지 않았다면 이유를 남긴다.
+- 예외는 만료된다. 임시 위반은 `TODO(원칙-N): 이유` 주석과 함께 남기고, 다음 관련
+  작업에서 정리한다.
+- 런타임 개발 지침은 `README.md`(구조 · 규약)와 `STRUCTURE.md`(이관 지도)를 본다.
+
+**Version**: 1.1.0 | **Ratified**: 2026-09-10 | **Last Amended**: 2026-09-10
