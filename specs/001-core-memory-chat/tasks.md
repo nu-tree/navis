@@ -71,7 +71,7 @@ description: "핵심 나비스 — 기억과 대화 구현 작업 목록"
 - [X] T015 `packages/domain/src/errors.ts` 를 만들고 **타입 있는 오류**를 정의한다 (`NotFoundError`, `EmbeddingError`). 없는 id 에 대한 오류를 한국어 메시지 문자열로 판정하지 않는다 — 문구를 다듬으면 404 가 500 이 된다(FR-041, `STRUCTURE.md` 7항)
 - [X] T016 `packages/domain/src/memory/embed.ts` 에 `embed()` 를 구현한다. **`json.data[0].embedding` 을 무가드로 읽지 않는다** — 200 + 빈 `data` 면 `EmbeddingError` 를 던진다(FR-042, `STRUCTURE.md` 8항, R5)
 - [X] T017 [P] `packages/domain/src/memory/embed.test.ts` — 빈 `data`, 오류 응답, 차원 불일치 각각에서 `EmbeddingError` 가 나오는지 검증한다
-- [ ] T018 ⛔ **[차단 — DB 연결 불가]** `packages/db/src/schema.ts` 의 `memories` 에서 `source` 컬럼을 삭제하고 `pnpm db:generate` → `pnpm db:migrate` 를 돌린다 — 부팅 시 자동 마이그레이션은 없다(헌장). **데이터 유실이므로 선택 사항이다**; 남겨두고 쓰지 않아도 동작에 지장이 없다
+- [X] T018 `packages/db/src/schema.ts` 의 `memories` 에서 `source` 컬럼을 삭제하고 `pnpm db:generate` → `pnpm db:migrate` 를 돌린다 — 부팅 시 자동 마이그레이션은 없다(헌장). **데이터 유실이므로 선택 사항이다**; 남겨두고 쓰지 않아도 동작에 지장이 없다
 - [X] T019 `packages/domain/src/memory/mapping.ts` 에 저장↔와이어 매핑을 만든다. `tags: string[]` 와 `done: boolean` 은 DB 의 `metadata` jsonb 안에 살고 밖으로는 일급 필드로 나간다. `relatedIds` 도 `metadata` 에 둔다 — 조인 테이블을 만들지 않는다(data-model.md)
 - [X] T020 [P] `packages/domain/src/memory/mapping.test.ts` — jsonb ↔ 일급 필드 왕복이 손실 없는지, `category` 가 `decision·learning·idea·feeling·people·todo` 중 하나이거나 `null` 인지, `project` 가 `null` 일 때 개인 · 전역 기억으로 취급되는지 검증한다
 
@@ -376,6 +376,42 @@ Foundational 완료 후:
 저장소의 `SELECTABLE_MODELS` 값이 유효하다. 별칭이 그 스냅샷으로 해석된다.
 `packages/validation/src/chat.ts` 는 그대로 둔다. **T008 의 "확정 전까지 기본 모델만
 노출한다" 제약은 해제된다** — 모델 선택기를 정상 범위로 만들 수 있다(analyze C2).
+
+### T018 — `source` 제거 + 마이그레이션 드리프트 정리 (2026-09-11)
+
+로컬 DB 를 실물로 보니 `schema.ts` 와 마이그레이션이 세 군데 갈라져 있었다. `source`
+하나만 지우려 했지만 드리프트를 안고 US3 로 가면 런타임에 깨지므로 함께 정리했다.
+
+| 항목 | 마이그레이션(실제 DB) | `schema.ts` | 처리 |
+| --- | --- | --- | --- |
+| `memories.source` | 있음 | 없음 | 삭제 (T018) |
+| `conversations.created_at` | **없음** | 있음 | 추가 + `updated_at` 으로 백필 |
+| `conversations` 의 `kind`·`unread`·`hidden`·`deleted_at` | 있음 | 없음 | 삭제 |
+| `crons`·`profile` 테이블 | 있음 | 없음 | 삭제 |
+| `conversations_updated_at_idx` | **없음** | 있음 | 생성 |
+
+**마이그레이션 3개로 나눴다.** `db:generate` 는 "컬럼 4개 삭제 + 1개 추가" 를 이름
+변경으로 오해해 대화형 프롬프트를 띄운다. 추가와 삭제를 같은 패스에 두지 않으면 안 뜬다.
+
+| # | 내용 |
+| --- | --- |
+| `0005_add_conversation_created_at` | `created_at` 추가 · `source` 삭제 · `crons`/`profile` 삭제 · 인덱스 생성 |
+| `0006_backfill_and_purge_tombstones` | `created_at` 백필 · **툼스톤 실제 삭제** (커스텀 SQL) |
+| `0007_drop_legacy_conversation_columns` | 레거시 컬럼 4개 삭제 |
+
+**0006 이 순서상 반드시 중간이어야 한다.** `deleted_at` 이 166개 중 **137개**에
+값이 있었다 — 사용자가 삭제한 대화다. 컬럼만 지우면 그 137개(메시지 1,838개)가 목록에
+전부 되살아난다. 그래서 컬럼 삭제 전에 행을 실제로 지운다.
+
+`created_at` 백필도 같은 이유다. `DEFAULT now()` 가 기존 행 전부에 "지금"을 박으므로
+`updated_at` 으로 되돌린다 — 정확하진 않지만 "전부 오늘 생성" 보다 참에 가깝고 목록
+정렬(updated_at 기준)과 모순이 없다.
+
+**결과**: 대화방 166 → 29, 테이블 5 → 3, 기억 1,031 유지.
+`pnpm db:generate` 가 `No schema changes` 를 내며 드리프트 0 확인.
+
+**⚠️ Supabase 에 적용할 때**: 이 마이그레이션은 그쪽의 `crons`·`profile` 데이터(각 8행)를
+지우고 툼스톤 대화도 실제 삭제한다. 둘 다 의도된 것이지만, 8/26 백업이 안전망이다.
 
 ---
 

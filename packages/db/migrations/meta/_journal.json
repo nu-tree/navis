@@ -36,6 +36,27 @@
       "when": 1780647573893,
       "tag": "0004_talented_yellow_claw",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1789087634481,
+      "tag": "0005_add_conversation_created_at",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789087660103,
+      "tag": "0006_backfill_and_purge_tombstones",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789087669175,
+      "tag": "0007_drop_legacy_conversation_columns",
+      "breakpoints": true
     }
   ]
 }

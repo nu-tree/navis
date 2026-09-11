@@ -27,8 +27,7 @@ export const memories = pgTable(
     // 카테고리와 직교하는 두 번째 축 ("navis 프로젝트의 todo" 같은 검색용).
     project: text("project"),
     embedding: vector("embedding", { dimensions: 1024 }),
-    source: text("source"),
-    // tags: string[], done: boolean 이 여기 들어간다.
+    // tags: string[], done: boolean, relatedIds: string[] 가 여기 들어간다.
     metadata: jsonb("metadata").notNull().default({}),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
