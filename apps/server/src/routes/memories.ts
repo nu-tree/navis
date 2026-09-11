@@ -1,7 +1,11 @@
 import { Hono, type Context } from "hono";
 import { memory } from "@navis/domain";
 import { isEmbeddingError, isNotFound } from "@navis/domain/errors";
-import { recentInputSchema, saveInputSchema } from "@navis/validation";
+import {
+  recallInputSchema,
+  recentInputSchema,
+  saveInputSchema,
+} from "@navis/validation";
 
 // 기억 라우트. 인증은 app.ts 의 기본 잠금이 이미 걸어뒀다.
 //
@@ -25,6 +29,19 @@ export const memoriesRoute = new Hono()
     }
     try {
       return c.json(await memory.recent(parsed.data));
+    } catch (err) {
+      return failure(c, err);
+    }
+  })
+  // ★ 정적 경로를 /:id 류보다 먼저 등록한다. 나중에 GET /memories/:id 가 붙으면
+  //   "search" 를 id 로 잡아먹는다.
+  .get("/search", async (c) => {
+    const parsed = recallInputSchema.safeParse(numericQuery(c.req.query()));
+    if (!parsed.success) {
+      return c.json({ error: "잘못된 요청", detail: parsed.error.issues }, 400);
+    }
+    try {
+      return c.json(await memory.recall(parsed.data));
     } catch (err) {
       return failure(c, err);
     }

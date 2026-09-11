@@ -7,11 +7,13 @@ vi.stubEnv("VOYAGE_API_KEY", "test-voyage-key");
 
 const save = vi.fn();
 const recent = vi.fn();
+const recall = vi.fn();
 
 vi.mock("@navis/domain", () => ({
   memory: {
     save: (...a: unknown[]) => save(...a),
     recent: (...a: unknown[]) => recent(...a),
+    recall: (...a: unknown[]) => recall(...a),
   },
   chat: { runTurn: vi.fn() },
 }));
@@ -135,3 +137,70 @@ describe("GET /memories", () => {
     expect(first).not.toHaveProperty("embedding");
   });
 });
+
+describe("GET /memories/search", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("RecallHit 배열을 돌려준다", async () => {
+    recall.mockResolvedValue([{ memory, score: 0.42 }]);
+    const res = await req("/memories/search?query=배포");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Array<{ score: number }>;
+    expect(body[0]?.score).toBe(0.42);
+  });
+
+  it("query 가 없으면 400", async () => {
+    const res = await req("/memories/search");
+    expect(res.status).toBe(400);
+    expect(recall).not.toHaveBeenCalled();
+  });
+
+  it("빈 query 는 400", async () => {
+    const res = await req("/memories/search?query=");
+    expect(res.status).toBe(400);
+  });
+
+  // FR-019 — recallInputSchema 의 상한과 일치해야 한다.
+  it("limit 상한(50)을 넘으면 400", async () => {
+    const res = await req("/memories/search?query=x&limit=51");
+    expect(res.status).toBe(400);
+    expect(recall).not.toHaveBeenCalled();
+  });
+
+  it("limit 을 숫자로 넘긴다", async () => {
+    recall.mockResolvedValue([]);
+    await req("/memories/search?query=x&limit=5");
+    expect(recall).toHaveBeenCalledWith(expect.objectContaining({ limit: 5 }));
+  });
+
+  // FR-018 — 스코프는 그 프로젝트 + 개인 기억. 필터 자체는 domain 이 하고,
+  // 라우트는 값을 그대로 넘기기만 한다.
+  it("project 스코프를 그대로 넘긴다", async () => {
+    recall.mockResolvedValue([]);
+    await req("/memories/search?query=x&project=navis");
+    expect(recall).toHaveBeenCalledWith(
+      expect.objectContaining({ project: "navis" }),
+    );
+  });
+
+  it("결과가 없으면 빈 배열 — 404 가 아니다", async () => {
+    recall.mockResolvedValue([]);
+    const res = await req("/memories/search?query=없는내용");
+    expect(res.status).toBe(200);
+    expect((await res.json()) as unknown[]).toEqual([]);
+  });
+
+  it("임베딩 실패는 502", async () => {
+    recall.mockRejectedValue(new FakeEmbeddingError("임베딩 실패"));
+    const res = await req("/memories/search?query=x");
+    expect(res.status).toBe(502);
+  });
+
+  // "search" 가 나중에 붙을 /:id 라우트에 잡아먹히면 안 된다.
+  it("정적 경로가 id 로 해석되지 않는다", async () => {
+    recall.mockResolvedValue([]);
+    await req("/memories/search?query=x");
+    expect(recall).toHaveBeenCalled();
+  });
+});
+

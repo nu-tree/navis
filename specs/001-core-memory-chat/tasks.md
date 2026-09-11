@@ -119,15 +119,15 @@ description: "핵심 나비스 — 기억과 대화 구현 작업 목록"
 **Independent test**: 기억을 HTTP 로 직접 몇 건 주입한 뒤(US1 없이 가능) 저장 때와 다른 표현으로
 질문해 그 내용이 답에 나오면 통과. 인사 10턴에 기억 검색이 0회면 함께 통과. (`quickstart.md` S2, S3)
 
-- [ ] T036 [US2] `packages/domain/src/memory/rerank.ts` 에 시간 가중치 재정렬을 **순수 함수**로 구현한다: `score = similarity × decay(age)`. 반감기 방식. 입출력이 배열인 순수 함수라 `let` 없이 `map`/`sort` 로 쓴다(헌장 원칙 IV, R6)
-- [ ] T037 [P] [US2] `packages/domain/src/memory/rerank.test.ts` — 유사도가 대등하면 최근 기억이 앞에 오는지(FR-017), 유사도 차이가 크면 시간이 뒤집지 못하는지, 빈 배열 · 단일 원소를 검증한다
-- [ ] T038 [US2] `packages/domain/src/memory/recall.ts` 에 `recall()` 을 구현한다. **HNSW 코사인 거리로 후보 N 건(limit 의 약 4배, 상한 200)만 DB 에서 뽑고** 재정렬은 T036 에 맡긴다 — 가중치를 SQL `ORDER BY` 에서 곱하면 `memories_embedding_idx` 를 타지 못한다(R6)
-- [ ] T039 [US2] `packages/domain/src/memory/recall.ts` 의 `recall()` 에 프로젝트 스코프 필터를 넣는다: 스코프가 주어지면 **그 프로젝트 + `project IS NULL` 인 개인 기억**만 후보로 삼는다(FR-018)
-- [ ] T040 [US2] `packages/domain/src/memory/recall.ts` 의 `recall()` 반환 상한을 **최대 50건**으로 강제한다(FR-019, `recallInputSchema` 의 `limit` 상한과 일치해야 한다)
-- [ ] T041 [US2] `packages/domain/src/memory/mcp.ts` 에 `recall` 도구를 등록한다
-- [ ] T042 [US2] `packages/domain/src/chat/index.ts` 의 시스템 프롬프트에 호출 시점 기준을 넣는다: 사용자가 과거를 물으면 **반드시** `recall` 을 부르고(FR-053), 인사 · 감사에는 부르지 않고(FR-052), 결과가 비면 **없다고 말한다**(FR-020). 턴이 끝난 뒤 저장 여부를 다시 판단하는 과정을 넣지 않는다(헌장 성능 절)
-- [ ] T043 [US2] `apps/server/src/routes/memories.ts` 에 `GET /memories/search`(`RecallInput` 쿼리 → `RecallHit[]`)를 붙인다
-- [ ] T044 [P] [US2] `apps/server/src/routes/memories.test.ts` 에 검색 계약 테스트를 추가한다 — `limit` 상한 초과 요청에 400, 스코프 필터가 개인 기억을 포함하는지
+- [X] T036 [US2] `packages/domain/src/memory/rerank.ts` 에 시간 가중치 재정렬을 **순수 함수**로 구현한다: `score = similarity × decay(age)`. 반감기 방식. 입출력이 배열인 순수 함수라 `let` 없이 `map`/`sort` 로 쓴다(헌장 원칙 IV, R6)
+- [X] T037 [P] [US2] `packages/domain/src/memory/rerank.test.ts` — 유사도가 대등하면 최근 기억이 앞에 오는지(FR-017), 유사도 차이가 크면 시간이 뒤집지 못하는지, 빈 배열 · 단일 원소를 검증한다
+- [X] T038 [US2] `packages/domain/src/memory/recall.ts` 에 `recall()` 을 구현한다. **HNSW 코사인 거리로 후보 N 건(limit 의 약 4배, 상한 200)만 DB 에서 뽑고** 재정렬은 T036 에 맡긴다 — 가중치를 SQL `ORDER BY` 에서 곱하면 `memories_embedding_idx` 를 타지 못한다(R6)
+- [X] T039 [US2] `packages/domain/src/memory/recall.ts` 의 `recall()` 에 프로젝트 스코프 필터를 넣는다: 스코프가 주어지면 **그 프로젝트 + `project IS NULL` 인 개인 기억**만 후보로 삼는다(FR-018)
+- [X] T040 [US2] `packages/domain/src/memory/recall.ts` 의 `recall()` 반환 상한을 **최대 50건**으로 강제한다(FR-019, `recallInputSchema` 의 `limit` 상한과 일치해야 한다)
+- [X] T041 [US2] `packages/domain/src/memory/mcp.ts` 에 `recall` 도구를 등록한다
+- [X] T042 [US2] `packages/domain/src/chat/index.ts` 의 시스템 프롬프트에 호출 시점 기준을 넣는다: 사용자가 과거를 물으면 **반드시** `recall` 을 부르고(FR-053), 인사 · 감사에는 부르지 않고(FR-052), 결과가 비면 **없다고 말한다**(FR-020). 턴이 끝난 뒤 저장 여부를 다시 판단하는 과정을 넣지 않는다(헌장 성능 절)
+- [X] T043 [US2] `apps/server/src/routes/memories.ts` 에 `GET /memories/search`(`RecallInput` 쿼리 → `RecallHit[]`)를 붙인다
+- [X] T044 [P] [US2] `apps/server/src/routes/memories.test.ts` 에 검색 계약 테스트를 추가한다 — `limit` 상한 초과 요청에 400, 스코프 필터가 개인 기억을 포함하는지
 
 **Checkpoint**: `quickstart.md` S2 · S3 통과. 인사 턴에 진행 표시로 기억 도구가 나타나지 않고 첫 글자가 3초 안에 온다.
 
@@ -412,6 +412,43 @@ Foundational 완료 후:
 
 **⚠️ Supabase 에 적용할 때**: 이 마이그레이션은 그쪽의 `crons`·`profile` 데이터(각 8행)를
 지우고 툼스톤 대화도 실제 삭제한다. 둘 다 의도된 것이지만, 8/26 백업이 안전망이다.
+
+### Phase 4 (US2) 실측 (2026-09-11)
+
+기억 1,031건이 든 로컬 DB 로 확인했다.
+
+| 입력 | 도구 | 첫 글자 | 저장 |
+| --- | --- | --- | --- |
+| "안녕" | **(없음)** | 2.1초 | 0건 |
+| "내가 배포 관련해서 뭐라고 했었지?" | `recall` | 4.9초 | 0건 |
+| "내 할 일 중에 안 끝난 거 알려줘" | `recall` | 4.9초 | 0건 |
+
+FR-052(인사엔 검색 안 함) · FR-053(과거 질문엔 반드시) · SC-017(인사 검색 0회) 충족.
+인사 턴 2.1초는 SC-001 의 3초 예산 안이지만 여유가 크지 않다.
+
+**프로젝트 스코프(FR-018)** — 같은 질의로 확인:
+
+| 스코프 | 결과 분포 |
+| --- | --- |
+| 없음 | `navis:3 (null):6 ddubi-mall:1` |
+| `navis` | `navis:3 (null):7` — ddubi-mall 제외, 개인 기억 포함 |
+| `scm` | `(null):10` — navis·ddubi-mall 제외 |
+
+**`recall()` 소요**: 220~370ms (임베딩 왕복 포함). `limit: 999` 요청 → 50건(FR-019).
+
+### ⚠️ HNSW `ef_search` — 지금은 안 보이는 함정
+
+`hnsw.ef_search` 기본값이 **40** 인데 `recall()` 은 후보를 최대 **200** 요청한다.
+pgvector 는 근사 검색이고 이 값이 탐색 폭이라, 인덱스가 쓰이는 순간 나머지 160 은
+무의미해진다.
+
+1,031행에서는 플래너가 `Seq Scan`(정확 검색)을 골라 **드러나지 않는다**. `EXPLAIN` 으로
+확인: 기본 상태는 `Seq Scan`, `enable_seqscan=off` 면 `Index Scan using
+memories_embedding_idx` 로 바뀐다 — 인덱스는 쓸 수 있고 플래너가 안 고를 뿐이다.
+
+규모가 커져 인덱스로 넘어갈 때 조용히 나빠지는 종류라, 질의마다 `SET LOCAL
+hnsw.ef_search = <후보 수>` 로 맞춰뒀다. 트랜잭션이 끝나면 되돌아가 커넥션 풀에 새지
+않는다.
 
 ---
 

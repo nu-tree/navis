@@ -13,7 +13,8 @@
 //      가장 나쁜 실패다. 그래서 ALLOWED_MEMORY_TOOLS 를 반드시 함께 넘긴다.
 
 import { createSdkMcpServer, tool } from "@anthropic-ai/claude-agent-sdk";
-import { saveInputSchema } from "@navis/validation";
+import { recallInputSchema, saveInputSchema } from "@navis/validation";
+import { recall } from "./recall";
 import { save } from "./save";
 
 /** MCP 서버 이름. 도구는 `mcp__memory__<도구명>` 으로 노출된다. */
@@ -28,7 +29,7 @@ export const MEMORY_SERVER_NAME = "memory";
  *
  * `graphify` 는 등록하지 않는다 — 기억 그래프는 범위 밖이다.
  */
-export const MEMORY_TOOL_NAMES = ["save"] as const satisfies readonly string[];
+export const MEMORY_TOOL_NAMES = ["save", "recall"] as const satisfies readonly string[];
 
 /**
  * `Options.allowedTools` 에 넘길 값.
@@ -95,6 +96,45 @@ export const createMemoryMcpServer = (tally: MemoryToolTally) =>
               type: "text" as const,
               text: `저장했다. id=${memory.id} 분류=${memory.category ?? "없음"}`,
             },
+          ],
+        };
+      },
+    ),
+    tool(
+      "recall",
+      [
+        "사용자의 과거 기억을 의미로 찾는다. 저장 당시와 같은 단어가 아니어도 찾는다.",
+        "",
+        "반드시 부를 때:",
+        "- 사용자가 과거를 묻는다 ('전에 뭐라고 했지', '왜 그렇게 정했지', '남은 할 일')",
+        "- 사용자 본인·과거 결정·진행 중인 일에 대한 답이 필요하다",
+        "",
+        "부르지 않을 때:",
+        "- 인사, 감사, 짧은 확인 — 기억이 필요 없는 말에 검색 비용을 얹지 않는다",
+        "- 일반 지식 질문 (기억이 아니라 네가 아는 것으로 답한다)",
+        "",
+        "query 는 사용자의 말 그대로가 아니라 '무엇을 찾고 싶은가' 로 다듬어 넣는다.",
+        "결과가 비면 **기억에 없다고 말한다.** 지어내지 않는다.",
+      ].join("\n"),
+      recallInputSchema.shape,
+      async (args) => {
+        const hits = await recall(args);
+        if (hits.length === 0) {
+          return {
+            content: [
+              { type: "text" as const, text: "관련된 기억이 없다." },
+            ],
+          };
+        }
+        const lines = hits.map((h) => {
+          const meta = [h.memory.category, h.memory.project]
+            .filter(Boolean)
+            .join("/");
+          return `- [${h.memory.createdAt.slice(0, 10)}${meta ? ` ${meta}` : ""}] ${h.memory.content}`;
+        });
+        return {
+          content: [
+            { type: "text" as const, text: `기억 ${hits.length}건:\n${lines.join("\n")}` },
           ],
         };
       },
