@@ -73,3 +73,5 @@ pnpm db:migrate     # 적용
 
 
 <!-- Security scan triggered at 2026-09-10 04:08:31 -->
+
+<!-- Security scan triggered at 2026-09-11 07:26:05 -->
