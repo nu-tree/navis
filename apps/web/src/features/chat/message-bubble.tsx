@@ -21,11 +21,31 @@ export const MessageBubble = ({ message }: Readonly<Props>) => {
       )}
     >
       {isUser ? (
-        // 사용자 입력은 마크다운으로 해석하지 않는다 — 의도 없이 쓴 `*`·`#` 가
-        // 서식으로 바뀌면 원문이 왜곡된다. 줄바꿈만 보존한다.
-        <p className="whitespace-pre-wrap text-md leading-relaxed">
-          {message.text}
-        </p>
+        <>
+          {message.images?.length ? (
+            <div className="mb-2 flex flex-wrap gap-1.5">
+              {message.images.map((src, i) => (
+                /* data URL 이라 원격 호스트도 최적화 대상도 없다. */
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  key={src.slice(-40) + i}
+                  src={src}
+                  alt={`첨부 ${i + 1}`}
+                  className="size-20 rounded-lg object-cover"
+                />
+              ))}
+            </div>
+          ) : null}
+
+          {/* 사용자 입력은 마크다운으로 해석하지 않는다 — 의도 없이 쓴 `*`·`#` 가
+              서식으로 바뀌면 원문이 왜곡된다. 줄바꿈만 보존한다.
+              이미지만 보낸 턴은 텍스트가 비어 있으므로 그릴 것이 없다(FR-006). */}
+          {message.text ? (
+            <p className="whitespace-pre-wrap text-md leading-relaxed">
+              {message.text}
+            </p>
+          ) : null}
+        </>
       ) : (
         <>
           <MarkdownText text={message.text} />

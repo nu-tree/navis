@@ -13,8 +13,9 @@
 // 기억 MCP 는 in-process 로 붙는다(../memory/mcp.ts). 예전처럼 HTTP MCP 로 자기 자신에게
 // 왕복하지 않는다 — 그게 첫 토큰 지연의 가장 큰 원인이었다.
 
-import { query } from "@anthropic-ai/claude-agent-sdk";
+import { query, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import { DEFAULT_MODEL, type Model } from "@navis/validation";
+import { toImageBlocks } from "./images";
 import {
   ALLOWED_MEMORY_TOOLS,
   MEMORY_SERVER_NAME,
@@ -53,6 +54,13 @@ const SYSTEM_PROMPT = [
 
 export type TurnInput = {
   prompt: string;
+  /**
+   * 첨부 이미지 (base64 data URL, 최대 8장).
+   *
+   * 있으면 프롬프트 형태가 바뀐다 — 문자열로는 이미지를 실을 수 없어
+   * AsyncIterable<SDKUserMessage> 로 넘긴다(images.ts 주석 참조).
+   */
+  images?: string[];
   /** 이어갈 에이전트 세션. 없으면 새 세션으로 시작한다. */
   resumeSessionId?: string | null;
   model?: Model;
@@ -92,8 +100,33 @@ export async function runTurn(
   // 이 턴 동안의 기억 도구 집계. 도구 핸들러가 클로저로 잡아 직접 올린다.
   const tally: MemoryToolTally = { saved: 0 };
 
+  // 이미지가 없으면 문자열 프롬프트를 그대로 쓴다 — 불필요하게 구조화하지 않는다.
+  // 있으면 텍스트 + 이미지 블록을 담은 사용자 메시지 하나를 흘려보낸다.
+  // 텍스트가 비어도 이미지만으로 보낼 수 있다(FR-006).
+  // ★ 검증은 제너레이터 **밖에서** 한다. 안에서 던지면 SDK 가 그것을 스트림 취소로
+  //   바꿔 "Operation aborted" 로 덮어버리고, 사용자는 왜 실패했는지 알 수 없다
+  //   (실측 확인). 여기서 던지면 라우트가 그대로 error 이벤트로 내보낸다.
+  const blocks = input.images?.length ? toImageBlocks(input.images) : null;
+
+  const prompt =
+    blocks
+      ? (async function* (): AsyncIterable<SDKUserMessage> {
+          yield {
+            type: "user",
+            message: {
+              role: "user",
+              content: input.prompt.trim()
+                ? [...blocks, { type: "text", text: input.prompt }]
+                : blocks,
+            },
+            parent_tool_use_id: null,
+            session_id: input.resumeSessionId ?? "",
+          } as SDKUserMessage;
+        })()
+      : input.prompt;
+
   for await (const message of query({
-    prompt: input.prompt,
+    prompt,
     options: {
       model: input.model ?? DEFAULT_MODEL,
       systemPrompt: SYSTEM_PROMPT,
@@ -157,3 +190,5 @@ export async function runTurn(
     savedCount: tally.saved,
   };
 }
+
+export { MAX_IMAGES, toImageBlocks } from "./images";

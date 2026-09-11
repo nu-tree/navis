@@ -107,6 +107,16 @@ description: "핵심 나비스 — 기억과 대화 구현 작업 목록"
 - [X] T034 [US1] `apps/web/src/features/chat/message-bubble.tsx` 에 저장 표시를 넣는다. `done.saved` 가 참인 턴에만 보인다. props 를 늘리지 않고 메시지에 담긴 값으로 판단한다(헌장 원칙 V)
 - [X] T035 [US1] `apps/web/src/features/chat/use-chat.ts` 가 `done` 이벤트의 `saved` 를 메시지에 실어 목록으로 옮긴다
 
+### 추가 — `/speckit-analyze` 가 찾은 커버리지 갭 (2026-09-11 등록)
+
+스펙 요구인데 작업이 없던 셋. US1 이 "완료"로 표시됐지만 실제로는 빠져 있었다.
+
+- [X] T106 [US1] **[analyze C1 · FR-006]** `packages/domain/src/chat/index.ts` 의 `runTurn` 이 `images?: string[]`(data URL, 최대 8장)을 받아 SDK 에 이미지 블록으로 넘긴다. `query()` 의 `prompt` 를 `AsyncIterable<SDKUserMessage>` 형태로 바꿔야 한다 — 문자열 프롬프트로는 이미지를 실을 수 없다. data URL 파싱과 media type 검증을 가드한다
+- [X] T107 [US1] **[analyze C1 · FR-006]** `apps/server/src/routes/chat.ts` 가 `req.images` 를 `runTurn` 에 넘긴다
+- [X] T108 [US1] **[analyze C1 · FR-006]** `apps/web/src/features/chat/chat-input.tsx` 에 이미지 선택·미리보기·제거를 붙인다. **최대 8장**, **텍스트 없이 이미지만으로도 전송 가능**해야 한다(`canSend` 조건 수정)
+- [X] T109 [US1] **[analyze C2 · FR-007]** `apps/web/src/features/chat/chat-input.tsx` 에 모델 선택기를 붙인다. 목록은 `@navis/validation` 의 `SELECTABLE_MODELS`, 초기값은 `DEFAULT_MODEL`. T008 실측으로 id 가 확정됐으므로 전체 목록을 노출한다
+- [X] T110 [US1] **[analyze C3 · SC-012]** `apps/web/src/features/chat/chat-panel.tsx` 의 빈 상태가 **무엇을 하면 되는지** 알려준다. 지금은 "무엇을 도와드릴까요?" 뿐이라 처음 여는 사용자가 첫 기억을 남기는 방법을 모른다(엣지 케이스 "첫 실행")
+
 **Checkpoint**: `quickstart.md` S1 통과. 잡담에 기억이 늘지 않고, 같은 말을 반복하면 기억이 한 건 더 생긴다.
 
 ---
@@ -159,6 +169,7 @@ description: "핵심 나비스 — 기억과 대화 구현 작업 목록"
 - [ ] T059 [US3] `apps/web/src/components/layout/sidebar.tsx` 를 배선한다. **`PLACEHOLDER_ROOMS` 와 `unread` 배지 · `SidebarMenuBadge` 를 제거한다** — 계약에 `unread` 가 없다(data-model.md 경고)
 - [ ] T060 [US3] `apps/web/src/features/chat/use-chat.ts` 가 `conversationId` 를 훅 안에서 만들지 않고 선택된 방에서 받는다. 방이 바뀌면 메시지를 그 방의 것으로 교체한다(FR-031)
 - [ ] T061 [US3] 중단된 답변의 부분 텍스트를 기록하지 않는다는 것을 `use-chat.ts` 에 반영한다. 화면에는 남지만 방을 다시 열면 사라진다(FR-004, Q3=B)
+- [ ] T111 [US3] **[analyze G1 · CRITICAL]** `apps/web/src/features/chat/message-bubble.tsx` 와 `message-list.tsx` 에 개별 메시지 삭제를 붙인다. T054 가 `DELETE /conversations/:id/messages/:messageId` 를 만드는데 **부르는 UI 가 없으면 소비자 없는 라우트**가 되어 헌장 원칙 I 위반이고, "답 없는 질문의 연속" 엣지 케이스도 미충족으로 남는다. 중단된 질문이 방에 남은 상태에서 다시 보내면 같은 질문이 두 번 보이므로 하나를 지울 수 있어야 한다
 
 **Checkpoint**: `quickstart.md` S4 · S5 · S6 통과. 서버를 재시작해도 맥락이 이어지고 질문이 유실되지 않는다.
 
@@ -449,6 +460,33 @@ memories_embedding_idx` 로 바뀐다 — 인덱스는 쓸 수 있고 플래너�
 규모가 커져 인덱스로 넘어갈 때 조용히 나빠지는 종류라, 질의마다 `SET LOCAL
 hnsw.ef_search = <후보 수>` 로 맞춰뒀다. 트랜잭션이 끝나면 되돌아가 커넥션 풀에 새지
 않는다.
+
+### US1 커버리지 갭 메꿈 (2026-09-11)
+
+`/speckit-analyze` 가 찾은 C1·C2·C3. US1 이 "완료"로 표시됐지만 스펙 요구 셋이 빠져 있었다.
+
+**C1 (FR-006 이미지 첨부)** — SDK 의 `query()` 는 `prompt: string | AsyncIterable<SDKUserMessage>`
+를 받고, 이미지는 후자의 `message.content` 배열에 블록으로 들어간다. 문자열 프롬프트로는
+실을 수 없다. 이미지가 없으면 문자열을 그대로 쓴다 — 불필요하게 구조화하지 않는다.
+
+실측으로 확인: 빨간 PNG 를 보내면 "빨강"이라 답하고, 텍스트 없이 이미지만도 동작한다.
+
+> ⚠️ **검증은 제너레이터 밖에서 해야 한다.** 안에서 던지면 SDK 가 그것을 스트림 취소로
+> 바꿔 `Operation aborted` 로 덮어버리고, 사용자는 왜 실패했는지 알 수 없다. 처음 그렇게
+> 구현해 실측에서 잡았다. 밖으로 옮긴 뒤 세 오류 모두 원문이 전달된다:
+> 형식 미지원 · data URL 아님 · 8장 초과.
+
+지원하지 않는 형식과 상한 초과는 **조용히 버리지 않고 던진다** — 버리면 사용자가 보낸
+이미지가 사라진 채 답이 온다.
+
+**C2 (FR-007 모델 선택기)** — T008 실측으로 id 가 확정돼 전체 목록을 노출한다. 목록의
+단일 출처는 `@navis/validation` 의 `SELECTABLE_MODELS` 이고, 표시 이름만 화면에 둔다.
+
+**C3 (SC-012 빈 상태)** — "무엇을 도와드릴까요?" 만으로는 이게 기억하는 도구라는 걸 알 수
+없다. 저장 예시 둘 + 불러오기 예시 하나를 보여준다.
+
+렌더 확인은 `curl localhost:3001` 로 했다(Chrome 확장 미연결로 스크린샷 불가).
+**주의**: 3000 포트는 다른 프로젝트가 점유 중이라 나비스는 3001 에 뜬다.
 
 ---
 

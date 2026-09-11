@@ -47,6 +47,7 @@ export const chatRoute = new Hono()
             resumeSessionId: sessions.get(req.conversationId) ?? null,
             model: req.model,
             abortController,
+            ...(req.images?.length ? { images: req.images } : {}),
           },
           {
             onDelta: (text) => void send({ type: "delta", text }),

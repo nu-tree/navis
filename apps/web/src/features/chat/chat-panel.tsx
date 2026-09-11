@@ -24,8 +24,26 @@ export const ChatPanel = () => {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {empty ? (
-        <div className="flex min-h-0 flex-1 items-center justify-center px-4">
-          <p className="text-lg text-muted-foreground">무엇을 도와드릴까요?</p>
+        // 처음 여는 사용자가 안내 없이 첫 기억을 남기게 해야 한다(SC-012).
+        // "무엇을 도와드릴까요?" 만으로는 이게 기억하는 도구라는 걸 알 수 없다.
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-6 px-4">
+          <div className="space-y-1.5 text-center">
+            <p className="text-lg font-medium">무엇을 도와드릴까요?</p>
+            <p className="text-sm text-muted-foreground">
+              말한 것 중 기억할 만한 건 알아서 남겨둬요.
+            </p>
+          </div>
+
+          <ul className="w-full max-w-md space-y-1.5 text-sm text-muted-foreground">
+            {EMPTY_HINTS.map((hint) => (
+              <li
+                key={hint}
+                className="rounded-lg border border-border/60 px-3 py-2"
+              >
+                {hint}
+              </li>
+            ))}
+          </ul>
         </div>
       ) : (
         <MessageList ref={scrollRef} messages={messages}>
@@ -54,3 +72,11 @@ export const ChatPanel = () => {
     </div>
   );
 };
+
+// 첫 화면의 예시. 저장(첫째·둘째)과 불러오기(셋째)를 각각 한 번 보여줘서
+// 이 도구가 무엇을 하는지 한눈에 알게 한다.
+const EMPTY_HINTS = [
+  "이번 분기엔 나비스에 집중하기로 했어",
+  "장 볼 것: 세탁세제, 건조대",
+  "내가 배포 관련해서 뭐라고 했었지?",
+];

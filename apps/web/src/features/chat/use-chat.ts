@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { parseChatEvents } from "@navis/api";
 import type { ChatRequest, Message } from "@navis/validation";
+import type { SendInput } from "./chat-input";
 
 // 한 대화방의 턴 진행 상태. 브라우저는 /api/chat(BFF)만 부른다 — apps/server 의
 // 토큰은 Next 서버에만 있다.
@@ -20,7 +21,7 @@ export function useChat() {
 
   const turnId = useRef<string | null>(null);
 
-  const send = async (text: string) => {
+  const send = async ({ text, images, model }: SendInput) => {
     if (streaming !== null) return; // 턴이 도는 중엔 새 턴을 만들지 않는다
 
     setMessages((prev) => [
@@ -30,6 +31,8 @@ export function useChat() {
         role: "user",
         text,
         createdAt: new Date().toISOString(),
+        // 화면에 첨부를 보여주기 위해서만 담는다 — 서버는 저장 시 비운다.
+        ...(images?.length ? { images } : {}),
       },
     ]);
     setStreaming("");
@@ -45,6 +48,8 @@ export function useChat() {
         conversationId,
         text,
         turnId: id,
+        ...(images?.length ? { images } : {}),
+        ...(model ? { model } : {}),
       };
       const res = await fetch("/api/chat", {
         method: "POST",
