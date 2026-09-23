@@ -6,9 +6,23 @@ import { MessageBubble } from "./message-bubble";
 import { MessageList } from "./message-list";
 import { TypingIndicator } from "./typing-indicator";
 import { useChat } from "./use-chat";
+import { useConversation } from "@/features/conversation/use-conversation";
 
-export const ChatPanel = () => {
-  const { messages, streaming, tool, error, send, stop } = useChat();
+type Props = {
+  /** 열려 있는 방. 아직 첫 메시지를 보내지 않은 새 방도 id 를 갖는다. */
+  conversationId: string;
+  /** 턴이 끝난 뒤 방 목록을 갱신한다. */
+  onTurnEnd?: () => void;
+};
+
+export const ChatPanel = ({ conversationId, onTurnEnd }: Readonly<Props>) => {
+  const { messages, setMessages, removeMessage } = useConversation(conversationId);
+  const { streaming, tool, error, send, stop } = useChat({
+    conversationId,
+    messages,
+    setMessages,
+    ...(onTurnEnd ? { onTurnEnd } : {}),
+  });
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // 새 메시지·델타는 항상 바닥에 붙는다. 그려진 뒤 내려야 하므로 effect 에서.
@@ -46,7 +60,7 @@ export const ChatPanel = () => {
           </ul>
         </div>
       ) : (
-        <MessageList ref={scrollRef} messages={messages}>
+        <MessageList ref={scrollRef} messages={messages} onRemove={removeMessage}>
           {/* 스트리밍 중인 답변. 확정되면 done 이벤트가 messages 로 옮긴다. */}
           {streaming ? (
             <MessageBubble

@@ -3,6 +3,7 @@ import { bearerAuth } from "hono/bearer-auth";
 import { env } from "./env";
 import { chatRoute } from "./routes/chat";
 import { health } from "./routes/health";
+import { conversationsRoute } from "./routes/conversations";
 import { memoriesRoute } from "./routes/memories";
 
 // Hono 앱 조립. index.ts 와 분리해 테스트에서 app.fetch 를 직접 부를 수 있게 한다.
@@ -29,5 +30,6 @@ app.use("*", async (c, next) => {
 app.route("/health", health);
 app.route("/chat", chatRoute);
 app.route("/memories", memoriesRoute);
+app.route("/conversations", conversationsRoute);
 
-// TODO: /conversations, /settings
+// TODO: /settings

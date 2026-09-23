@@ -1,25 +1,43 @@
-import { Brain } from "lucide-react";
+import { Brain, Trash2 } from "lucide-react";
 import type { Message } from "@navis/validation";
 import { cn } from "cn";
 import { MarkdownText } from "./markdown-text";
 
 type Props = {
   message: Message;
+  /**
+   * 이 메시지 삭제. 없으면 버튼이 나타나지 않는다 — 스트리밍 중인 임시 말풍선처럼
+   * 서버에 없는 메시지에는 넘기지 않는다.
+   */
+  onRemove?: () => void;
 };
 
-export const MessageBubble = ({ message }: Readonly<Props>) => {
+export const MessageBubble = ({ message, onRemove }: Readonly<Props>) => {
   const isUser = message.role === "user";
 
   return (
     // 사용자는 우측 말풍선, 어시스턴트는 전폭 평문.
     // 긴 마크다운을 좁은 버블에 넣으면 코드블록·표가 읽히지 않는다.
+    // group 은 삭제 버튼의 호버 표시에 쓴다. 버튼이 항상 보이면 대화가 시끄럽다.
     <div
       className={cn(
+        "group/msg relative",
         isUser
           ? "ml-auto max-w-[85%] rounded-2xl rounded-br-md bg-primary px-4 py-2.5 text-primary-foreground"
           : "w-full text-foreground",
       )}
     >
+      {onRemove ? (
+        <button
+          type="button"
+          aria-label="메시지 삭제"
+          onClick={onRemove}
+          className="absolute top-1 -left-8 rounded-md p-1.5 text-muted-foreground opacity-0 transition-opacity group-hover/msg:opacity-100 focus-visible:opacity-100 hover:text-destructive"
+        >
+          <Trash2 className="size-3.5" />
+        </button>
+      ) : null}
+
       {isUser ? (
         <>
           {message.images?.length ? (

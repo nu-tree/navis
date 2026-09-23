@@ -1,6 +1,7 @@
 "use client";
 
 import { Brain, MessageSquare, Plus, Settings, Trash2 } from "lucide-react";
+import type { ConversationSummary } from "@navis/validation";
 import { Button } from "@/components/ui/button";
 import {
   Sidebar,
@@ -11,13 +12,26 @@ import {
   SidebarHeader,
   SidebarMenu,
   SidebarMenuAction,
-  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarSeparator,
 } from "@/components/ui/sidebar";
 
-export function NavisSidebar() {
+type Props = {
+  rooms: ConversationSummary[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  onCreate: () => void;
+  onRemove: (id: string) => void;
+};
+
+export function NavisSidebar({
+  rooms,
+  selectedId,
+  onSelect,
+  onCreate,
+  onRemove,
+}: Readonly<Props>) {
   return (
     <Sidebar collapsible="offcanvas">
       <SidebarHeader>
@@ -27,6 +41,7 @@ export function NavisSidebar() {
 
         <Button
           variant="outline"
+          onClick={onCreate}
           className="w-full justify-start group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
         >
           <Plus />
@@ -38,24 +53,32 @@ export function NavisSidebar() {
 
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>채팅</SidebarGroupLabel>
+          <SidebarGroupLabel>대화</SidebarGroupLabel>
           <SidebarMenu>
-            {PLACEHOLDER_ROOMS.map((room) => (
+            {rooms.length === 0 ? (
+              <p className="px-2 py-1.5 text-xs text-muted-foreground">
+                아직 대화가 없어요.
+              </p>
+            ) : null}
+
+            {rooms.map((room) => (
               <SidebarMenuItem key={room.id}>
-                <SidebarMenuButton isActive={room.active} tooltip={room.title}>
+                <SidebarMenuButton
+                  isActive={room.id === selectedId}
+                  tooltip={room.title}
+                  onClick={() => onSelect(room.id)}
+                >
                   <MessageSquare />
                   <span>{room.title}</span>
                 </SidebarMenuButton>
 
-                {/* 안읽음 배지. 액션과 같은 자리라 둘이 겹치는데, 배지는
-                    호버 시 액션에 자리를 내준다. */}
-                {room.unread ? (
-                  <SidebarMenuBadge className="group-hover/menu-item:hidden">
-                    {room.unread}
-                  </SidebarMenuBadge>
-                ) : null}
-
-                <SidebarMenuAction showOnHover aria-label="대화 삭제">
+                {/* 안읽음 배지는 두지 않는다 — 계약(ConversationSummary)에 없고,
+                    기기 간 동기화를 가져오지 않기로 하면서 의미를 잃었다. */}
+                <SidebarMenuAction
+                  showOnHover
+                  aria-label={`${room.title} 삭제`}
+                  onClick={() => onRemove(room.id)}
+                >
                   <Trash2 />
                 </SidebarMenuAction>
               </SidebarMenuItem>
@@ -83,11 +106,3 @@ export function NavisSidebar() {
     </Sidebar>
   );
 }
-
-// 골격 확인용 더미. 배선 시 제거한다.
-const PLACEHOLDER_ROOMS = [
-  { id: "1", title: "리팩터링 계획 정리", active: true, unread: 0 },
-  { id: "2", title: "Tailwind v4 토큰 형식 질문", unread: 2 },
-  { id: "3", title: "모노레포 의존 방향", unread: 0 },
-  { id: "4", title: "이번 주에 배운 것들 정리해줘", unread: 0 },
-];

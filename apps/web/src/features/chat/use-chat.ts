@@ -5,19 +5,24 @@ import { parseChatEvents } from "@navis/api";
 import type { ChatRequest, Message } from "@navis/validation";
 import type { SendInput } from "./chat-input";
 
+type UseChatInput = {
+  /** 이 턴이 속한 방. 서버가 이걸로 에이전트 세션을 이어 붙인다. */
+  conversationId: string;
+  /** 방의 메시지. 방을 바꾸면 교체된다 — 소유는 useConversation 이 한다(FR-031). */
+  messages: Message[];
+  setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
+  /** 턴이 끝난 뒤. 방 목록 갱신에 쓴다. */
+  onTurnEnd?: () => void;
+};
+
 // 한 대화방의 턴 진행 상태. 브라우저는 /api/chat(BFF)만 부른다 — apps/server 의
 // 토큰은 Next 서버에만 있다.
-export function useChat() {
-  const [messages, setMessages] = useState<Message[]>([]);
+export function useChat({ conversationId, messages, setMessages, onTurnEnd }: UseChatInput) {
   // 스트리밍 중인 어시스턴트 텍스트. null 이면 진행 중인 턴이 없다.
   // 빈 문자열("")은 "턴은 시작됐지만 첫 토큰 전" — 생각 중 표시의 조건이다.
   const [streaming, setStreaming] = useState<string | null>(null);
   const [tool, setTool] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  // 방 id 는 첫 렌더에 한 번만 만든다(지연 초기화). 서버가 이걸로 에이전트
-  // 세션을 이어 붙인다.
-  const [conversationId] = useState(() => crypto.randomUUID());
 
   const turnId = useRef<string | null>(null);
 
@@ -75,8 +80,13 @@ export function useChat() {
             setMessages((prev) => [...prev, event.message]);
             break;
           case "aborted":
-            // 중지 시점까지 온 부분 답변은 남긴다 — 화면에서 사라지면
-            // 사용자는 무엇이 중단됐는지 알 수 없다.
+            // 중지 시점까지 온 부분 답변은 화면에 남긴다 — 사라지면 사용자는
+            // 무엇이 중단됐는지 알 수 없다.
+            //
+            // ★ 다만 **서버에 기록되지는 않는다**(FR-004, Q3=B). 방을 다시 열면
+            //   사라지고 질문만 남는다. 그래서 이 메시지에는 id 를 새로 만들어
+            //   붙이지만, 서버의 어떤 메시지와도 대응되지 않는다 — 삭제 버튼이
+            //   404 를 받아도 정상이다.
             if (text_) {
               setMessages((prev) => [
                 ...prev,
@@ -101,6 +111,8 @@ export function useChat() {
       setStreaming(null);
       setTool(null);
       turnId.current = null;
+      // 목록의 제목·마지막 메시지·정렬을 갱신한다.
+      onTurnEnd?.();
     }
   };
 

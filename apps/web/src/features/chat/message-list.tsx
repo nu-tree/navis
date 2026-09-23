@@ -6,10 +6,13 @@ import { MessageBubble } from "./message-bubble";
 // 바닥으로 내리는 건 부모가 판단한다.
 type Props = React.ComponentProps<"div"> & {
   messages: Message[];
+  /** 메시지 하나 삭제. 없으면 삭제 버튼이 나타나지 않는다. */
+  onRemove?: (messageId: string) => void;
 };
 
 export const MessageList = ({
   messages,
+  onRemove,
   className,
   children,
   ...props
@@ -24,7 +27,11 @@ export const MessageList = ({
     >
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-6">
         {messages.map((message) => (
-          <MessageBubble key={message.id} message={message} />
+          <MessageBubble
+            key={message.id}
+            message={message}
+            {...(onRemove ? { onRemove: () => onRemove(message.id) } : {})}
+          />
         ))}
 
         {/* 스트리밍 중인 답변·진행 표시 — 확정된 메시지 뒤에 붙는다. */}

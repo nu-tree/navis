@@ -1,15 +1,16 @@
 import type { ReactNode } from "react";
-import {
-  SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
-} from "@/components/ui/sidebar";
-import { NavisSidebar } from "./sidebar";
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 
-export function AppShell({ children }: { children: ReactNode }) {
+type Props = {
+  /** 왼쪽 사이드바. 슬롯으로 받는다 — 셸이 목록의 상태를 알 필요가 없다. */
+  sidebar: ReactNode;
+  children: ReactNode;
+};
+
+export function AppShell({ sidebar, children }: Readonly<Props>) {
   return (
     <SidebarProvider className="flex-1">
-      <NavisSidebar />
+      {sidebar}
 
       {/* 목록만 스크롤하고 입력창은 바닥에 고정되려면 이 열의 높이가 화면에
           묶여야 한다 — min-h-0 이 없으면 내용만큼 늘어난다. */}

@@ -152,24 +152,24 @@ description: "핵심 나비스 — 기억과 대화 구현 작업 목록"
 답하면 통과. 턴 실패 · 중지 · 재시작 각 10회에서 질문이 모두 남으면 함께 통과.
 (`quickstart.md` S4, S5, S6)
 
-- [ ] T045 [US3] `packages/domain/src/conversation/index.ts` 에 `list()` 를 구현한다. **`messages` 를 반환하지 않는다** — `ConversationSummary`(제목 · 마지막 메시지 · 메시지 수 · `sessionId` · 시각)만 싣고 `updated_at DESC` 인덱스를 쓴다(FR-032, `STRUCTURE.md` 6항)
-- [ ] T046 [US3] `packages/domain/src/conversation/index.ts` 에 `get()` · `create()` · `appendMessage()` · `remove()` · `removeMessage()` 를 구현한다. 없는 id 는 `NotFoundError`(T015)를 던진다
-- [ ] T047 [US3] `appendMessage()` 의 메시지 id 를 `crypto.randomUUID()` 로 만든다. `` `a${Date.now()}` `` 는 같은 ms 안에서 충돌한다(FR-035, `STRUCTURE.md` 5항)
-- [ ] T048 [P] [US3] `packages/domain/src/conversation/index.test.ts` — `list()` 반환에 `messages` 키가 없는지, `appendMessage` 가 read-modify-write 로 기존 메시지를 지우지 않는지, 같은 ms 에 두 메시지를 만들어 id 충돌이 없는지 검증한다
-- [ ] T049 [US3] `apps/server/src/routes/chat.ts` 의 순서를 고정한다: **검증 → (방 없으면 생성) → 사용자 메시지 append → 그 다음 SSE 스트림 시작**. 스트림을 열기 전에 질문이 커밋되어야 서버가 언제 죽어도 남는다(FR-048, R9)
-- [ ] T050 [US3] `routes/chat.ts` 의 `done` 핸들러가 어시스턴트 메시지를 append 하고 `sessionId` 를 `conversations.sessionId` 에 저장한다. `sessionId` 는 `result` 메시지가 권위다
-- [ ] T051 [US3] `routes/chat.ts` 의 프로세스 로컬 `sessions` Map 을 삭제하고 `conversations.sessionId` 조회로 바꾼다 — 재시작 후 맥락 이어가기의 조건이다(R10, 코드의 기존 `TODO`)
-- [ ] T052 [US3] `routes/chat.ts` 에 같은 방의 동시 턴을 **409** 로 막는다. FR-008 은 클라이언트 측 방어라 새로고침으로 우회된다(R9, contracts/server-http.md)
-- [ ] T053 [US3] `apps/server/src/routes/chat.ts` 의 `inFlight` (AbortController) Map 은 **프로세스 로컬로 유지한다** — 중지는 생성이 도는 프로세스에서만 유효하고 서버 인스턴스가 하나다(R10). 이 판단을 주석으로 남긴다
-- [ ] T054 [US3] `apps/server/src/routes/conversations.ts` 를 만들고 `GET /conversations` · `GET /conversations/:id` · `DELETE /conversations/:id` · `DELETE /conversations/:id/messages/:messageId` 를 붙인다. **방 생성 전용 엔드포인트는 만들지 않는다** — 첫 메시지가 겸한다(헌장 원칙 I)
-- [ ] T055 [US3] `apps/server/src/routes/conversations.ts` 의 `DELETE /conversations/:id` 가 그 방에서 저장된 **기억을 지우지 않음**을 보장한다. 기억은 방과 완전히 독립이다(FR-015, Q1)
-- [ ] T056 [P] [US3] `apps/server/src/routes/conversations.test.ts` — 목록 응답에 `messages` 가 없는지, 없는 id 에 **404**(500 아님)인지, 진행 중인 턴이 있는 방에 새 턴이 409 인지 검증한다
-- [ ] T057 [US3] `apps/web/src/app/api/conversations/` 아래에 BFF 라우트를 만든다. T023 의 중계 헬퍼를 쓴다
-- [ ] T058 [US3] `apps/web/src/features/conversation/use-conversations.ts` 를 만든다. 목록 · 선택 · 생성 · 삭제 상태를 훅이 갖고 `.tsx` 는 렌더만 한다(헌장 원칙 III)
-- [ ] T059 [US3] `apps/web/src/components/layout/sidebar.tsx` 를 배선한다. **`PLACEHOLDER_ROOMS` 와 `unread` 배지 · `SidebarMenuBadge` 를 제거한다** — 계약에 `unread` 가 없다(data-model.md 경고)
-- [ ] T060 [US3] `apps/web/src/features/chat/use-chat.ts` 가 `conversationId` 를 훅 안에서 만들지 않고 선택된 방에서 받는다. 방이 바뀌면 메시지를 그 방의 것으로 교체한다(FR-031)
-- [ ] T061 [US3] 중단된 답변의 부분 텍스트를 기록하지 않는다는 것을 `use-chat.ts` 에 반영한다. 화면에는 남지만 방을 다시 열면 사라진다(FR-004, Q3=B)
-- [ ] T111 [US3] **[analyze G1 · CRITICAL]** `apps/web/src/features/chat/message-bubble.tsx` 와 `message-list.tsx` 에 개별 메시지 삭제를 붙인다. T054 가 `DELETE /conversations/:id/messages/:messageId` 를 만드는데 **부르는 UI 가 없으면 소비자 없는 라우트**가 되어 헌장 원칙 I 위반이고, "답 없는 질문의 연속" 엣지 케이스도 미충족으로 남는다. 중단된 질문이 방에 남은 상태에서 다시 보내면 같은 질문이 두 번 보이므로 하나를 지울 수 있어야 한다
+- [X] T045 [US3] `packages/domain/src/conversation/index.ts` 에 `list()` 를 구현한다. **`messages` 를 반환하지 않는다** — `ConversationSummary`(제목 · 마지막 메시지 · 메시지 수 · `sessionId` · 시각)만 싣고 `updated_at DESC` 인덱스를 쓴다(FR-032, `STRUCTURE.md` 6항)
+- [X] T046 [US3] `packages/domain/src/conversation/index.ts` 에 `get()` · `create()` · `appendMessage()` · `remove()` · `removeMessage()` 를 구현한다. 없는 id 는 `NotFoundError`(T015)를 던진다
+- [X] T047 [US3] `appendMessage()` 의 메시지 id 를 `crypto.randomUUID()` 로 만든다. `` `a${Date.now()}` `` 는 같은 ms 안에서 충돌한다(FR-035, `STRUCTURE.md` 5항)
+- [X] T048 [P] [US3] `packages/domain/src/conversation/index.test.ts` — `list()` 반환에 `messages` 키가 없는지, `appendMessage` 가 read-modify-write 로 기존 메시지를 지우지 않는지, 같은 ms 에 두 메시지를 만들어 id 충돌이 없는지 검증한다
+- [X] T049 [US3] `apps/server/src/routes/chat.ts` 의 순서를 고정한다: **검증 → (방 없으면 생성) → 사용자 메시지 append → 그 다음 SSE 스트림 시작**. 스트림을 열기 전에 질문이 커밋되어야 서버가 언제 죽어도 남는다(FR-048, R9)
+- [X] T050 [US3] `routes/chat.ts` 의 `done` 핸들러가 어시스턴트 메시지를 append 하고 `sessionId` 를 `conversations.sessionId` 에 저장한다. `sessionId` 는 `result` 메시지가 권위다
+- [X] T051 [US3] `routes/chat.ts` 의 프로세스 로컬 `sessions` Map 을 삭제하고 `conversations.sessionId` 조회로 바꾼다 — 재시작 후 맥락 이어가기의 조건이다(R10, 코드의 기존 `TODO`)
+- [X] T052 [US3] `routes/chat.ts` 에 같은 방의 동시 턴을 **409** 로 막는다. FR-008 은 클라이언트 측 방어라 새로고침으로 우회된다(R9, contracts/server-http.md)
+- [X] T053 [US3] `apps/server/src/routes/chat.ts` 의 `inFlight` (AbortController) Map 은 **프로세스 로컬로 유지한다** — 중지는 생성이 도는 프로세스에서만 유효하고 서버 인스턴스가 하나다(R10). 이 판단을 주석으로 남긴다
+- [X] T054 [US3] `apps/server/src/routes/conversations.ts` 를 만들고 `GET /conversations` · `GET /conversations/:id` · `DELETE /conversations/:id` · `DELETE /conversations/:id/messages/:messageId` 를 붙인다. **방 생성 전용 엔드포인트는 만들지 않는다** — 첫 메시지가 겸한다(헌장 원칙 I)
+- [X] T055 [US3] `apps/server/src/routes/conversations.ts` 의 `DELETE /conversations/:id` 가 그 방에서 저장된 **기억을 지우지 않음**을 보장한다. 기억은 방과 완전히 독립이다(FR-015, Q1)
+- [X] T056 [P] [US3] `apps/server/src/routes/conversations.test.ts` — 목록 응답에 `messages` 가 없는지, 없는 id 에 **404**(500 아님)인지, 진행 중인 턴이 있는 방에 새 턴이 409 인지 검증한다
+- [X] T057 [US3] `apps/web/src/app/api/conversations/` 아래에 BFF 라우트를 만든다. T023 의 중계 헬퍼를 쓴다
+- [X] T058 [US3] `apps/web/src/features/conversation/use-conversations.ts` 를 만든다. 목록 · 선택 · 생성 · 삭제 상태를 훅이 갖고 `.tsx` 는 렌더만 한다(헌장 원칙 III)
+- [X] T059 [US3] `apps/web/src/components/layout/sidebar.tsx` 를 배선한다. **`PLACEHOLDER_ROOMS` 와 `unread` 배지 · `SidebarMenuBadge` 를 제거한다** — 계약에 `unread` 가 없다(data-model.md 경고)
+- [X] T060 [US3] `apps/web/src/features/chat/use-chat.ts` 가 `conversationId` 를 훅 안에서 만들지 않고 선택된 방에서 받는다. 방이 바뀌면 메시지를 그 방의 것으로 교체한다(FR-031)
+- [X] T061 [US3] 중단된 답변의 부분 텍스트를 기록하지 않는다는 것을 `use-chat.ts` 에 반영한다. 화면에는 남지만 방을 다시 열면 사라진다(FR-004, Q3=B)
+- [X] T111 [US3] **[analyze G1 · CRITICAL]** `apps/web/src/features/chat/message-bubble.tsx` 와 `message-list.tsx` 에 개별 메시지 삭제를 붙인다. T054 가 `DELETE /conversations/:id/messages/:messageId` 를 만드는데 **부르는 UI 가 없으면 소비자 없는 라우트**가 되어 헌장 원칙 I 위반이고, "답 없는 질문의 연속" 엣지 케이스도 미충족으로 남는다. 중단된 질문이 방에 남은 상태에서 다시 보내면 같은 질문이 두 번 보이므로 하나를 지울 수 있어야 한다
 
 **Checkpoint**: `quickstart.md` S4 · S5 · S6 통과. 서버를 재시작해도 맥락이 이어지고 질문이 유실되지 않는다.
 
@@ -487,6 +487,46 @@ hnsw.ef_search = <후보 수>` 로 맞춰뒀다. 트랜잭션이 끝나면 되�
 
 렌더 확인은 `curl localhost:3001` 로 했다(Chrome 확장 미연결로 스크린샷 불가).
 **주의**: 3000 포트는 다른 프로젝트가 점유 중이라 나비스는 3001 에 뜬다.
+
+### Phase 5 (US3) 실측 (2026-09-23)
+
+**서버를 실제로 죽였다 살려서** 검증했다. 처음엔 `pkill` 후 바로 확인해 서버가 안 죽은
+채로 테스트했고, 게다가 답이 `mcp__memory__recall` 로 나와 **기억으로 답한 것**이었다 —
+대화 맥락을 증명하지 못했다. 포트 점유 0개를 확인하고, 기억으로는 답할 수 없는 질문으로
+다시 했다.
+
+| 검증 | 결과 |
+| --- | --- |
+| 서버 종료 확인 | 포트 4000 점유 **0개** |
+| 재시작 후 "이 대화에서 몇 번 질문했지?" | **"2"** (정확) · **도구 0개** ← 맥락으로 답했다 |
+| `sessionId` | `e4389d21-683…` 재시작 전후 동일 |
+| 동시 턴 (같은 방) | **409** · 거부된 요청은 메시지를 남기지 않음 |
+| 동시 턴 (다른 방) | 200 |
+| 턴 도중 `SIGKILL` | 질문만 남고 답변 없음 (**SC-015**) |
+| 방 삭제 후 기억 | 1032 → 1032 (**FR-015**) |
+| BFF 목록 32개 | `messages` 키 없음 (**FR-032**) |
+| 메시지 삭제 / 없는 메시지 | 200 / **404** |
+
+### 함께 고친 것
+
+**`loading` 상태가 두 훅에서 아무 데도 안 쓰였다.** `react-hooks/set-state-in-effect` 가
+그걸 잡아줬고, 지우니 lint 오류 2개가 같이 사라졌다(헌장 원칙 I — 소비자 없는 것).
+
+**`useConversations` 의 목록 조회에 취소 처리가 없었다.** 린터를 만족시키려 순수
+`fetchRooms` 와 상태 반영을 분리하다가 발견했다 — 언마운트 뒤 늦게 온 응답이 상태를
+덮을 수 있었다.
+
+**`AppShell` 이 사이드바를 슬롯으로 받게 바꿨다.** 셸이 목록 상태를 알 필요가 없다
+(헌장 원칙 V). 방 전환은 `key={selectedId}` 로 패널을 통째로 갈아끼운다 — 이전 방의
+스트리밍 버퍼나 오류가 새 방에 남지 않는다(FR-031).
+
+### 테스트를 실제 DB 로 돌린다
+
+대화방 테스트는 jsonb 이어붙이기(`||`)와 `-> -1 ->> 'text'` 가 맞는지가 검증 대상이라
+mock 으로는 의미가 없다. 그런데 vitest 가 `apps/server/.env` 를 안 읽어서 **17개가 조용히
+건너뛰어지고 있었다** — 게이트가 통과했다고 말하면서 실제로는 안 돈 상태다.
+`vitest.setup.ts` 에서 env 를 읽게 해 해결했다. `.env` 가 없는 환경에서는 skip 되고
+그 사실이 출력에 남는다.
 
 ---
 
