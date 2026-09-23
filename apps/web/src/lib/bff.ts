@@ -2,10 +2,8 @@
 //
 // ★ 브라우저는 이 층만 부른다. NAVIS_API_TOKEN 은 여기서 밖으로 나가지 않는다(FR-038).
 //
-// 세션 검증 자리는 지금 비어 있다. US6(로그인)에서 requireSession() 이 채운다 —
-// 그때까지는 로컬 개발용으로 열려 있고, 그 상태를 아래 TODO 가 명시한다.
-
 import { apiServer, missingApiConfig } from "@/lib/api-server";
+import { getSession } from "@/lib/session";
 
 /** 업스트림으로 그대로 넘기는 요청 헤더. 나머지는 버린다. */
 const FORWARDED_REQUEST_HEADERS = ["content-type", "accept"] as const;
@@ -14,11 +12,21 @@ const jsonError = (message: string, status: number) =>
   Response.json({ error: message }, { status });
 
 /**
- * TODO(US6): 세션을 검증한다. 없으면 **401 JSON** 을 돌려준다 — 리다이렉트하지 않는다.
+ * 세션이 없으면 **401 JSON** 을 돌려준다 — 리다이렉트하지 않는다.
  * `fetch` 호출자가 HTML 리다이렉트를 받으면 파싱이 깨진다(헌장 보안 절).
  * 화면 전환은 src/proxy.ts 의 낙관적 리다이렉트가 맡는다.
+ *
+ * Supabase 설정이 없으면(unconfigured) 통과시킨다 — 로그인을 켜지 않은 로컬 개발
+ * 상태다. 설정이 있는데 세션이 없으면 막는다. 이 분기 때문에 **배포 환경에
+ * 반드시 두 환경변수를 넣어야 한다** — 빠뜨리면 인증이 통째로 꺼진다.
  */
-const requireSession = async (): Promise<Response | null> => null;
+const requireSession = async (): Promise<Response | null> => {
+  const session = await getSession();
+  if (session.kind === "authenticated" || session.kind === "unconfigured") {
+    return null;
+  }
+  return jsonError("로그인이 필요하다.", 401);
+};
 
 type ProxyInit = {
   /** apps/server 의 경로. 예: `/memories`, `/chat` */

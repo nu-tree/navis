@@ -1,8 +1,9 @@
 "use client";
 
-import { Brain, MessageSquare, Plus, Settings, Trash2 } from "lucide-react";
+import { Brain, LogOut, MessageSquare, Plus, Settings, Trash2 } from "lucide-react";
 import type { ConversationSummary } from "@navis/validation";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/features/auth/use-auth";
 import {
   Sidebar,
   SidebarContent,
@@ -32,6 +33,8 @@ export function NavisSidebar({
   onCreate,
   onRemove,
 }: Readonly<Props>) {
+  const { signOut, configured } = useAuth();
+
   return (
     <Sidebar collapsible="offcanvas">
       <SidebarHeader>
@@ -101,6 +104,17 @@ export function NavisSidebar({
               <span>설정</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
+
+          {/* 로그인을 켜지 않은 로컬 개발 상태에서는 보여주지 않는다 — 누를 수
+              있는데 아무 일도 안 일어나는 버튼은 고장으로 보인다. */}
+          {configured ? (
+            <SidebarMenuItem>
+              <SidebarMenuButton tooltip="로그아웃" onClick={() => void signOut()}>
+                <LogOut />
+                <span>로그아웃</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ) : null}
         </SidebarMenu>
       </SidebarFooter>
     </Sidebar>

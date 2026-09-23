@@ -218,13 +218,13 @@ description: "핵심 나비스 — 기억과 대화 구현 작업 목록"
 **Independent test**: 로그아웃 상태에서 세 화면 주소를 직접 입력해 전부 막히고, BFF 를 직접
 찔러 401 JSON 이 오면 통과. 기억 · 대화 기능 없이도 검증된다. (`quickstart.md` S11, S12)
 
-- [ ] T083 [US6] `apps/web/src/lib/session.ts` 에 세션 검증을 만든다. `@supabase/ssr` 의 쿠키 어댑터를 쓴다. 이 파일이 인증을 아는 **유일한 곳**이고 `packages/*` 로 새지 않는다(헌장 원칙 II)
-- [ ] T084 [US6] `apps/web/src/proxy.ts` 를 만든다. **`middleware.ts` 가 아니다** — Next 16 에서 미들웨어는 `proxy` 다(헌장 규약). `matcher` 로 `api` · `_next/static` · `_next/image` 를 제외하고, **쿠키만 읽어** 낙관적으로 리다이렉트한다. 데이터베이스를 보지 않는다(헌장 보안 절, R2)
-- [ ] T085 [US6] `apps/web/src/lib/bff.ts` (T023) 의 중계 헬퍼에 `apps/web/src/lib/session.ts` 의 세션 검증을 끼운다. 세션이 없으면 **401 JSON** 을 돌려준다 — 리다이렉트하지 않는다. `fetch` 호출자가 HTML 을 받으면 파싱이 깨진다(헌장 보안 절)
-- [ ] T086 [US6] `apps/web/src/features/auth/use-auth.ts` — 로그인 · 로그아웃 훅. 브라우저 클라이언트는 **로그인 · 로그아웃에만** 쓴다. 데이터 요청은 계속 `/api/*` 로만 간다(헌장 보안 절)
-- [ ] T087 [US6] `apps/web/src/app/login/page.tsx` — 로그인 화면. 실패 사유가 **계정 존재 여부를 알려주지 않는다**(FR-045)
-- [ ] T088 [US6] `apps/web/src/components/layout/sidebar.tsx` 에 로그아웃 동작을 붙인다. 로그아웃하면 즉시 모든 화면이 잠긴다(FR-044)
-- [ ] T089 [US6] `packages/db/src/schema.ts` 의 `memories` · `conversations` · `settings` 에 **사용자 식별자 열이 없음**을 확인한다. 로그인은 문일 뿐 데이터 소유자 구분이 아니다(FR-046, 헌장 원칙 II)
+- [X] T083 [US6] `apps/web/src/lib/session.ts` 에 세션 검증을 만든다. `@supabase/ssr` 의 쿠키 어댑터를 쓴다. 이 파일이 인증을 아는 **유일한 곳**이고 `packages/*` 로 새지 않는다(헌장 원칙 II)
+- [X] T084 [US6] `apps/web/src/proxy.ts` 를 만든다. **`middleware.ts` 가 아니다** — Next 16 에서 미들웨어는 `proxy` 다(헌장 규약). `matcher` 로 `api` · `_next/static` · `_next/image` 를 제외하고, **쿠키만 읽어** 낙관적으로 리다이렉트한다. 데이터베이스를 보지 않는다(헌장 보안 절, R2)
+- [X] T085 [US6] `apps/web/src/lib/bff.ts` (T023) 의 중계 헬퍼에 `apps/web/src/lib/session.ts` 의 세션 검증을 끼운다. 세션이 없으면 **401 JSON** 을 돌려준다 — 리다이렉트하지 않는다. `fetch` 호출자가 HTML 을 받으면 파싱이 깨진다(헌장 보안 절)
+- [X] T086 [US6] `apps/web/src/features/auth/use-auth.ts` — 로그인 · 로그아웃 훅. 브라우저 클라이언트는 **로그인 · 로그아웃에만** 쓴다. 데이터 요청은 계속 `/api/*` 로만 간다(헌장 보안 절)
+- [X] T087 [US6] `apps/web/src/app/login/page.tsx` — 로그인 화면. 실패 사유가 **계정 존재 여부를 알려주지 않는다**(FR-045)
+- [X] T088 [US6] `apps/web/src/components/layout/sidebar.tsx` 에 로그아웃 동작을 붙인다. 로그아웃하면 즉시 모든 화면이 잠긴다(FR-044)
+- [X] T089 [US6] `packages/db/src/schema.ts` 의 `memories` · `conversations` · `settings` 에 **사용자 식별자 열이 없음**을 확인한다. 로그인은 문일 뿐 데이터 소유자 구분이 아니다(FR-046, 헌장 원칙 II)
 
 **Checkpoint**: `quickstart.md` S11 · S12 통과. 로그아웃 상태에서 데이터 노출 0건.
 
@@ -527,6 +527,39 @@ mock 으로는 의미가 없다. 그런데 vitest 가 `apps/server/.env` 를 안
 건너뛰어지고 있었다** — 게이트가 통과했다고 말하면서 실제로는 안 돈 상태다.
 `vitest.setup.ts` 에서 env 를 읽게 해 해결했다. `.env` 가 없는 환경에서는 skip 되고
 그 사실이 출력에 남는다.
+
+### Phase 7 (US6 로그인) 실측 (2026-09-23)
+
+| 경로 | 미설정 (로컬 개발) | 설정됨 · 로그아웃 상태 |
+| --- | --- | --- |
+| `/` | 200 | **307 → `/login`** |
+| `/api/conversations` | 200 | **401 `{"error":"로그인이 필요하다."}`** |
+| `/login` | 200 (안내 문구) | 200 |
+
+BFF 는 리다이렉트가 아니라 **401 JSON** 을 준다 — `fetch` 호출자가 HTML 을 받으면
+파싱이 깨진다(헌장 보안 절). 화면 전환은 proxy 가 맡는다.
+
+### 확인한 API 사실
+
+- **Proxy 는 Node.js 런타임이 기본**이다(Next 16 변경, `proxy.md`). Edge 제약이 없어
+  Supabase 클라이언트를 그대로 쓴다.
+- `@supabase/ssr` 의 `createServerClient` 는 `getAll` 과 `setAll` 을 **둘 다** 요구한다.
+  라이브러리 문서가 빠뜨리면 "random logouts, early session termination" 이 난다고
+  경고한다.
+- 세션 판정에 `getClaims()` 를 쓴다. `getSession()` 은 쿠키 값을 그대로 믿어 위조된
+  쿠키를 통과시킨다.
+
+### 설계 판단
+
+**미설정이면 통과시킨다.** `NEXT_PUBLIC_SUPABASE_*` 가 없으면 로그인을 켜지 않은 로컬
+개발 상태로 보고 BFF·proxy 둘 다 열어둔다. 로컬 개발이 막히지 않는 대신 —
+**⚠️ 배포 환경에 두 값을 반드시 넣어야 한다. 빠뜨리면 인증이 통째로 꺼진다.**
+
+**로그인 실패 사유를 구분해 보여주지 않는다**(FR-045). "user not found" 와 "wrong
+password" 를 나누면 어떤 이메일이 가입돼 있는지 알려주는 셈이다.
+
+**T089 확인**: `schema.ts` 와 실제 DB 모두에 `user_id`·`owner` 류 열이 **없다**.
+로그인은 문일 뿐 데이터 소유자 구분이 아니다(FR-046, 헌장 원칙 II).
 
 ---
 
