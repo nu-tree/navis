@@ -75,6 +75,12 @@ spec:
                 secretKeyRef:
                   name: navis-claude-oauth-token
                   key: latest
+            # 외부 MCP(Claude Code)용. API_TOKEN 과 다른 값이다(헌장 보안 절).
+            - name: NAVIS_MCP_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: navis-mcp-token
+                  key: latest
           resources:
             limits:
               cpu: "1"

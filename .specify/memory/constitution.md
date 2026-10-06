@@ -132,6 +132,16 @@ props 는 그 컴포넌트가 **직접 쓰는 것만** 받는다.
   `tools` 는 **내장 도구**의 집합이므로(설치된 SDK 타입 주석: *"the base set of available
   built-in tools"*, `[]` = 전면 차단) MCP 도구와 충돌하지 않는다. `mcpServers` 로 들어오는
   도구는 이 배열과 무관하다 — 둘을 같은 것으로 보고 `tools` 에 MCP 도구를 넣지 말 것.
+- **외부 MCP(`/mcp`)는 Claude Code 를 위한 통로다.** 소비자가 생겨서 열었다(원칙 I).
+  - 전용 토큰 `NAVIS_MCP_TOKEN` 으로만 연다. `API_TOKEN`(web → server)과 **다른 값**이다 —
+    로컬 개발 기기에 놓이는 자격이 새어도 대화 · 대화방 API 까지 열리지 않게 한다.
+    토큰이 없으면 `/mcp` 는 닫혀 있다(404).
+  - 경로는 Claude Code → web `/api/mcp` → server `/mcp`. web 은 MCP 토큰을 **갖지 않고**
+    받은 `Authorization` 을 그대로 넘긴다. 검증은 server 한 곳에서 한다. server 는 계속
+    인터넷에 직접 열리지 않는다.
+  - 노출하는 도구는 navis 대화와 **같은 정의**(`createMemoryMcpServer`)를 쓴다. 설명이
+    두 벌로 갈라지지 않게 한다. 기억 외의 도구는 열지 않는다.
+  - navis 대화는 여전히 in-process 로 붙인다(성능 절). HTTP MCP 는 외부 클라이언트 전용이다.
 - `settingSources: []` 를 유지한다. 서버는 어느 디렉터리에서 뜨든 같게 동작해야 한다.
 - 환경변수는 **부팅 때** 검증한다. 첫 요청에서 500 으로 알게 되면 늦다.
 
@@ -214,4 +224,4 @@ props 는 그 컴포넌트가 **직접 쓰는 것만** 받는다.
   작업에서 정리한다.
 - 런타임 개발 지침은 `README.md`(구조 · 규약)와 `STRUCTURE.md`(이관 지도)를 본다.
 
-**Version**: 1.2.0 | **Ratified**: 2026-09-10 | **Last Amended**: 2026-10-06
+**Version**: 1.3.0 | **Ratified**: 2026-09-10 | **Last Amended**: 2026-10-06
