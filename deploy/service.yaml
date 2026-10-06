@@ -10,6 +10,9 @@ metadata:
     cloud.googleapis.com/location: __REGION__
   annotations:
     run.googleapis.com/ingress: all
+    # 누구나 URL 에 접속할 수 있게 한다(콘솔의 "공개 액세스 허용"). 문은 앱 로그인이
+    # 지킨다(proxy · BFF). 여기 두지 않으면 콘솔에서 켜도 다음 배포의 replace 가 끈다.
+    run.googleapis.com/invoker-iam-disabled: "true"
 spec:
   template:
     metadata:

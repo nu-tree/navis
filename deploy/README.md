@@ -78,10 +78,6 @@ gcloud iam service-accounts add-iam-policy-binding navis-run@$PROJECT.iam.gservi
 # 6. 배포 설정
 cp deploy/deploy.env.example deploy/deploy.env   # GCP_PROJECT · Supabase 공개 값 채우기
 ./deploy/deploy.sh
-
-# 7. 누구나 URL 에 접속할 수 있게(앱 자체 로그인이 문을 지킨다)
-gcloud run services add-iam-policy-binding navis --region=$REGION \
-  --member=allUsers --role=roles/run.invoker
 ```
 
 마지막으로 Supabase 대시보드 → Authentication → URL Configuration 의 **Site URL** 에
