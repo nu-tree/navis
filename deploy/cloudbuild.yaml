@@ -10,6 +10,9 @@ substitutions:
 
 options:
   dynamicSubstitutions: true
+  # 콘솔에서 만든 트리거는 이 파일이 쓰지 않는 변수(_AR_HOSTNAME 등)를 끼워 넣는다.
+  # 기본값(MUST_MATCH)이면 그 때문에 빌드가 거부된다.
+  substitutionOption: ALLOW_LOOSE
   logging: CLOUD_LOGGING_ONLY
 
 steps:
