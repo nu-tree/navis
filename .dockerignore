@@ -1,0 +1,18 @@
+# 빌드 컨텍스트는 레포 루트다(워크스페이스 패키지가 필요하다).
+# 로컬 산출물·비밀값이 이미지에 들어가지 않게 막는다.
+**/node_modules
+**/.next
+**/dist
+**/.turbo
+**/coverage
+**/*.tsbuildinfo
+.git
+.claude
+.vscode
+.specify
+specs
+
+# ★ 비밀값. 운영 값은 Secret Manager 에서 런타임에 주입한다.
+**/.env
+**/.env.*
+!**/.env.example

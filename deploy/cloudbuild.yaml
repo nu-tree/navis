@@ -1,0 +1,66 @@
+# 빌드 → 푸시 → 배포를 한 번에. deploy/deploy.sh 가 부른다.
+#
+# 이미지는 Cloud Build(linux/amd64)에서 만든다. Agent SDK 는 플랫폼별 claude 바이너리를
+# 설치하므로 맥(arm64)에서 만든 이미지를 그대로 올리면 Cloud Run 에서 돌지 않는다.
+substitutions:
+  _REGION: asia-southeast1
+  _REPO: navis
+  _NEXT_PUBLIC_SUPABASE_URL: ""
+  _NEXT_PUBLIC_SUPABASE_ANON_KEY: ""
+
+options:
+  dynamicSubstitutions: true
+  logging: CLOUD_LOGGING_ONLY
+
+steps:
+  - id: build-server
+    name: gcr.io/cloud-builders/docker
+    waitFor: ["-"]
+    args:
+      - build
+      - -f
+      - apps/server/Dockerfile
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/server:$BUILD_ID
+      - .
+
+  - id: build-web
+    name: gcr.io/cloud-builders/docker
+    waitFor: ["-"]
+    args:
+      - build
+      - -f
+      - apps/web/Dockerfile
+      - --build-arg
+      - NEXT_PUBLIC_SUPABASE_URL=${_NEXT_PUBLIC_SUPABASE_URL}
+      - --build-arg
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${_NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/web:$BUILD_ID
+      - .
+
+  - id: push-server
+    name: gcr.io/cloud-builders/docker
+    waitFor: [build-server]
+    args: [push, "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/server:$BUILD_ID"]
+
+  - id: push-web
+    name: gcr.io/cloud-builders/docker
+    waitFor: [build-web]
+    args: [push, "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/web:$BUILD_ID"]
+
+  - id: deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    waitFor: [push-server, push-web]
+    entrypoint: bash
+    args:
+      - -euo
+      - pipefail
+      - -c
+      - |
+        sed -e "s|__PROJECT_ID__|$PROJECT_ID|g" \
+            -e "s|__REGION__|${_REGION}|g" \
+            -e "s|__IMAGE_WEB__|${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/web:$BUILD_ID|g" \
+            -e "s|__IMAGE_SERVER__|${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/server:$BUILD_ID|g" \
+            deploy/service.yaml > /workspace/service.rendered.yaml
+        gcloud run services replace /workspace/service.rendered.yaml --region=${_REGION}

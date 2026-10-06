@@ -19,3 +19,6 @@ Thumbs.db
 
 # 테스트 커버리지
 coverage/
+
+# 배포 설정(GCP 프로젝트 · Supabase 공개 키)
+deploy/deploy.env

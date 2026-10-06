@@ -1,0 +1,85 @@
+# Cloud Run 서비스 정의 — web(ingress) + server(사이드카) 두 컨테이너, 배포 한 번.
+#
+# __PROJECT_ID__ · __REGION__ · __IMAGE_WEB__ · __IMAGE_SERVER__ 는 deploy/cloudbuild.yaml 이
+# 배포 직전에 채운다. 직접 고칠 일은 리소스 · 스케일 설정 정도다.
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: navis
+  labels:
+    cloud.googleapis.com/location: __REGION__
+  annotations:
+    run.googleapis.com/ingress: all
+spec:
+  template:
+    metadata:
+      annotations:
+        # ★ 최대 1. 진행 중인 턴의 AbortController 가 server 프로세스 메모리에 있다 —
+        #   인스턴스가 둘이면 중지 요청이 다른 인스턴스로 가서 아무것도 멈추지 않는다
+        #   (apps/server/src/routes/chat.ts 의 inFlight 주석). 무료 한도 보호도 겸한다.
+        autoscaling.knative.dev/maxScale: "1"
+        # 안 쓸 때는 0 으로 내려가 과금되지 않는다. 대가로 첫 요청에 콜드 스타트가 있다.
+        autoscaling.knative.dev/minScale: "0"
+        # server 의 startupProbe 가 통과한 뒤에 web 을 띄운다.
+        run.googleapis.com/container-dependencies: '{"web":["server"]}'
+        run.googleapis.com/startup-cpu-boost: "true"
+    spec:
+      serviceAccountName: navis-run@__PROJECT_ID__.iam.gserviceaccount.com
+      # 에이전트 턴은 분 단위로 갈 수 있다. SSE 스트림 하나가 이 시간 안에 끝나야 한다.
+      timeoutSeconds: 3600
+      containerConcurrency: 80
+      containers:
+        - name: web
+          image: __IMAGE_WEB__
+          ports:
+            - containerPort: 8080
+          env:
+            - name: NAVIS_API_URL
+              value: http://localhost:4000
+            - name: NAVIS_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: navis-api-token
+                  key: latest
+          resources:
+            limits:
+              cpu: "1"
+              memory: 512Mi
+
+        # ★ 원칙 II: DATABASE_URL · CLAUDE_CODE_OAUTH_TOKEN 은 이 컨테이너에만 준다.
+        #   ports 가 없으므로 외부에 열리지 않는다. PORT 는 ingress 에만 주입되므로
+        #   server 는 기본값 4000 으로 뜬다(apps/server/src/index.ts).
+        - name: server
+          image: __IMAGE_SERVER__
+          env:
+            - name: API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: navis-api-token
+                  key: latest
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: navis-database-url
+                  key: latest
+            - name: VOYAGE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: navis-voyage-api-key
+                  key: latest
+            - name: CLAUDE_CODE_OAUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: navis-claude-oauth-token
+                  key: latest
+          resources:
+            limits:
+              cpu: "1"
+              # Agent SDK 가 claude 바이너리를 서브프로세스로 띄운다. 512Mi 는 빠듯하다.
+              memory: 1Gi
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 4000
+            periodSeconds: 2
+            failureThreshold: 30

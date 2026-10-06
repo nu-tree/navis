@@ -65,6 +65,11 @@ pnpm db:migrate     # 적용
 
 부팅 시 자동 마이그레이션은 하지 않는다 — 배포와 분리된 명시적 단계다.
 
+## 배포
+
+Cloud Run 서비스 하나에 web(ingress) + server(사이드카). `./deploy/deploy.sh` 한 번이면
+빌드 · 배포가 끝난다. 최초 준비는 [`deploy/README.md`](deploy/README.md).
+
 ## 규약
 
 - 파일·폴더명은 **kebab-case** (`use-send-message.ts`)

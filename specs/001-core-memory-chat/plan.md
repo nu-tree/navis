@@ -41,7 +41,7 @@
 호출). 웹 단위 테스트와 E2E 는 하지 않는다. 확률적 기준은 `quickstart.md` 의 수동 시나리오가
 덮는다. 근거와 기각한 대안은 research R1.
 
-**Target Platform**: 모던 브라우저 + Node 22 상주 서버. 배포 대상 미정(Railway 제외).
+**Target Platform**: 모던 브라우저 + Node 22 상주 서버. 배포는 Cloud Run 서비스 하나(web ingress + server 사이드카, 헌장 v1.2.0).
 
 **Project Type**: 웹 — pnpm 모노레포(Next 웹 + Hono 상주 서버 + 공용 패키지 5개)
 
