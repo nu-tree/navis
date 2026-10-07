@@ -15,6 +15,7 @@
 
 import { query, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import { DEFAULT_MODEL, type Model } from "@navis/validation";
+import { withHistory, type HistoryMessage } from "./history";
 import { toImageBlocks } from "./images";
 import {
   ALLOWED_MEMORY_TOOLS,
@@ -52,6 +53,16 @@ const SYSTEM_PROMPT = [
   "recall 결과가 비면 **기억에 없다고 말한다.** 있을 법한 내용을 지어내지 않는다.",
 ].join("\n");
 
+// 이 프로세스가 만들었거나 이어 온 에이전트 세션.
+//
+// ★ 세션 내용(대화 기록 파일)은 SDK 가 **이 컨테이너의 디스크**(~/.claude)에 쓴다. DB 에는
+//   세션 id 만 있다. Cloud Run 이 0 으로 내려갔다 새 인스턴스가 뜨면 id 는 남고 파일은
+//   사라져서, 그 id 로 resume 하면 `error_during_execution` 으로 턴이 죽는다(2026-10-07 운영
+//   로그: 새 인스턴스 기동 직후 첫 턴마다 실패).
+//   그래서 이 프로세스에서 성공한 세션만 resume 한다. 서버 인스턴스는 하나(헌장 배포 절)라
+//   이 집합이 곧 "지금 디스크에 있는 세션"이다. 매 턴 파일을 확인하는 I/O 를 붙이지 않는다.
+const liveSessions = new Set<string>();
+
 export type TurnInput = {
   prompt: string;
   /**
@@ -63,6 +74,11 @@ export type TurnInput = {
   images?: string[];
   /** 이어갈 에이전트 세션. 없으면 새 세션으로 시작한다. */
   resumeSessionId?: string | null;
+  /**
+   * 이 방의 이전 메시지(이번 질문 제외). 세션을 이어갈 수 없을 때만 쓴다(liveSessions 주석).
+   * 이어갈 수 있으면 SDK 세션이 맥락을 들고 있으므로 보지 않는다.
+   */
+  history?: readonly HistoryMessage[];
   model?: Model;
   abortController?: AbortController;
 };
@@ -93,8 +109,18 @@ export async function runTurn(
   input: TurnInput,
   cb: TurnCallbacks = {},
 ): Promise<TurnResult> {
+  // 디스크에 세션이 있을 때만 잇는다. 없으면 새 세션 + 기록 복원.
+  const resume =
+    input.resumeSessionId && liveSessions.has(input.resumeSessionId)
+      ? input.resumeSessionId
+      : null;
+  const promptText =
+    !resume && input.resumeSessionId && input.history?.length
+      ? withHistory(input.prompt, input.history)
+      : input.prompt;
+
   let text = "";
-  let sessionId: string | null = input.resumeSessionId ?? null;
+  let sessionId: string | null = resume;
   const toolsUsed: string[] = [];
 
   // 이 턴 동안의 기억 도구 집계. 도구 핸들러가 클로저로 잡아 직접 올린다.
@@ -115,15 +141,15 @@ export async function runTurn(
             type: "user",
             message: {
               role: "user",
-              content: input.prompt.trim()
-                ? [...blocks, { type: "text", text: input.prompt }]
+              content: promptText.trim()
+                ? [...blocks, { type: "text", text: promptText }]
                 : blocks,
             },
             parent_tool_use_id: null,
-            session_id: input.resumeSessionId ?? "",
+            session_id: resume ?? "",
           } as SDKUserMessage;
         })()
-      : input.prompt;
+      : promptText;
 
   for await (const message of query({
     prompt,
@@ -152,7 +178,7 @@ export async function runTurn(
       ...(input.abortController
         ? { abortController: input.abortController }
         : {}),
-      ...(input.resumeSessionId ? { resume: input.resumeSessionId } : {}),
+      ...(resume ? { resume } : {}),
     },
   })) {
     if (message.type === "stream_event") {
@@ -178,6 +204,7 @@ export async function runTurn(
       if (message.subtype !== "success") {
         throw new Error(`Claude 응답 실패: ${message.subtype}`);
       }
+      liveSessions.add(message.session_id);
       // result.result 가 최종 전문이다. 델타를 이어 붙인 것보다 이쪽이 정확하다.
       text = message.result;
     }

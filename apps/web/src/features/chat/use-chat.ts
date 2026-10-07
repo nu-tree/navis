@@ -1,9 +1,10 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { parseChatEvents } from "@navis/api";
 import type { ChatRequest, Message } from "@navis/validation";
 import type { SendInput } from "./chat-input";
+import { turnStore } from "./turn-store";
 
 type UseChatInput = {
   /** 이 턴이 속한 방. 서버가 이걸로 에이전트 세션을 이어 붙인다. */
@@ -15,20 +16,29 @@ type UseChatInput = {
   onTurnEnd?: () => void;
 };
 
-// 한 대화방의 턴 진행 상태. 브라우저는 /api/chat(BFF)만 부른다 — apps/server 의
-// 토큰은 Next 서버에만 있다.
+// 한 대화방의 턴. 브라우저는 /api/chat(BFF)만 부른다 — apps/server 의 토큰은
+// Next 서버에만 있다.
+//
+// 턴 상태는 이 훅이 아니라 turnStore 가 방별로 들고 있다(turn-store.ts 주석). 방을 옮겨도
+// 스트림은 끝까지 읽히고, 돌아오면 같은 상태가 다시 보인다.
 export function useChat({ conversationId, messages, setMessages, onTurnEnd }: UseChatInput) {
-  // 스트리밍 중인 어시스턴트 텍스트. null 이면 진행 중인 턴이 없다.
-  // 빈 문자열("")은 "턴은 시작됐지만 첫 토큰 전" — 생각 중 표시의 조건이다.
-  const [streaming, setStreaming] = useState<string | null>(null);
-  const [tool, setTool] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { streaming, tool, error, turnId } = useSyncExternalStore(
+    turnStore.subscribe,
+    () => turnStore.get(conversationId),
+    () => turnStore.get(conversationId),
+  );
 
-  const turnId = useRef<string | null>(null);
+  // 이 방이 화면에 열려 있는 동안만 끝난 턴의 메시지를 받는다.
+  useEffect(
+    () => turnStore.attach(conversationId, (incoming) => setMessages((prev) => [...prev, ...incoming])),
+    [conversationId, setMessages],
+  );
 
   const send = async ({ text, images, model }: SendInput) => {
-    if (streaming !== null) return; // 턴이 도는 중엔 새 턴을 만들지 않는다
+    // 이 방에서 턴이 도는 중엔 새 턴을 만들지 않는다. 다른 방은 상관없다.
+    if (turnStore.get(conversationId).streaming !== null) return;
 
+    // 보내는 순간에는 방이 열려 있다 — 화면 목록에 바로 붙인다.
     setMessages((prev) => [
       ...prev,
       {
@@ -40,11 +50,8 @@ export function useChat({ conversationId, messages, setMessages, onTurnEnd }: Us
         ...(images?.length ? { images } : {}),
       },
     ]);
-    setStreaming("");
-    setError(null);
-
     const id = crypto.randomUUID();
-    turnId.current = id;
+    turnStore.update(conversationId, { streaming: "", tool: null, error: null, turnId: id });
     // 중지 뒤 도착한 델타가 다음 턴에 섞이지 않게, 이 턴의 로컬 버퍼를 따로 둔다.
     let text_ = "";
 
@@ -69,15 +76,15 @@ export function useChat({ conversationId, messages, setMessages, onTurnEnd }: Us
         switch (event.type) {
           case "delta":
             text_ += event.text;
-            setStreaming(text_);
+            turnStore.update(conversationId, { streaming: text_ });
             break;
           case "status":
-            setTool(event.tool);
+            turnStore.update(conversationId, { tool: event.tool });
             break;
           case "done":
             // 최종 전문은 서버가 권위다 — 델타를 이어 붙인 것과 다를 수 있다.
             // message 에 saved 가 실려 오므로 저장 표시도 여기서 함께 확정된다.
-            setMessages((prev) => [...prev, event.message]);
+            turnStore.deliver(conversationId, [event.message]);
             break;
           case "aborted":
             // 중지 시점까지 온 부분 답변은 화면에 남긴다 — 사라지면 사용자는
@@ -88,8 +95,7 @@ export function useChat({ conversationId, messages, setMessages, onTurnEnd }: Us
             //   붙이지만, 서버의 어떤 메시지와도 대응되지 않는다 — 삭제 버튼이
             //   404 를 받아도 정상이다.
             if (text_) {
-              setMessages((prev) => [
-                ...prev,
+              turnStore.deliver(conversationId, [
                 {
                   id: crypto.randomUUID(),
                   role: "assistant",
@@ -100,17 +106,16 @@ export function useChat({ conversationId, messages, setMessages, onTurnEnd }: Us
             }
             break;
           case "error":
-            setError(event.message);
+            turnStore.update(conversationId, { error: event.message });
             break;
           // thinking 은 아직 화면에 쓰지 않는다.
         }
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      turnStore.update(conversationId, { error: err instanceof Error ? err.message : String(err) });
     } finally {
-      setStreaming(null);
-      setTool(null);
-      turnId.current = null;
+      // 오류는 남긴다 — 방을 떠난 사이 실패했어도 돌아와서 볼 수 있어야 한다.
+      turnStore.update(conversationId, { streaming: null, tool: null, turnId: null });
       // 목록의 제목·마지막 메시지·정렬을 갱신한다.
       onTurnEnd?.();
     }
@@ -118,7 +123,7 @@ export function useChat({ conversationId, messages, setMessages, onTurnEnd }: Us
 
   // 연결만 끊으면 서버는 계속 생성한다. 반드시 cancel 을 불러야 멈춘다.
   const stop = async () => {
-    const id = turnId.current;
+    const id = turnId;
     if (!id) return;
     await fetch("/api/chat/cancel", {
       method: "POST",

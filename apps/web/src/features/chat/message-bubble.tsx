@@ -58,8 +58,11 @@ export const MessageBubble = ({ message, onRemove }: Readonly<Props>) => {
           {/* 사용자 입력은 마크다운으로 해석하지 않는다 — 의도 없이 쓴 `*`·`#` 가
               서식으로 바뀌면 원문이 왜곡된다. 줄바꿈만 보존한다.
               이미지만 보낸 턴은 텍스트가 비어 있으므로 그릴 것이 없다(FR-006). */}
+          {/* wrap-anywhere: 붙여넣은 로그·명령의 공백 없는 긴 토큰(--enable-features=…)도
+              버블 안에서 끊는다. break-word 는 최소 너비 계산에 들어가지 않아, 내용에
+              맞춰 줄어드는 이 버블을 그 토큰 길이만큼 밀어낸다. */}
           {message.text ? (
-            <p className="whitespace-pre-wrap text-md leading-relaxed">
+            <p className="whitespace-pre-wrap wrap-anywhere text-md leading-relaxed">
               {message.text}
             </p>
           ) : null}

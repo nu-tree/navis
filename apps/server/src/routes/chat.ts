@@ -5,6 +5,7 @@ import {
   cancelRequestSchema,
   chatRequestSchema,
   type ChatEvent,
+  type Message,
 } from "@navis/validation";
 
 // 진행 중인 턴. 상주 서버라 프로세스 로컬 Map 으로 충분하다 — 중지가 DB 신호
@@ -36,9 +37,13 @@ export const chatRoute = new Hono()
     //   실패하면 스트림을 열지 않고 평범한 오류 응답을 준다 — SSE 안에서 실패하면
     //   화면이 "빈 답변"으로 보게 된다.
     let resumeSessionId: string | null = null;
+    // 이번 질문을 붙이기 **전**의 메시지. 세션을 이어갈 수 없을 때 맥락 복원에 쓴다
+    // (domain/chat 의 liveSessions 주석). ensure 가 이미 읽어 온 것이라 추가 조회가 없다.
+    let history: Message[] = [];
     try {
       const room = await conversation.ensure(req.conversationId, req.text);
       resumeSessionId = room.sessionId;
+      history = room.messages;
       await conversation.appendMessage(req.conversationId, {
         role: "user",
         text: req.text,
@@ -72,6 +77,7 @@ export const chatRoute = new Hono()
           {
             prompt: req.text,
             resumeSessionId,
+            history,
             model: req.model,
             abortController,
             ...(req.images?.length ? { images: req.images } : {}),
