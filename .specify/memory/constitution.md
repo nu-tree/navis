@@ -129,6 +129,11 @@ props 는 그 컴포넌트가 **직접 쓰는 것만** 받는다.
 - Agent SDK 의 내장 파일 · 셸 도구(`Read`/`Write`/`Edit`/`Bash`)를 열지 않는다.
   `tools: []` 가 기본이고, 기억 MCP 의 도구만 명시적으로 연다. 서버에 소스 트리가 없어
   얻는 것이 없고, 토큰이 새면 그대로 임의 명령 실행이 된다.
+  - 예외는 웹 도구 둘이다. `WebSearch` 는 Anthropic 쪽에서 실행되어 자동 승인한다.
+    `WebFetch` 는 **이 컨테이너가** URL 을 가져오므로 자동 승인하지 않는다. 매번 `canUseTool`
+    (`packages/domain/src/chat/fetch-guard.ts`)이 검사해 **사용자가 쓴 URL 과 이번 턴의 검색
+    결과에 나온 URL** 만 연다(쿼리까지 일치, 내부 주소 거절). 모델이 지어낸 URL 을 열면
+    가져온 페이지에 심긴 지시로 기억이 URL 에 실려 밖으로 샐 수 있다.
   `tools` 는 **내장 도구**의 집합이므로(설치된 SDK 타입 주석: *"the base set of available
   built-in tools"*, `[]` = 전면 차단) MCP 도구와 충돌하지 않는다. `mcpServers` 로 들어오는
   도구는 이 배열과 무관하다 — 둘을 같은 것으로 보고 `tools` 에 MCP 도구를 넣지 말 것.
@@ -224,4 +229,4 @@ props 는 그 컴포넌트가 **직접 쓰는 것만** 받는다.
   작업에서 정리한다.
 - 런타임 개발 지침은 `README.md`(구조 · 규약)와 `STRUCTURE.md`(이관 지도)를 본다.
 
-**Version**: 1.3.0 | **Ratified**: 2026-09-10 | **Last Amended**: 2026-10-06
+**Version**: 1.4.0 | **Ratified**: 2026-09-10 | **Last Amended**: 2026-10-07

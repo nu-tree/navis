@@ -8,8 +8,9 @@ HTTP MCP 로 자기 자신에게 왕복하지 않는다(헌장 성능 절, R3).
 ```
 createSdkMcpServer({ name: 'memory', tools: [ tool(...), ... ] })
   → Options.mcpServers = { memory: <config> }
-  → Options.tools = []            // 내장 도구 전면 차단. MCP 도구는 이 배열과 무관하다
-  → Options.allowedTools = ['mcp__memory__save', ...]   // 승인 프롬프트 상대가 없다
+  → Options.tools = ['WebSearch', 'WebFetch']  // 내장 도구는 웹 도구만. MCP 도구는 이 배열과 무관하다
+  → Options.allowedTools = ['mcp__memory__save', ..., 'WebSearch']   // 승인 프롬프트 상대가 없다
+  → Options.canUseTool = fetchGuard.canUseTool  // WebFetch 는 URL 허용 목록으로 매번 판정
 ```
 
 `Options.tools` 는 **내장 도구**의 집합이며 `[]` 는 "모든 내장 도구 비활성"이다. MCP 도구는
