@@ -64,11 +64,21 @@
 
 | 메서드 | 경로 | 요청 | 응답 | 요구 |
 | --- | --- | --- | --- | --- |
-| `GET` | `/settings/persona` | — | `{ value: string, isDefault: boolean }` | FR-036 |
-| `PUT` | `/settings/persona` | `{ value: string }` | `{ value, isDefault }` | FR-036, FR-037 |
+> 2026-10-06 변경: `/settings/persona` 는 드롭했다(US5 성격 설정 → Claude 토큰 관리).
 
-`isDefault` 를 함께 내려보내야 화면이 "기본값이 적용 중"과 "사용자가 저장한 값"을 구분해
-보여줄 수 있다(FR-036 수용 시나리오 1).
+| 메서드 | 경로 | 요청 | 응답 | 요구 |
+| --- | --- | --- | --- | --- |
+| `GET` | `/settings/claude-token` | — | `ClaudeTokenStatus` | FR-036, FR-037 |
+| `PUT` | `/settings/claude-token` | `{ token: string }` | `ClaudeTokenStatus` | FR-036, FR-055 |
+| `DELETE` | `/settings/claude-token` | — | `ClaudeTokenStatus` | FR-036 |
+
+`ClaudeTokenStatus` = `{ registered: boolean, last4: string | null, updatedAt: string | null }`.
+
+- **어떤 응답에도 토큰 원문이 없다**(FR-037). `PUT` 도 받은 값을 되돌려주지 않고 상태만 준다.
+- `PUT` 의 빈 문자열 · 공백뿐인 값은 **400**. 지우려면 `DELETE` 를 쓴다 — "빈 값 저장 = 삭제"
+  같은 암묵 규약을 두지 않는다.
+- 저장 형식만 검사하고(공백 제거 후 비어 있지 않음), 실제로 유효한지는 다음 턴에 Claude 가
+  판정한다(FR-056). 저장 시점에 Claude 를 호출하지 않는다 — 구독 사용량을 쓰지 않는다.
 
 ### 헬스
 

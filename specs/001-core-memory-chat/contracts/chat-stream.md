@@ -15,7 +15,7 @@
 | `tool` | `label` | 완료된 도구 한 줄 | FR-003 |
 | `done` | `message`, `sessionId`, `saved` | 확정 메시지를 목록으로 옮긴다 | FR-002, FR-010 |
 | `aborted` | `reason` | 부분 답변을 화면에 남긴다 | FR-004 |
-| `error` | `message` | 읽을 수 있는 오류를 보여준다 | FR-040 |
+| `error` | `message`, `code?` | 읽을 수 있는 오류를 보여준다. `code` 가 `claude_token_missing` · `claude_token_rejected` 면 설정 화면으로 가는 안내를 붙인다 | FR-040, FR-056 |
 
 ## 규약
 

@@ -230,22 +230,32 @@ description: "핵심 나비스 — 기억과 대화 구현 작업 목록"
 
 ---
 
-## Phase 8: User Story 5 — 나비스의 성격을 정한다 (P3)
+## Phase 8: User Story 5 — Claude 연결을 설정 화면에서 관리한다 (P2)
 
-**Goal**: 설정 화면에서 나비스가 답하는 태도를 보고 수정한다. 저장하면 이후 턴에 반영된다.
+> **2026-10-06 계획 변경.** 성격 설정(옛 T090~T096: 성격 조회 · 저장, `SYSTEM_PROMPT` 의 DB 이전,
+> `/settings/persona`)은 **드롭**했다. 성격은 `domain/chat` 의 코드 기본값을 그대로 쓴다(FR-057).
+> 같은 번호에 Claude 토큰 관리를 채우고, 넘치는 작업은 T112 부터 이어 붙인다.
 
-**Independent test**: 성격을 `무조건 한 문장으로만 답한다` 로 바꾸고 아무 질문을 보내 답
-길이가 바뀌면 통과. (`quickstart.md` S10)
+**Goal**: Claude 구독 토큰을 서버 환경변수가 아니라 설정 화면에서 등록 · 교체 · 삭제한다.
+데이터베이스에는 암호문만 두고, 바꾸면 재배포 없이 다음 턴부터 적용된다.
 
-- [ ] T090 [US5] `packages/domain/src/settings/index.ts` 에 성격 조회 · 저장을 구현한다. 우선순위는 **DB → 환경변수 → 내장 기본값**. `getSetting` 의 빈 값 규약을 한쪽으로 통일한다 — 이전 구현에서는 `null` 과 `undefined` 가 공존했다(코드 주석)
-- [ ] T091 [P] [US5] `packages/domain/src/settings/index.test.ts` — 세 우선순위가 순서대로 적용되는지, 빈 문자열 저장이 기본값으로 되돌리는지 검증한다(FR-037)
-- [ ] T092 [US5] `packages/domain/src/chat/index.ts` 의 하드코딩된 `SYSTEM_PROMPT` 를 DB 설정에서 읽도록 바꾼다. 코드의 기존 `TODO` 를 해소한다
-- [ ] T093 [US5] `apps/server/src/routes/settings.ts` — `GET /settings/persona` · `PUT /settings/persona`. 응답에 **`isDefault`** 를 함께 싣는다. 화면이 "기본값 적용 중"과 "사용자가 저장한 값"을 구분해야 한다(FR-036 시나리오 1)
-- [ ] T094 [P] [US5] `apps/server/src/routes/settings.test.ts` — 빈 값 저장 후 `isDefault: true` 인지 검증한다
-- [ ] T095 [US5] `apps/web/src/app/api/settings/` BFF 라우트와 `apps/web/src/features/settings/use-persona.ts` 훅
-- [ ] T096 [US5] `apps/web/src/app/settings/page.tsx` — 설정 화면
+**Independent test**: 토큰을 지운 뒤 질문하면 등록 안내가 나오고, 설정 화면에서 등록한 뒤 재배포
+없이 같은 질문에 답이 오면 통과. (`quickstart.md` S10)
 
-**Checkpoint**: `quickstart.md` S10 통과.
+- [ ] T090 [US5] `packages/domain/src/settings/secret.ts` — AES-256-GCM 암호화 · 복호화. 키는 `NAVIS_SETTINGS_KEY`(32바이트 base64)를 인자로 받는다(전역 env 를 직접 읽지 않는다 — 테스트가 키를 주입한다). 형식 `v1.<iv>.<tag>.<ciphertext>` (data-model.md 설정 절)
+- [ ] T091 [P] [US5] `packages/domain/src/settings/secret.test.ts` — 왕복 일치, 같은 평문 두 번 암호화 시 암호문이 다름(IV), 한 글자 변조 시 복호화 **실패**, 다른 키로 복호화 실패, 형식이 아닌 값 거부
+- [ ] T092 [US5] `packages/domain/src/settings/index.ts` — `claudeToken.status()`(`{ registered, last4, updatedAt }`) · `set(token)` · `remove()` · `resolve()`(턴에서 쓸 평문). 키는 `claude_oauth_token`. **`status()` 의 반환값에 평문이 들어갈 길이 없게** 타입으로 막는다. 서버 인스턴스가 하나(헌장 배포 절)이므로 평문을 프로세스 메모리에 캐시하고 `set` · `remove` 때 무효화한다 — 매 턴 DB 조회 · 복호화를 하지 않는다(성능 절). 옛 성격 이관 주석을 지운다
+- [ ] T093 [P] [US5] `packages/domain/src/settings/index.test.ts` — `status()` 직렬화 결과에 평문이 없음, 공백뿐인 값 `set` 거부, `remove` 후 `resolve()` 가 `null`, `set` 직후 캐시가 새 값을 돌려줌
+- [ ] T094 [US5] `packages/domain/src/chat/index.ts` — 턴 시작 시 `claudeToken.resolve()` 로 토큰을 얻어 `query()` 의 `options.env` 로 넘긴다(`process.env` 에 기대지 않는다). 없으면 Claude 를 부르지 않고 `ClaudeTokenMissingError`, SDK 가 인증 실패를 내면 `ClaudeTokenRejectedError`(`packages/domain/src/errors.ts`). 상단의 "SDK 가 process.env 의 토큰을 알아서 집는다" 주석을 고친다
+- [ ] T095 [US5] `apps/server/src/routes/settings.ts` — `GET` · `PUT` · `DELETE /settings/claude-token`(contracts/server-http.md 설정 절). `apps/server/src/routes/chat.ts` 는 두 토큰 오류를 SSE `error` 의 `code`(`claude_token_missing` · `claude_token_rejected`)로 싣는다 — `packages/validation/src/chat.ts` 의 `error` 이벤트에 `code` 를 선택 필드로 추가. `apps/server/src/env.ts` 에서 `CLAUDE_CODE_OAUTH_TOKEN` 경고를 지우고 `NAVIS_SETTINGS_KEY` 를 **부팅 필수**로 검증한다
+- [ ] T096 [P] [US5] `apps/server/src/routes/settings.test.ts` — 토큰 없이 401(기본 잠금), `PUT` 응답 · 이후 `GET` 응답 본문에 보낸 토큰 문자열이 **없음**, 빈 값 400, `DELETE` 후 `registered: false`. `chat` 계약 테스트에 토큰 미등록 시 `error.code = claude_token_missing` 추가
+- [ ] T112 [US5] `apps/web/src/app/api/settings/claude-token/route.ts` BFF(세션 검증 → 중계)와 `apps/web/src/features/settings/use-claude-token.ts` 훅
+- [ ] T113 [US5] `apps/web/src/app/settings/page.tsx` + `apps/web/src/features/settings/claude-token-form.tsx` — 상태(등록 여부 · 끝 4자리 · 변경 시각), `type="password"` 입력, 교체 · 삭제. 저장이 끝나면 입력 칸을 비운다(원문을 화면 상태에 남기지 않는다). 사이드바에서 설정으로 가는 진입점을 둔다 — 화면 상한(SC-010)은 채팅 · 기억 · 설정 셋이다
+- [ ] T114 [US5] `apps/web/src/features/chat/` — `error.code` 가 토큰 오류면 메시지 아래에 설정 화면 링크를 붙인다
+- [ ] T115 [US5] 배포 전환 — Secret Manager 에 `navis-settings-key`(`openssl rand -base64 32`)를 만들고 `deploy/service.yaml` 의 **server 컨테이너에만** 주입, `CLAUDE_CODE_OAUTH_TOKEN` 주입을 제거. `apps/server/.env.example` · `deploy/README.md` · 루트 `README.md` 를 맞춘다. **배포 직후 설정 화면에서 토큰을 등록해야 대화가 된다** — 순서를 README 에 적는다. 정상 동작을 확인한 뒤 Secret Manager 의 `navis-claude-oauth-token` 을 삭제한다
+- [ ] T116 [US5] 헌장 개정 — 원칙 II 의 "`CLAUDE_CODE_OAUTH_TOKEN` 을 아는 배포 단위" 문구, 보안 절(토큰 원문 비노출 · 암호화 저장 · 키는 server 에만), 스택 절의 배포 비밀값 목록을 갱신한다
+
+**Checkpoint**: `quickstart.md` S10 통과(SC-019).
 
 ---
 
@@ -275,7 +285,7 @@ description: "핵심 나비스 — 기억과 대화 구현 작업 목록"
 - **US3 (Phase 5)**: Foundational 완료 후. US1 · US2 와 독립
 - **US4 (Phase 6)**: Foundational 완료 후. `recent()` 를 US1 의 T031 이 최소 구현했으므로 T062 가 그것을 확장한다 — 유일한 이야기 간 접점
 - **US6 (Phase 7)**: Foundational 완료 후. **완전 독립** — T023 의 빈 자리를 T085 가 채운다. 기억 · 대화 기능 없이 검증된다
-- **US5 (Phase 8)**: Foundational 완료 후. 독립. T092 가 US1 의 T028 시스템 프롬프트와 같은 파일을 만지므로 순서를 맞춘다
+- **US5 (Phase 8)**: Foundational 완료 후. 독립. T094 가 `domain/chat/index.ts` · T095 가 `routes/chat.ts` 를 만지므로 같은 파일을 건드리는 다른 작업과 순서를 맞춘다. **T115(배포 전환)는 T090~T114 가 끝난 뒤** — 먼저 env 를 걷어내면 대화가 끊긴다
 - **Polish (Phase 9)**: 원하는 이야기가 모두 끝난 뒤
 
 ### Within Each User Story
@@ -341,7 +351,7 @@ Task: "apps/web/src/features/memory/use-memory-neighbors.ts"
 4. **US3** → S4 · S5 · S6 검증 → 실사용 가능(재시작에도 안 깨진다)
 5. **US4** → S7 · S8 · S9 검증 → 자동 저장을 신뢰할 수 있게 된다
 6. **US6** → S11 · S12 검증 → **인터넷에 둘 수 있게 된다**
-7. **US5** → S10 검증 → 취향 조정
+7. **US5** → S10 검증 → 토큰을 재배포 없이 갈아끼운다
 
 US1 + US2 까지가 제품의 최소 형태고, US6 이 없으면 로컬에서만 쓴다.
 
@@ -351,7 +361,7 @@ Foundational 완료 후:
 
 - 개발자 A: US1 → US2 (기억의 저장과 불러오기는 같은 사람이 보는 편이 낫다 — 시스템 프롬프트를 공유한다)
 - 개발자 B: US3 (대화 이력 · 기록 시점)
-- 개발자 C: US6 → US5 (인증과 설정. 둘 다 표면이 작다)
+- 개발자 C: US6 → US5 (인증과 설정 — 둘 다 자격을 다루는 일이다)
 - US4 는 US1 이 끝난 뒤 A 또는 C 가 잡는다
 
 ---

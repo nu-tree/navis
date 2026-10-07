@@ -22,6 +22,11 @@
    실제 인가는 BFF 라우트 핸들러가 한다. Next 16 문서가 프록시를 인가 수단으로 쓰지 말라고
    명시한다(research R2).
 
+> **2026-10-06 계획 변경 — US5.** 성격 설정(시스템 프롬프트 편집)을 드롭하고, 설정 화면을
+> **Claude 구독 토큰 관리**로 바꿨다. 토큰은 서버 환경변수가 아니라 DB 에 **암호화해** 두고
+> (키 `NAVIS_SETTINGS_KEY` 만 server 환경에), 재배포 없이 교체한다. 상세: spec US5 · FR-036/037 ·
+> FR-055~057 · SC-019, data-model 설정 절, contracts/server-http 설정 절, tasks Phase 8.
+
 ## Technical Context
 
 **Language/Version**: TypeScript 5.9 · Node ≥ 22 · 전부 ESM (`"type": "module"`)
@@ -152,7 +157,7 @@ apps/
 │       ├── chat.ts              ~ 메시지 기록 시점(R9) · sessionId 를 DB 로(R10) · 동시 턴 409
 │       ├── conversations.ts     + 목록 · 조회 · 삭제 · 메시지 삭제
 │       ├── memories.ts          + 목록 · 추가 · 검색 · 이웃 · 수정 · 삭제 · 할일 · 내보내기
-│       ├── settings.ts          + 성격 조회 · 저장
+│       ├── settings.ts          + Claude 토큰 상태 · 등록 · 삭제 (원문 비노출)
 │       └── health.ts              변경 없음
 └── web/src/
     ├── proxy.ts                 + 낙관적 리다이렉트만 (Next 16: middleware → proxy)
@@ -165,7 +170,7 @@ apps/
     │   ├── chat/                ~ use-chat.ts 에 방 목록 · 이어가기 반영
     │   ├── conversation/        + 방 목록 훅 · 사이드바 배선
     │   ├── memory/              + 목록 · 검색 · 수정 · 이웃 정리 · 내보내기 훅과 화면
-    │   ├── settings/            + 성격 편집
+    │   ├── settings/            + Claude 토큰 폼 · 상태 훅
     │   └── auth/                + 로그인 · 로그아웃 훅
     ├── components/layout/
     │   └── sidebar.tsx          ~ PLACEHOLDER_ROOMS 제거 · unread 배지 제거(계약에 없다)
@@ -183,9 +188,9 @@ packages/
 │   ├── memory/index.ts          + 이관 — save · recall · recent · update · remove · todos
 │   │                              embed() 가드(R5) · 시간 가중치 재정렬(R6) · 이웃 조회(R7)
 │   │                              내보내기 직렬화(R8)
-│   ├── chat/index.ts            ~ 기억 MCP 등록(R3) · 시스템 프롬프트를 DB 설정에서
+│   ├── chat/index.ts            ~ 기억 MCP 등록(R3) · 토큰을 settings 에서 받아 options.env 로
 │   ├── conversation/index.ts    + 이관 — 목록 · 조회 · 메시지 추가 · 삭제
-│   └── settings/index.ts        + 이관 — 성격 조회/저장 (DB → env → 기본값)
+│   └── settings/                + Claude 토큰 암호화 저장(AES-256-GCM) · 상태 · 프로세스 캐시
 └── db/src/schema.ts             ~ memories.source 삭제(선택) → db:generate · db:migrate
 ```
 
