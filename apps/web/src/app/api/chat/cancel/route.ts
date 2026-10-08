@@ -1,20 +1,4 @@
-import { apiServer, missingApiConfig } from "@/lib/api-server";
+import { proxyToServer } from "@/lib/bff";
 
-export async function POST(request: Request) {
-  const missing = missingApiConfig();
-  if (missing) return Response.json({ error: missing }, { status: 500 });
-
-  const upstream = await fetch(`${apiServer.baseUrl}/chat/cancel`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${apiServer.token}`,
-    },
-    body: await request.text(),
-  });
-
-  return new Response(await upstream.text(), {
-    status: upstream.status,
-    headers: { "content-type": "application/json" },
-  });
-}
+// 진행 중인 턴 중지. 같은 회원의 턴만 멈춘다 — 회원은 proxyToServer 가 세션에서 붙인다.
+export const POST = (request: Request) => proxyToServer(request, { path: "/chat/cancel" });
