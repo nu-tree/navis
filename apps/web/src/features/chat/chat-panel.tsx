@@ -6,7 +6,7 @@ import { MessageBubble } from "./message-bubble";
 import { MessageList } from "./message-list";
 import { TypingIndicator } from "./typing-indicator";
 import { useChat } from "./use-chat";
-import { useConversation } from "@/features/conversation/use-conversation";
+import { useChatMessages } from "@/hooks/pages/chat/use-chat-messages";
 
 type Props = {
   /** 열려 있는 방. 아직 첫 메시지를 보내지 않은 새 방도 id 를 갖는다. */
@@ -16,7 +16,7 @@ type Props = {
 };
 
 export const ChatPanel = ({ conversationId, onTurnEnd }: Readonly<Props>) => {
-  const { messages, setMessages, removeMessage } = useConversation(conversationId);
+  const { messages, setMessages, removeMessage } = useChatMessages(conversationId);
   const { streaming, tool, error, send, stop } = useChat({
     conversationId,
     messages,

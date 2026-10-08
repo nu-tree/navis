@@ -1,71 +1,25 @@
-"use client";
+import { supabaseEnv } from "@/lib/supabase";
+import { LoginBrand } from "@/features/auth/login-brand";
+import { LoginForm } from "@/features/auth/login-form";
+import { LoginUnconfigured } from "@/features/auth/login-unconfigured";
+import { NeuralBackdrop } from "@/features/auth/neural-backdrop";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { useAuth } from "@/features/auth/use-auth";
-
-export default function LoginPage() {
-  const router = useRouter();
-  const { signIn, pending, error, configured } = useAuth();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-
-  const submit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (await signIn(email, password)) {
-      // replace 로 옮긴다 — 뒤로가기로 로그인 화면에 돌아오지 않게.
-      router.replace("/");
-      router.refresh();
-    }
-  };
+export default async function Page() {
+  // 로그인 설정 여부는 서버에서 정한다 — 폼(클라이언트)을 내릴지 말지가 여기서 갈린다.
+  const configured = supabaseEnv() !== null;
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-4">
-      <div className="w-full max-w-sm space-y-6">
-        <div className="space-y-1.5 text-center">
-          <h1 className="text-2xl font-extrabold">나비스</h1>
-          <p className="text-sm text-muted-foreground">
-            제2의 뇌 — 기억하고 대화한다
-          </p>
+    <main className="relative flex min-h-dvh items-center justify-center overflow-y-auto px-4 py-10">
+      <NeuralBackdrop />
+
+      <div className="relative w-full max-w-sm animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <LoginBrand className="mb-8" />
+
+        <div className="rounded-2xl border border-white/10 bg-card/60 p-6 shadow-2xl shadow-primary/10 backdrop-blur-xl">
+          {configured ? <LoginForm /> : <LoginUnconfigured />}
         </div>
 
-        {configured ? (
-          <form onSubmit={submit} className="space-y-3">
-            <Input
-              type="email"
-              autoComplete="email"
-              placeholder="이메일"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-            <Input
-              type="password"
-              autoComplete="current-password"
-              placeholder="비밀번호"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-
-            {error ? (
-              <p className="text-sm text-destructive">{error}</p>
-            ) : null}
-
-            <Button type="submit" className="w-full" disabled={pending}>
-              {pending ? "확인 중…" : "로그인"}
-            </Button>
-          </form>
-        ) : (
-          <p className="rounded-lg border border-border px-4 py-3 text-sm text-muted-foreground">
-            로그인이 설정되지 않았어요. 로컬 개발 상태입니다 —
-            <code className="mx-1 text-xs">NEXT_PUBLIC_SUPABASE_URL</code>과
-            <code className="mx-1 text-xs">NEXT_PUBLIC_SUPABASE_ANON_KEY</code>를
-            채우면 켜집니다.
-          </p>
-        )}
+        <p className="mt-6 text-center text-xs text-muted-foreground/70">나의 완벽한 비서</p>
       </div>
     </main>
   );

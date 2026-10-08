@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useState } from "react";
 
 /** 와이어 계약(chatRequestSchema.images)과 도메인(MAX_IMAGES)의 상한과 일치해야 한다. */
 export const MAX_IMAGES = 8;
@@ -26,7 +26,7 @@ export function useImageAttachments() {
   const [images, setImages] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  const add = useCallback(async (files: readonly File[]) => {
+  const add = async (files: readonly File[]) => {
     setError(null);
 
     const rejected = files.filter((f) => !ACCEPTED.includes(f.type));
@@ -52,17 +52,17 @@ export function useImageAttachments() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "이미지를 읽지 못했다.");
     }
-  }, [images.length]);
+  };
 
-  const removeAt = useCallback((index: number) => {
+  const removeAt = (index: number) => {
     setError(null);
     setImages((prev) => prev.filter((_, i) => i !== index));
-  }, []);
+  };
 
-  const clear = useCallback(() => {
+  const clear = () => {
     setImages([]);
     setError(null);
-  }, []);
+  };
 
   return {
     images,
