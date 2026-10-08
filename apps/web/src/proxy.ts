@@ -19,6 +19,12 @@ import { serverClient, supabaseEnv } from "@/lib/supabase";
 
 const LOGIN_PATH = "/login";
 
+/**
+ * 로그인 없이 열리는 화면. 비밀번호 찾기와 메일 링크 처리(/auth/confirm)는 아직 로그인 전이다.
+ * /auth/set-password 는 여기 없다 — 메일 링크를 지나 로그인된 뒤에만 연다.
+ */
+const PUBLIC_PATHS = new Set([LOGIN_PATH, "/forgot-password", "/auth/confirm"]);
+
 export async function proxy(request: NextRequest) {
   const env = supabaseEnv();
   // 설정이 없으면 로그인을 켜지 않은 로컬 개발 상태다. BFF 도 같은 판단을 한다.
@@ -36,9 +42,10 @@ export async function proxy(request: NextRequest) {
 
   const { data } = await supabase.auth.getClaims();
   const signedIn = typeof data?.claims?.sub === "string";
-  const onLoginPage = request.nextUrl.pathname === LOGIN_PATH;
+  const path = request.nextUrl.pathname;
+  const onLoginPage = path === LOGIN_PATH;
 
-  if (!signedIn && !onLoginPage) {
+  if (!signedIn && !PUBLIC_PATHS.has(path)) {
     const url = request.nextUrl.clone();
     url.pathname = LOGIN_PATH;
     return NextResponse.redirect(url);

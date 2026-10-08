@@ -124,3 +124,38 @@ gcloud secrets add-iam-policy-binding navis-settings-key \
 
 회원 추가: Supabase 대시보드 → Users 에서 초대 · 생성 → 회원이 로그인 → 설정 화면에서 자기 Claude
 토큰 등록. 새로 만드는 빈 DB 는 평소처럼 `pnpm db:migrate` 한 번이면 된다.
+
+## 메일 템플릿 — 초대 · 비밀번호 재설정 (Supabase 대시보드, 한 번)
+
+이 앱은 세션을 쿠키로 둔다(`@supabase/ssr`). 기본 템플릿의 `{{ .ConfirmationURL }}` 은 로그인 정보를 주소의
+`#` 뒤에 실어 보내서 서버가 받을 수 없다. 링크가 `/auth/confirm` 으로 오도록 템플릿을 바꾼다.
+
+**Authentication → URL Configuration**
+
+- Site URL: `https://navis-2gk6vbz4kq-as.a.run.app` (커스텀 도메인을 쓰면 그 주소)
+- Redirect URLs: `https://navis-2gk6vbz4kq-as.a.run.app/**` (로컬도 쓰면 `http://localhost:3000/**`)
+
+**Authentication → Emails → Templates**
+
+Invite user — 본문의 링크를 이것으로:
+
+```html
+<h2>나비스에 초대됐어요</h2>
+<p>아래 링크에서 비밀번호를 정하면 바로 쓸 수 있어요.</p>
+<p><a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=invite&next=/auth/set-password">초대 수락하고 비밀번호 정하기</a></p>
+```
+
+Reset password:
+
+```html
+<h2>나비스 비밀번호 다시 정하기</h2>
+<p><a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery&next=/auth/set-password">새 비밀번호 정하기</a></p>
+<p>요청하지 않았다면 이 메일은 무시해도 돼요.</p>
+```
+
+흐름: 메일 링크 → `/auth/confirm`(서버가 토큰 검증 · 세션 쿠키) → `/auth/set-password`(새 비밀번호) → 대화.
+링크가 만료됐거나 이미 쓴 것이면 `/login?error=link` 로 돌아가 안내가 보인다.
+
+**메일 발송(SMTP)** — Supabase 기본 발송은 시간당 몇 통으로 제한되고, 팀원으로 등록된 주소에만 보내는
+제약이 있다. 다른 사람을 초대하려면 Authentication → Emails → SMTP Settings 에 자체 SMTP(Resend · Gmail 등)를
+넣는다.

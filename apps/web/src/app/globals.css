@@ -155,6 +155,21 @@
   --font-mono: var(--font-geist-mono), "SFMono-Regular", Menlo, Consolas, monospace;
   --font-heading: var(--font-sans);
 
+  /* "생각하는 중" 점 — 기본 animate-bounce 는 요소 높이의 25% 만 움직여 6px 점이 1.5px 밖에 안 뛴다. */
+  --animate-typing-dot: typing-dot 1.1s ease-in-out infinite;
+  @keyframes typing-dot {
+    0%,
+    70%,
+    100% {
+      transform: translateY(0);
+      opacity: 0.45;
+    }
+    35% {
+      transform: translateY(-6px);
+      opacity: 1;
+    }
+  }
+
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);

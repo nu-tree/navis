@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { AlertCircle, ArrowRight, Loader2, Lock, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,7 +60,12 @@ export const LoginForm = () => {
       ) : null}
 
       {/* 공개 가입은 없다 — 회원은 관리자가 만든다(specs/002 FR-109). */}
-      <p className="text-center text-xs text-muted-foreground">계정은 관리자에게 요청하세요.</p>
+      <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <span>계정은 관리자에게 요청하세요.</span>
+        <Link href="/forgot-password" className="underline-offset-4 hover:text-foreground hover:underline">
+          비밀번호를 잊으셨나요?
+        </Link>
+      </div>
 
       <Button
         type="submit"

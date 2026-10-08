@@ -157,7 +157,8 @@ export const ChatInput = ({
                   size="icon-xs"
                   aria-label={`첨부 ${index + 1} 제거`}
                   onClick={() => attachments.removeAt(index)}
-                  className="absolute top-0.5 right-0.5 rounded-full bg-background/80 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                  // 늘 보이게 한다 — 마우스를 올려야만 나타나면 없는 줄 알고, 터치 화면에선 아예 못 본다.
+                  className="absolute top-0.5 right-0.5 size-5 rounded-full bg-background/85 shadow-sm ring-1 ring-border hover:bg-background"
                 >
                   <X />
                 </Button>
