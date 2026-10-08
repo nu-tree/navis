@@ -46,11 +46,16 @@ export async function proxy(request: NextRequest) {
   const onLoginPage = path === LOGIN_PATH;
 
   /**
-   * 상대경로 리다이렉트. 절대 URL(nextUrl 기준)은 Cloud Run 안에서 내부 주소(0.0.0.0:8080)가 될 수 있다
-   * (auth/confirm/route.ts 주석). 위에서 갱신된 세션 쿠키도 함께 싣는다 — 버리면 다음 요청이 또 만료다.
+   * 리다이렉트. 위에서 갱신된 세션 쿠키도 함께 싣는다 — 버리면 다음 요청이 또 만료다.
+   *
+   * ★ Location 은 **절대 URL** 로 준다. Proxy 의 Location 은 Next 가 `new NextURL(location)` 으로
+   *   다시 해석하는데, 상대경로면 기준이 없어 `TypeError: Invalid URL` → 모든 화면이 500 이었다
+   *   (2026-10-08, 3f54af2). 내부 주소(0.0.0.0:8080)로 샐 걱정은 없다 — 요청과 같은 호스트면
+   *   Next 가 내보내기 직전에 상대경로로 바꾼다(next/dist/server/web/adapter.js, getRelativeURL).
+   *   route handler 는 이 과정을 거치지 않아 상대경로가 그대로 나간다(auth/confirm/route.ts).
    */
   const redirectTo = (to: string) => {
-    const res = new NextResponse(null, { status: 307, headers: { Location: to } });
+    const res = NextResponse.redirect(new URL(to, request.nextUrl), 307);
     for (const cookie of response.cookies.getAll()) res.cookies.set(cookie);
     return res;
   };
