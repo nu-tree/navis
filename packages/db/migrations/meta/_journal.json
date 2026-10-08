@@ -57,6 +57,20 @@
       "when": 1789087669175,
       "tag": "0007_drop_legacy_conversation_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791432609494,
+      "tag": "0008_add_user_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791432921441,
+      "tag": "0009_require_user_id",
+      "breakpoints": true
     }
   ]
 }

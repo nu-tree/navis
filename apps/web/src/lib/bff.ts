@@ -20,14 +20,13 @@ const jsonError = (message: string, status: number) =>
  * 상태다. 설정이 있는데 세션이 없으면 막는다. 이 분기 때문에 **배포 환경에
  * 반드시 두 환경변수를 넣어야 한다** — 빠뜨리면 인증이 통째로 꺼진다.
  */
-const requireSession = async (): Promise<Response | null> => {
+const requireSession = async (): Promise<{ userId: string } | Response> => {
   const session = await getSession();
-  if (session.kind === "authenticated" || session.kind === "unconfigured") {
-    return null;
-  }
+  if (session.kind === "authenticated") return { userId: session.userId };
+  // 로그인이 꺼진 로컬 개발 — server 가 owner 를 관리자(NAVIS_OWNER_ID)로 바꾼다.
+  if (session.kind === "unconfigured") return { userId: "owner" };
   return jsonError("로그인이 필요하다.", 401);
 };
-
 type ProxyInit = {
   /** apps/server 의 경로. 예: `/memories`, `/chat` */
   path: string;
@@ -45,13 +44,18 @@ export async function proxyToServer(
   request: Request,
   { path, stream = false }: ProxyInit,
 ): Promise<Response> {
-  const unauthorized = await requireSession();
-  if (unauthorized) return unauthorized;
+  const member = await requireSession();
+  if (member instanceof Response) return member;
 
   const missing = missingApiConfig();
   if (missing) return jsonError(missing, 500);
 
-  const headers = new Headers({ authorization: `Bearer ${apiServer.token}` });
+  // ★ 회원은 세션에서만 정한다(specs/002 contracts/identity.md). 브라우저가 x-navis-user 를
+  //   보내도 아래 화이트리스트에 없으므로 server 에 닿지 않는다 — 이 헤더의 값은 언제나 여기서 쓴 것이다.
+  const headers = new Headers({
+    authorization: `Bearer ${apiServer.token}`,
+    "x-navis-user": member.userId,
+  });
   for (const name of FORWARDED_REQUEST_HEADERS) {
     const value = request.headers.get(name);
     if (value) headers.set(name, value);

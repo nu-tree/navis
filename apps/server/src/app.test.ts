@@ -12,6 +12,7 @@ const TOKEN = "test-token-do-not-use-in-prod";
 vi.stubEnv("API_TOKEN", TOKEN);
 vi.stubEnv("VOYAGE_API_KEY", "test-voyage-key");
 vi.stubEnv("NAVIS_SETTINGS_KEY", Buffer.alloc(32, 1).toString("base64"));
+vi.stubEnv("NAVIS_OWNER_ID", "00000000-0000-4000-8000-000000000001");
 
 let app: { fetch: (req: Request) => Response | Promise<Response> };
 
@@ -53,9 +54,19 @@ describe("기본 잠금", () => {
     expect(res.status).toBe(401);
   });
 
-  it("올바른 토큰이면 401 이 아니다 (404 여도 통과 — 인증은 지났다)", async () => {
-    const res = await get("/memories", TOKEN);
+  it("올바른 토큰 + 회원이면 401 이 아니다 (404 여도 통과 — 인증은 지났다)", async () => {
+    const res = await app.fetch(
+      new Request("http://localhost/memories/does-not-exist/neighbors", {
+        headers: { authorization: `Bearer ${TOKEN}`, "x-navis-user": "owner" },
+      }),
+    );
     expect(res.status).not.toBe(401);
+  });
+
+  // specs/002 — 토큰만으로는 안 된다. 회원이 없으면 관리자로 떨어지지 않고 막힌다.
+  it("올바른 토큰이어도 회원 헤더가 없으면 401", async () => {
+    const res = await get("/memories", TOKEN);
+    expect(res.status).toBe(401);
   });
 
   it("/health 앞에 다른 경로를 붙여도 공개되지 않는다", async () => {

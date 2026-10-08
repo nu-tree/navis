@@ -58,6 +58,9 @@ export const LoginForm = () => {
         </p>
       ) : null}
 
+      {/* 공개 가입은 없다 — 회원은 관리자가 만든다(specs/002 FR-109). */}
+      <p className="text-center text-xs text-muted-foreground">계정은 관리자에게 요청하세요.</p>
+
       <Button
         type="submit"
         disabled={pending}

@@ -14,7 +14,7 @@ import type { RecallHit, RecallInput } from "@navis/validation";
 import { embed } from "./embed";
 import { toMemory, type MemoryRow } from "./mapping";
 import { rerank } from "./rerank";
-import { projectScope } from "./scope";
+import { ownedBy, projectScope } from "./scope";
 
 /** recallInputSchema 의 limit 상한과 반드시 일치해야 한다(FR-019). */
 const MAX_LIMIT = 50;
@@ -29,7 +29,7 @@ const DEFAULT_LIMIT = 10;
 const CANDIDATE_MULTIPLIER = 4;
 const MAX_CANDIDATES = 200;
 
-export async function recall(input: RecallInput): Promise<RecallHit[]> {
+export async function recall(userId: string, input: RecallInput): Promise<RecallHit[]> {
   const limit = Math.min(input.limit ?? DEFAULT_LIMIT, MAX_LIMIT);
   const candidates = Math.min(limit * CANDIDATE_MULTIPLIER, MAX_CANDIDATES);
 
@@ -37,6 +37,7 @@ export async function recall(input: RecallInput): Promise<RecallHit[]> {
   const literal = sql`${JSON.stringify(vector)}::vector`;
 
   const conditions = [
+    ownedBy(userId),
     sql`${memories.embedding} is not null`,
     input.category ? eq(memories.category, input.category) : undefined,
     projectScope(input),
@@ -52,6 +53,10 @@ export async function recall(input: RecallInput): Promise<RecallHit[]> {
   //   BEGIN/COMMIT 왕복이 붙지만, 위의 임베딩 호출(~200ms)에 비하면 잡음이다.
   const rows = await db.transaction(async (tx) => {
     await tx.execute(sql`set local hnsw.ef_search = ${sql.raw(String(candidates))}`);
+    // ★ 회원 조건은 HNSW 가 후보를 뽑은 **뒤에** 걸린다. 다른 회원의 기억이 많으면 후보 대부분이
+    //   걸러져 결과가 모자란다 — 모자라면 더 탐색하게 한다(specs/002 R5). pgvector ≥ 0.8 이 필요하다
+    //   (운영 버전 확인: specs/002 quickstart S0-3).
+    await tx.execute(sql`set local hnsw.iterative_scan = relaxed_order`);
     return tx
       .select({
         id: memories.id,

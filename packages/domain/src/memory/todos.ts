@@ -6,11 +6,13 @@ import { and, desc, eq, isNull, or, sql } from "drizzle-orm";
 import { db, memories } from "@navis/db";
 import type { Memory, TodosInput } from "@navis/validation";
 import { toMemory, type MemoryRow } from "./mapping";
+import { ownedBy } from "./scope";
 
 const DEFAULT_LIMIT = 100;
 
-export async function todos(input: TodosInput = {}): Promise<Memory[]> {
+export async function todos(userId: string, input: TodosInput = {}): Promise<Memory[]> {
   const conditions = [
+    ownedBy(userId),
     eq(memories.category, "todo"),
     input.includeDone
       ? undefined

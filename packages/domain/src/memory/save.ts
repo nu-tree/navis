@@ -14,7 +14,7 @@ import type { Memory, SaveInput } from "@navis/validation";
 import { embed } from "./embed";
 import { toMemory, toMetadata, type MemoryRow } from "./mapping";
 
-export async function save(input: SaveInput): Promise<Memory> {
+export async function save(userId: string, input: SaveInput): Promise<Memory> {
   const content = input.content.trim();
 
   // 스키마가 min(1) 을 보장하지만 공백만 든 문자열은 통과한다. 임베딩이 불가능하고
@@ -28,6 +28,7 @@ export async function save(input: SaveInput): Promise<Memory> {
   const [row] = await db
     .insert(memories)
     .values({
+      userId,
       content,
       category: input.category ?? null,
       project: input.project ?? null,

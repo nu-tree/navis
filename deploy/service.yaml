@@ -77,6 +77,12 @@ spec:
                 secretKeyRef:
                   name: navis-settings-key
                   key: latest
+            # 관리자 회원 uuid(specs/002). 외부 MCP 기억과 전환 전 기존 데이터의 주인이다.
+            - name: NAVIS_OWNER_ID
+              valueFrom:
+                secretKeyRef:
+                  name: navis-owner-id
+                  key: latest
             # 외부 MCP(Claude Code)용. API_TOKEN 과 다른 값이다(헌장 보안 절).
             - name: NAVIS_MCP_TOKEN
               valueFrom:

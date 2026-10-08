@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import type { AppEnv } from "../types";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { memory } from "@navis/domain";
 
@@ -10,9 +11,13 @@ import { memory } from "@navis/domain";
 // ★ 무상태(stateless)로 둔다. 요청마다 서버 · 전송을 새로 만들고 세션 ID 를 발급하지 않는다.
 //   save · recall 은 요청 하나로 끝나서 세션이 줄 것이 없고, 세션을 두면 인스턴스가
 //   다시 뜰 때(Cloud Run 이 0 으로 내려갔다 올라올 때) 클라이언트가 죽은 세션을 들고 온다.
-export const mcpRoute = new Hono().all("/", async (c) => {
+export const mcpRoute = new Hono<AppEnv>().all("/", async (c) => {
   // 집계는 대화 턴의 done.saved 용이다. 여기서는 쓰지 않는다.
-  const { instance } = memory.createMemoryMcpServer({ saved: 0 });
+  // 회원은 app.ts 가 관리자로 고정했다 — 외부 MCP 는 관리자 전용이다(specs/002 FR-113).
+  const { instance } = memory.createMemoryMcpServer({
+    userId: c.get("userId"),
+    tally: { saved: 0 },
+  });
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
     // SSE 대신 JSON 한 번으로 답한다. 도구가 진행 상황을 흘려보낼 일이 없다.

@@ -6,22 +6,29 @@ const API_TOKEN = "test-api-token";
 vi.stubEnv("API_TOKEN", API_TOKEN);
 vi.stubEnv("VOYAGE_API_KEY", "test-voyage-key");
 vi.stubEnv("NAVIS_SETTINGS_KEY", Buffer.alloc(32, 1).toString("base64"));
+vi.stubEnv("NAVIS_OWNER_ID", "00000000-0000-4000-8000-000000000001");
+
+/** 이 파일의 요청 회원(BFF 가 x-navis-user 로 붙이는 값). */
+const MEMBER = "00000000-0000-4000-8000-0000000000a1";
 
 const SECRET = "sk-ant-oat01-super-secret-1234";
-let stored: string | null = null;
-const status = () =>
-  stored
-    ? { registered: true, last4: stored.slice(-4), updatedAt: "2026-10-08T00:00:00.000Z" }
+// 회원별 저장 — 라우트가 회원을 첫 인자로 넘기는지가 곧 이 mock 의 동작이다(specs/002 T028).
+const stored = new Map<string, string>();
+const status = (userId: string) => {
+  const t = stored.get(userId);
+  return t
+    ? { registered: true, last4: t.slice(-4), updatedAt: "2026-10-08T00:00:00.000Z" }
     : { registered: false, last4: null, updatedAt: null };
+};
 
 class SecretError extends Error {}
 vi.mock("@navis/domain", () => ({
   settings: {
     SecretError,
     claudeToken: {
-      status: vi.fn(async () => status()),
-      set: vi.fn(async (t: string) => ((stored = t), status())),
-      remove: vi.fn(async () => ((stored = null), status())),
+      status: vi.fn(async (u: string) => status(u)),
+      set: vi.fn(async (u: string, t: string) => (stored.set(u, t), status(u))),
+      remove: vi.fn(async (u: string) => (stored.delete(u), status(u))),
     },
   },
   memory: {},
@@ -31,12 +38,17 @@ vi.mock("@navis/domain", () => ({
 
 const { app } = await import("../app");
 
-const req = (method: string, body?: unknown, token: string | null = API_TOKEN) =>
+const req = (
+  method: string,
+  body?: unknown,
+  token: string | null = API_TOKEN,
+  member: string = MEMBER,
+) =>
   app.fetch(
     new Request("http://localhost/settings/claude-token", {
       method,
       headers: {
-        ...(token ? { authorization: `Bearer ${token}` } : {}),
+        ...(token ? { authorization: `Bearer ${token}`, "x-navis-user": member } : {}),
         ...(body !== undefined ? { "content-type": "application/json" } : {}),
       },
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
@@ -45,7 +57,14 @@ const req = (method: string, body?: unknown, token: string | null = API_TOKEN) =
 
 describe("/settings/claude-token", () => {
   beforeEach(() => {
-    stored = null;
+    stored.clear();
+  });
+
+  it("A 가 등록해도 B 의 GET 은 미등록이다", async () => {
+    const OTHER = "00000000-0000-4000-8000-0000000000b2";
+    await req("PUT", { token: SECRET });
+    const res = await req("GET", undefined, API_TOKEN, OTHER);
+    expect(await res.json()).toEqual({ registered: false, last4: null, updatedAt: null });
   });
 
   it("토큰 없이 401 (기본 잠금)", async () => {

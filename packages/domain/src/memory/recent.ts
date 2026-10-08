@@ -8,7 +8,7 @@ import { db, memories } from "@navis/db";
 import type { Memory, RecentInput } from "@navis/validation";
 import { toMemory, type MemoryRow } from "./mapping";
 import { parseSince, parseUntil } from "./range";
-import { projectScope } from "./scope";
+import { ownedBy, projectScope } from "./scope";
 
 /** 기본 개수. recentInputSchema 의 상한은 200 이다. */
 const DEFAULT_LIMIT = 50;
@@ -23,8 +23,9 @@ const COLUMNS = {
   createdAt: memories.createdAt,
 } as const;
 
-export async function recent(input: RecentInput = {}): Promise<Memory[]> {
+export async function recent(userId: string, input: RecentInput = {}): Promise<Memory[]> {
   const conditions = [
+    ownedBy(userId),
     input.category ? eq(memories.category, input.category) : undefined,
     projectScope(input),
     input.days
@@ -37,7 +38,7 @@ export async function recent(input: RecentInput = {}): Promise<Memory[]> {
   const rows = await db
     .select(COLUMNS)
     .from(memories)
-    .where(conditions.length ? and(...conditions) : undefined)
+    .where(and(...conditions))
     // memories_created_at_idx 가 created_at DESC 로 있다.
     .orderBy(desc(memories.createdAt))
     .limit(input.limit ?? DEFAULT_LIMIT)

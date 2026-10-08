@@ -1,4 +1,5 @@
 import { Hono, type Context } from "hono";
+import type { AppEnv } from "../types";
 import { memory } from "@navis/domain";
 import { isEmbeddingError, isNotFound } from "@navis/domain/errors";
 import {
@@ -28,14 +29,14 @@ const numericQuery = (raw: Record<string, string>) => {
   return out;
 };
 
-export const memoriesRoute = new Hono()
+export const memoriesRoute = new Hono<AppEnv>()
   .get("/", async (c) => {
     const parsed = recentInputSchema.safeParse(numericQuery(c.req.query()));
     if (!parsed.success) {
       return c.json({ error: "잘못된 요청", detail: parsed.error.issues }, 400);
     }
     try {
-      return c.json(await memory.recent(parsed.data));
+      return c.json(await memory.recent(c.get("userId"), parsed.data));
     } catch (err) {
       return failure(c, err);
     }
@@ -48,7 +49,7 @@ export const memoriesRoute = new Hono()
       return c.json({ error: "잘못된 요청", detail: parsed.error.issues }, 400);
     }
     try {
-      return c.json(await memory.recall(parsed.data));
+      return c.json(await memory.recall(c.get("userId"), parsed.data));
     } catch (err) {
       return failure(c, err);
     }
@@ -59,7 +60,7 @@ export const memoriesRoute = new Hono()
       return c.json({ error: "잘못된 요청", detail: parsed.error.issues }, 400);
     }
     try {
-      return c.json(await memory.todos(parsed.data));
+      return c.json(await memory.todos(c.get("userId"), parsed.data));
     } catch (err) {
       return failure(c, err);
     }
@@ -67,7 +68,7 @@ export const memoriesRoute = new Hono()
   // 0건이어도 200 + count: 0 (FR-051). 파일 이름은 받는 쪽(웹)이 정한다.
   .get("/export", async (c) => {
     try {
-      return c.body(memory.serializeExport(await memory.exportAll()), 200, {
+      return c.body(memory.serializeExport(await memory.exportAll(c.get("userId"))), 200, {
         "content-type": "application/json; charset=utf-8",
       });
     } catch (err) {
@@ -76,7 +77,7 @@ export const memoriesRoute = new Hono()
   })
   .get("/projects", async (c) => {
     try {
-      return c.json(await memory.projects());
+      return c.json(await memory.projects(c.get("userId")));
     } catch (err) {
       return failure(c, err);
     }
@@ -92,7 +93,7 @@ export const memoriesRoute = new Hono()
       return c.json({ error: "바꿀 이름이 지금 이름과 같다." }, 400);
     }
     try {
-      return c.json(await memory.renameProject(parsed.data));
+      return c.json(await memory.renameProject(c.get("userId"), parsed.data));
     } catch (err) {
       return failure(c, err);
     }
@@ -105,7 +106,7 @@ export const memoriesRoute = new Hono()
     }
     try {
       // 중복 판정을 하지 않으므로 판별 유니온이 아니라 Memory 를 바로 돌려준다(FR-011).
-      return c.json(await memory.save(parsed.data), 201);
+      return c.json(await memory.save(c.get("userId"), parsed.data), 201);
     } catch (err) {
       return failure(c, err);
     }
@@ -118,7 +119,7 @@ export const memoriesRoute = new Hono()
       return c.json({ error: "limit 은 1~20 의 정수여야 한다." }, 400);
     }
     try {
-      return c.json(await memory.neighbors(c.req.param("id"), limit));
+      return c.json(await memory.neighbors(c.get("userId"), c.req.param("id"), limit));
     } catch (err) {
       return failure(c, err);
     }
@@ -133,14 +134,14 @@ export const memoriesRoute = new Hono()
       return c.json({ error: "잘못된 요청", detail: parsed.error.issues }, 400);
     }
     try {
-      return c.json(await memory.update(parsed.data));
+      return c.json(await memory.update(c.get("userId"), parsed.data));
     } catch (err) {
       return failure(c, err);
     }
   })
   .delete("/:id", async (c) => {
     try {
-      return c.json(await memory.remove(c.req.param("id")));
+      return c.json(await memory.remove(c.get("userId"), c.req.param("id")));
     } catch (err) {
       return failure(c, err);
     }

@@ -3,6 +3,12 @@
 import { eq, isNull, or, type SQL } from "drizzle-orm";
 import { memories } from "@navis/db";
 
+/**
+ * 이 회원의 기억만(specs/002). 모든 기억 질의의 조건 배열 **맨 앞**에 둔다 — 빠뜨리면 남의 기억이
+ * 섞이므로, 조건을 쓰는 자리마다 첫 줄로 고정해 눈에 띄게 한다.
+ */
+export const ownedBy = (userId: string): SQL => eq(memories.userId, userId);
+
 type ScopeInput = { project?: string; exactProject?: boolean; personalOnly?: boolean };
 
 /**

@@ -6,6 +6,7 @@ import {
   timestamp,
   vector,
   index,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 
 // ── 저장 레이아웃 ────────────────────────────────────────────────────────────
@@ -21,6 +22,9 @@ export const memories = pgTable(
   "memories",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    // 주인 회원(Supabase 사용자 uuid). 외래 키는 걸지 않는다 — 다른 스키마의 테이블이다(specs/002).
+    // 주인 없는 행은 없다(FR-101) — 0008 추가 → assign-owner 채우기 → 0009 NOT NULL.
+    userId: uuid("user_id").notNull(),
     content: text("content").notNull(),
     category: text("category"),
     // 프로젝트 스코프(nullable). null = 개인/전역 기억.
@@ -38,7 +42,8 @@ export const memories = pgTable(
       "hnsw",
       t.embedding.op("vector_cosine_ops"),
     ),
-    index("memories_created_at_idx").on(t.createdAt.desc()),
+    // 모든 목록이 회원으로 먼저 좁혀진다 — 단일 열 created_at 인덱스는 이것으로 대체했다.
+    index("memories_user_created_idx").on(t.userId, t.createdAt.desc()),
     index("memories_category_idx").on(t.category),
     index("memories_project_idx").on(t.project),
   ],
@@ -53,6 +58,8 @@ export const conversations = pgTable(
   "conversations",
   {
     id: text("id").primaryKey(),
+    // 주인 회원. 방 id 는 전역 유일 그대로 — 남의 방 id 로는 이어 쓰지 않는다(specs/002 R8).
+    userId: uuid("user_id").notNull(),
     title: text("title").notNull(),
     messages: jsonb("messages").notNull().default([]),
     // 이어갈 에이전트 세션 id — 방마다 맥락을 분리한다.
@@ -62,12 +69,19 @@ export const conversations = pgTable(
       .defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
   },
-  (t) => [index("conversations_updated_at_idx").on(t.updatedAt.desc())],
+  // 목록은 언제나 회원으로 먼저 좁혀진다 — 단일 열 updated_at 인덱스는 이것으로 대체했다.
+  (t) => [index("conversations_user_updated_idx").on(t.userId, t.updatedAt.desc())],
 );
 
-// key→value 설정. 지금은 시스템 프롬프트(봇 성격) 보관용.
-export const settings = pgTable("settings", {
-  key: text("key").primaryKey(),
-  value: text("value").notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
-});
+// key→value 설정. 지금은 회원마다 Claude 토큰(암호문) 하나.
+export const settings = pgTable(
+  "settings",
+  {
+    // 주인 회원. 회원마다 같은 키(claude_oauth_token)를 하나씩 갖는다.
+    userId: uuid("user_id").notNull(),
+    key: text("key").notNull(),
+    value: text("value").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.key] })],
+);

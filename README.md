@@ -54,7 +54,24 @@ pnpm --filter @navis/web dev      # 웹만  → localhost:3000
 pnpm --filter @navis/server dev   # 서버만 → localhost:4000
 ```
 
-환경변수는 `apps/server/.env` (예시는 `.env.example`).
+환경변수는 `apps/server/.env` (예시는 `.env.example`). server 가 부팅 때 확인하는 것:
+
+| 변수 | 무엇 |
+| --- | --- |
+| `DATABASE_URL` | Postgres(Supabase 풀러). 로컬은 `docker compose up -d` 후 `127.0.0.1:5432` |
+| `VOYAGE_API_KEY` | 기억 임베딩 |
+| `API_TOKEN` | web BFF → server 서버 토큰 |
+| `NAVIS_SETTINGS_KEY` | Claude 토큰 암호화 키(32바이트 base64). 바꾸면 저장된 토큰을 못 푼다 |
+| `NAVIS_OWNER_ID` | 관리자 회원 uuid. 외부 MCP 기억 · 전환 전 데이터의 주인 |
+| `NAVIS_MCP_TOKEN` | (선택) 외부 MCP(Claude Code) 토큰. 없으면 `/mcp` 가 닫힌다 |
+
+Claude 토큰은 환경변수가 아니다 — 웹의 설정 화면에서 회원마다 등록한다.
+
+## 회원
+
+여러 사람이 쓴다. 기억 · 대화 · 설정은 회원마다 따로이고 서로 보이지 않는다
+(`specs/002-multi-user`). 공개 가입은 없다 — 관리자가 Supabase 대시보드에서 회원을 초대하거나
+만든다. 로그인을 설정하지 않은 로컬 개발에서는 관리자 한 사람으로 동작한다.
 
 ## 스키마 변경
 

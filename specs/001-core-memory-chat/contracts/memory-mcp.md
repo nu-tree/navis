@@ -1,5 +1,9 @@
 # 계약 — 기억 MCP (프로세스 내)
 
+> **2026-10-08 — 002 이후 모든 요청은 회원을 갖는다.** 회원 전달 · 남의 데이터 응답 규칙은
+> [specs/002-multi-user/contracts/identity.md](../../002-multi-user/contracts/identity.md),
+> 기억 MCP 의 회원 묶기는 [memory-mcp.md](../../002-multi-user/contracts/memory-mcp.md) 를 본다.
+
 나비스가 대화 중 기억을 다루는 유일한 통로. **프로세스 안에** 등록한다 —
 HTTP MCP 로 자기 자신에게 왕복하지 않는다(헌장 성능 절, R3).
 

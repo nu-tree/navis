@@ -91,7 +91,16 @@ export type MemoryToolTally = {
  * 비용은 객체 생성뿐이다 — 서버 등록 핸드셰이크는 query() 를 부를 때 어차피 턴마다
  * 일어나므로, 인스턴스를 재사용해도 줄어들지 않는다.
  */
-export const createMemoryMcpServer = (tally: MemoryToolTally) =>
+export type MemoryMcpContext = {
+  /**
+   * 이 서버의 모든 도구가 쓰는 회원(specs/002 contracts/memory-mcp.md). 대화 턴이면 그 턴의 회원,
+   * 외부 MCP 면 관리자. ★ 도구 입력 스키마에는 회원이 없다 — 모델은 회원을 고를 수 없다.
+   */
+  userId: string;
+  tally: MemoryToolTally;
+};
+
+export const createMemoryMcpServer = ({ userId, tally }: MemoryMcpContext) =>
   createSdkMcpServer({
   name: MEMORY_SERVER_NAME,
   version: "0.1.0",
@@ -126,8 +135,8 @@ export const createMemoryMcpServer = (tally: MemoryToolTally) =>
         // 비슷한 스코프 조회는 저장과 나란히 돌린다 — 저장 지연에 더해지지 않게.
         // 이 조회가 실패해도 저장은 성공한 것이다. 경고만 빠진다.
         const [memory, similar] = await Promise.all([
-          save(args),
-          args.project ? similarProjects(args.project).catch(() => []) : [],
+          save(userId, args),
+          args.project ? similarProjects(userId, args.project).catch(() => []) : [],
         ]);
         tally.saved += 1;
         const warning = similar.length
@@ -162,7 +171,7 @@ export const createMemoryMcpServer = (tally: MemoryToolTally) =>
       ].join("\n"),
       recallInputSchema.shape,
       async (args) => {
-        const hits = await recall(args);
+        const hits = await recall(userId, args);
         if (hits.length === 0) {
           return {
             content: [
@@ -201,7 +210,7 @@ export const createMemoryMcpServer = (tally: MemoryToolTally) =>
       recentInputSchema.shape,
       async (args) => {
         const limit = args.limit ?? RECENT_DEFAULT_LIMIT;
-        const items = await recent({ ...args, limit });
+        const items = await recent(userId, { ...args, limit });
         const range = [
           args.since ? `${args.since}부터` : null,
           args.until ? `${args.until}까지` : null,
@@ -233,7 +242,7 @@ export const createMemoryMcpServer = (tally: MemoryToolTally) =>
       ].join("\n"),
       {},
       async () => {
-        const list = await projects();
+        const list = await projects(userId);
         if (list.length === 0) {
           return { content: [{ type: "text" as const, text: "프로젝트 스코프가 없다." }] };
         }
@@ -259,7 +268,7 @@ export const createMemoryMcpServer = (tally: MemoryToolTally) =>
       ].join("\n"),
       renameProjectInputSchema.shape,
       async (args) => {
-        const r = await renameProject(args);
+        const r = await renameProject(userId, args);
         return {
           content: [
             {
@@ -281,7 +290,7 @@ export const createMemoryMcpServer = (tally: MemoryToolTally) =>
       ].join("\n"),
       todosInputSchema.shape,
       async (args) => {
-        const list = await todos(args);
+        const list = await todos(userId, args);
         if (list.length === 0) {
           return { content: [{ type: "text" as const, text: "남은 할 일이 없다." }] };
         }
@@ -306,7 +315,7 @@ export const createMemoryMcpServer = (tally: MemoryToolTally) =>
       ].join("\n"),
       updateInputSchema.shape,
       async (args) => {
-        const m = await update(args);
+        const m = await update(userId, args);
         return { content: [{ type: "text" as const, text: `고쳤다.\n${memoryLine(m)}` }] };
       },
     ),
@@ -318,7 +327,7 @@ export const createMemoryMcpServer = (tally: MemoryToolTally) =>
       ].join("\n"),
       removeInputSchema.shape,
       async ({ id }) => {
-        await remove(id);
+        await remove(userId, id);
         return { content: [{ type: "text" as const, text: `지웠다. id=${id}` }] };
       },
     ),

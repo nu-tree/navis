@@ -5,7 +5,7 @@
 // 하나이므로 그 전부가 불필요하고, 거기 있던 버그도 함께 사라진다.
 
 import { randomUUID } from "node:crypto";
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { conversations, db } from "@navis/db";
 import type {
   Conversation,
@@ -47,7 +47,7 @@ export const titleFrom = (text: string): string => {
  * (STRUCTURE.md 6항). 그게 30초 폴링과 겹쳐 하루 GB 단위 이그레스를 만들었다 —
  * 실측으로 확인된 사고다. 필요한 열만 읽는다.
  */
-export async function list(): Promise<ConversationSummary[]> {
+export async function list(userId: string): Promise<ConversationSummary[]> {
   const rows = await db
     .select({
       id: conversations.id,
@@ -62,7 +62,8 @@ export async function list(): Promise<ConversationSummary[]> {
         else ${conversations.messages} -> -1 ->> 'text' end`,
     })
     .from(conversations)
-    // conversations_updated_at_idx 가 updated_at DESC 로 있다.
+    .where(eq(conversations.userId, userId))
+    // conversations_user_updated_idx 가 (user_id, updated_at DESC) 로 있다.
     .orderBy(desc(conversations.updatedAt));
 
   return rows.map((row) => ({
@@ -76,19 +77,29 @@ export async function list(): Promise<ConversationSummary[]> {
   }));
 }
 
-export async function get(id: string): Promise<Conversation> {
+/** 이 회원의 방만 맞는다. 남의 방은 없는 것과 같다(specs/002 FR-103). */
+const owned = (userId: string, id: string) =>
+  and(eq(conversations.id, id), eq(conversations.userId, userId));
+
+export async function get(userId: string, id: string): Promise<Conversation> {
   const [row] = await db
     .select()
     .from(conversations)
-    .where(eq(conversations.id, id))
+    .where(owned(userId, id))
     .limit(1);
 
   if (!row) throw new NotFoundError("conversation", id);
   return toConversation(row);
 }
 
-/** 있으면 그대로, 없으면 만든다. 첫 메시지를 보낼 때 불린다(R9). */
+/**
+ * 있으면 그대로, 없으면 만든다. 첫 메시지를 보낼 때 불린다(R9).
+ *
+ * ★ 같은 id 의 방이 **다른 회원의 것이면** 이어 쓰지 않고 NotFoundError(specs/002 R8). 방 id 는
+ *   브라우저가 만든 uuid 라 우연한 충돌은 사실상 없다 — 이 분기는 남의 방 id 를 알아낸 경우를 막는다.
+ */
 export async function ensure(
+  userId: string,
   id: string,
   titleSeed: string,
 ): Promise<Conversation> {
@@ -97,6 +108,7 @@ export async function ensure(
     .insert(conversations)
     .values({
       id,
+      userId,
       title: titleFrom(titleSeed),
       messages: [],
       updatedAt: now,
@@ -106,7 +118,8 @@ export async function ensure(
     .onConflictDoNothing()
     .returning();
 
-  return row ? toConversation(row) : get(id);
+  // 충돌했으면 이미 있는 방이다 — 내 방일 때만 돌려준다. 남의 방이면 get 이 NotFoundError.
+  return row ? toConversation(row) : get(userId, id);
 }
 
 /**
@@ -117,6 +130,7 @@ export async function ensure(
  * jsonb 연산으로 DB 안에서 이어 붙여 왕복을 한 번으로 줄인다.
  */
 export async function appendMessage(
+  userId: string,
   conversationId: string,
   message: Omit<Message, "id" | "createdAt"> & Partial<Pick<Message, "id" | "createdAt">>,
 ): Promise<Message> {
@@ -133,7 +147,7 @@ export async function appendMessage(
       messages: sql`${conversations.messages} || ${JSON.stringify([full])}::jsonb`,
       updatedAt: new Date(),
     })
-    .where(eq(conversations.id, conversationId))
+    .where(owned(userId, conversationId))
     .returning({ id: conversations.id });
 
   if (!row) throw new NotFoundError("conversation", conversationId);
@@ -142,20 +156,21 @@ export async function appendMessage(
 
 /** 이어갈 에이전트 세션 id 를 저장한다. result 메시지가 권위다(R10). */
 export async function setSessionId(
+  userId: string,
   conversationId: string,
   sessionId: string,
 ): Promise<void> {
   await db
     .update(conversations)
     .set({ sessionId })
-    .where(eq(conversations.id, conversationId));
+    .where(owned(userId, conversationId));
 }
 
 /** 방 삭제. 그 방에서 저장된 기억은 남는다 — 기억은 방과 독립이다(FR-015). */
-export async function remove(id: string): Promise<void> {
+export async function remove(userId: string, id: string): Promise<void> {
   const [row] = await db
     .delete(conversations)
-    .where(eq(conversations.id, id))
+    .where(owned(userId, id))
     .returning({ id: conversations.id });
 
   if (!row) throw new NotFoundError("conversation", id);
@@ -168,10 +183,11 @@ export async function remove(id: string): Promise<void> {
  * 지울 수 있어야 한다(엣지 케이스 "답 없는 질문의 연속").
  */
 export async function removeMessage(
+  userId: string,
   conversationId: string,
   messageId: string,
 ): Promise<void> {
-  const conversation = await get(conversationId);
+  const conversation = await get(userId, conversationId);
   const next = conversation.messages.filter((m) => m.id !== messageId);
 
   if (next.length === conversation.messages.length) {
@@ -181,5 +197,5 @@ export async function removeMessage(
   await db
     .update(conversations)
     .set({ messages: next, updatedAt: new Date() })
-    .where(eq(conversations.id, conversationId));
+    .where(owned(userId, conversationId));
 }

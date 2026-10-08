@@ -101,6 +101,10 @@ const AUTO_ALLOWED_WEB_TOOLS = ["WebSearch"];
 const liveSessions = new Set<string>();
 
 export type TurnInput = {
+  /**
+   * 이 턴을 보낸 회원(specs/002). 기억 도구와 Claude 토큰이 이 회원의 것만 쓴다.
+   */
+  userId: string;
   prompt: string;
   /**
    * 첨부 이미지 (base64 data URL, 최대 8장).
@@ -150,7 +154,8 @@ export async function runTurn(
   cb: TurnCallbacks = {},
 ): Promise<TurnResult> {
   // 토큰이 없으면 Claude 를 부르지 않는다 — 부르면 SDK 가 알아보기 힘든 인증 오류를 낸다.
-  const token = await claudeToken.resolve();
+  // 그 회원의 토큰만 쓴다 — 다른 회원의 토큰으로 대신 답하지 않는다(specs/002 FR-111).
+  const token = await claudeToken.resolve(input.userId);
   if (!token) throw new ClaudeTokenMissingError();
 
   // 디스크에 세션이 있을 때만 잇는다. 없으면 새 세션 + 기록 복원.
@@ -212,7 +217,7 @@ export async function runTurn(
       // 들어오는 기억 도구는 영향받지 않는다(실측 확인: tasks.md T007).
       tools: WEB_TOOLS,
       // 기억 도구. 프로세스 안에 있어 왕복이 없다.
-      mcpServers: { [MEMORY_SERVER_NAME]: createMemoryMcpServer(tally) },
+      mcpServers: { [MEMORY_SERVER_NAME]: createMemoryMcpServer({ userId: input.userId, tally }) },
       // ★ 없으면 도구가 조용히 실행되지 않는다 — 서버에는 승인할 사람이 없다.
       //   모델은 호출을 시도하고 핸들러는 0회 실행된다(실측: tasks.md T007).
       allowedTools: [...ALLOWED_MEMORY_TOOLS, ...AUTO_ALLOWED_WEB_TOOLS],

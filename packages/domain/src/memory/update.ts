@@ -6,12 +6,13 @@
 //
 // ★ metadata 는 통째로 덮지 않고 병합한다. 태그만 고쳤는데 done 이 사라지면 안 된다.
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db, memories } from "@navis/db";
 import type { Memory, UpdateInput } from "@navis/validation";
 import { NotFoundError } from "../errors";
 import { embed } from "./embed";
 import { assertMemoryId, mergeMetadata, normalizeProject, toMemory, type MemoryRow } from "./mapping";
+import { ownedBy } from "./scope";
 
 const COLUMNS = {
   id: memories.id,
@@ -22,12 +23,13 @@ const COLUMNS = {
   createdAt: memories.createdAt,
 } as const;
 
-export async function update(input: UpdateInput): Promise<Memory> {
+export async function update(userId: string, input: UpdateInput): Promise<Memory> {
   assertMemoryId(input.id);
   const [current] = await db
     .select({ content: memories.content, metadata: memories.metadata })
     .from(memories)
-    .where(eq(memories.id, input.id));
+    // 남의 기억은 없는 것과 같다(specs/002 FR-103).
+    .where(and(eq(memories.id, input.id), ownedBy(userId)));
   if (!current) throw new NotFoundError("memory", input.id);
 
   const content = input.content?.trim();
@@ -53,7 +55,7 @@ export async function update(input: UpdateInput): Promise<Memory> {
         ...(input.category === "todo" && input.done === undefined ? { done: false } : {}),
       }),
     })
-    .where(eq(memories.id, input.id))
+    .where(and(eq(memories.id, input.id), ownedBy(userId)))
     .returning(COLUMNS);
 
   // select 와 update 사이에 지워졌다.

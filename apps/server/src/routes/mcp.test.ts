@@ -11,6 +11,7 @@ const MCP_TOKEN = "test-mcp-token";
 vi.stubEnv("API_TOKEN", API_TOKEN);
 vi.stubEnv("VOYAGE_API_KEY", "test-voyage-key");
 vi.stubEnv("NAVIS_SETTINGS_KEY", Buffer.alloc(32, 1).toString("base64"));
+vi.stubEnv("NAVIS_OWNER_ID", "00000000-0000-4000-8000-000000000001");
 vi.stubEnv("NAVIS_MCP_TOKEN", MCP_TOKEN);
 
 let app: { fetch: (req: Request) => Response | Promise<Response> };

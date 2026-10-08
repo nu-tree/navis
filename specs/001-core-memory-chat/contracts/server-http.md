@@ -1,5 +1,9 @@
 # 계약 — `apps/server` HTTP
 
+> **2026-10-08 — 002 이후 모든 요청은 회원을 갖는다.** 회원 전달 · 남의 데이터 응답 규칙은
+> [specs/002-multi-user/contracts/identity.md](../../002-multi-user/contracts/identity.md),
+> 기억 MCP 의 회원 묶기는 [memory-mcp.md](../../002-multi-user/contracts/memory-mcp.md) 를 본다.
+
 **소비자**: `apps/web` 의 서버 사이드(BFF)뿐. 이후 `apps/mobile`.
 **인증**: `Authorization: Bearer <API_TOKEN>`. `/health` 만 예외.
 **기본 잠금**: `app.use("*")` 로 전부 막고 예외만 나열한다. 보호할 경로를 나열하는 방식은

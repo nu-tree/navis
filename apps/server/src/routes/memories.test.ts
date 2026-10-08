@@ -5,6 +5,10 @@ const TOKEN = "test-token";
 vi.stubEnv("API_TOKEN", TOKEN);
 vi.stubEnv("VOYAGE_API_KEY", "test-voyage-key");
 vi.stubEnv("NAVIS_SETTINGS_KEY", Buffer.alloc(32, 1).toString("base64"));
+vi.stubEnv("NAVIS_OWNER_ID", "00000000-0000-4000-8000-000000000001");
+
+/** 이 파일의 요청 회원(BFF 가 x-navis-user 로 붙이는 값). */
+const MEMBER = "00000000-0000-4000-8000-0000000000a1";
 
 const save = vi.fn();
 const recent = vi.fn();
@@ -58,6 +62,7 @@ const req = (path: string, init: RequestInit = {}) =>
       ...init,
       headers: {
         authorization: `Bearer ${TOKEN}`,
+        "x-navis-user": MEMBER,
         ...(init.body ? { "content-type": "application/json" } : {}),
         ...(init.headers ?? {}),
       },
@@ -132,6 +137,7 @@ describe("GET /memories", () => {
     recent.mockResolvedValue([]);
     await req("/memories?limit=10&days=7&offset=50&category=todo");
     expect(recent).toHaveBeenCalledWith(
+      MEMBER,
       expect.objectContaining({ limit: 10, days: 7, offset: 50, category: "todo" }),
     );
   });
@@ -140,6 +146,7 @@ describe("GET /memories", () => {
     recent.mockResolvedValue([]);
     await req("/memories?since=2026-10-07&until=today");
     expect(recent).toHaveBeenCalledWith(
+      MEMBER,
       expect.objectContaining({ since: "2026-10-07", until: "today" }),
     );
   });
@@ -200,7 +207,9 @@ describe("GET /memories/search", () => {
   it("limit 을 숫자로 넘긴다", async () => {
     recall.mockResolvedValue([]);
     await req("/memories/search?query=x&limit=5");
-    expect(recall).toHaveBeenCalledWith(expect.objectContaining({ limit: 5 }));
+    expect(recall).toHaveBeenCalledWith(
+      MEMBER,
+      expect.objectContaining({ limit: 5 }));
   });
 
   // FR-018 — 스코프는 그 프로젝트 + 개인 기억. 필터 자체는 domain 이 하고,
@@ -209,6 +218,7 @@ describe("GET /memories/search", () => {
     recall.mockResolvedValue([]);
     await req("/memories/search?query=x&project=navis");
     expect(recall).toHaveBeenCalledWith(
+      MEMBER,
       expect.objectContaining({ project: "navis" }),
     );
   });
@@ -291,7 +301,9 @@ describe("기억 직접 관리 (US4)", () => {
       body: JSON.stringify({ id: "other", content: "고친 내용" }),
     });
     expect(res.status).toBe(200);
-    expect(update).toHaveBeenCalledWith(expect.objectContaining({ id: "m1", content: "고친 내용" }));
+    expect(update).toHaveBeenCalledWith(
+      MEMBER,
+      expect.objectContaining({ id: "m1", content: "고친 내용" }));
   });
 
   it("PATCH 의 잘못된 분류는 400", async () => {
@@ -328,9 +340,13 @@ describe("기억 직접 관리 (US4)", () => {
   it("todos 의 includeDone 은 'true' 만 참이다", async () => {
     todos.mockResolvedValue([]);
     await req("/memories/todos?includeDone=false");
-    expect(todos).toHaveBeenCalledWith(expect.objectContaining({ includeDone: false }));
+    expect(todos).toHaveBeenCalledWith(
+      MEMBER,
+      expect.objectContaining({ includeDone: false }));
     await req("/memories/todos?includeDone=true");
-    expect(todos).toHaveBeenLastCalledWith(expect.objectContaining({ includeDone: true }));
+    expect(todos).toHaveBeenLastCalledWith(
+      MEMBER,
+      expect.objectContaining({ includeDone: true }));
   });
 
   // 정적 경로가 /:id 에 잡아먹히면 todos 가 "todos 라는 id 의 기억"이 된다.

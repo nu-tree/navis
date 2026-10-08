@@ -29,6 +29,7 @@ export {
   MEMORY_SERVER_NAME,
   MEMORY_TOOL_NAMES,
   createMemoryMcpServer,
+  type MemoryMcpContext,
   type MemoryToolTally,
 } from "./mcp";
 export { toMemory, type MemoryRow } from "./mapping";

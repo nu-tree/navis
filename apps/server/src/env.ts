@@ -33,7 +33,18 @@ export const env = {
    * 이 컨테이너 환경에만 있다. 없으면 토큰을 저장도 사용도 못 하므로 부팅을 막는다.
    */
   settingsKey: required("NAVIS_SETTINGS_KEY"),
+  /**
+   * 관리자(Owner) 회원 uuid — Supabase 대시보드 → Users 의 UID(specs/002 research R2).
+   * 외부 MCP(`/mcp`)로 들어오는 기억과 다중 사용자 전환 전의 기존 데이터가 이 회원의 것이다.
+   * 모르면 MCP 기억을 아무 계정에나 넣게 되므로 부팅을 막는다.
+   */
+  ownerId: required("NAVIS_OWNER_ID"),
 };
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+if (!UUID.test(env.ownerId)) {
+  throw new Error("NAVIS_OWNER_ID 는 회원 uuid 여야 한다(Supabase 대시보드 → Users 의 UID).");
+}
 
 // 길이가 틀린 키는 첫 턴이 아니라 지금 알아야 한다.
 try {

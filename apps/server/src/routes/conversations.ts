@@ -1,4 +1,5 @@
 import { Hono, type Context } from "hono";
+import type { AppEnv } from "../types";
 import { conversation } from "@navis/domain";
 import { isNotFound } from "@navis/domain/errors";
 
@@ -17,18 +18,18 @@ function failure(c: Context, err: unknown) {
   return c.json({ error: message }, 500);
 }
 
-export const conversationsRoute = new Hono()
+export const conversationsRoute = new Hono<AppEnv>()
   .get("/", async (c) => {
     try {
       // messages 를 싣지 않는 요약만 반환한다(FR-032).
-      return c.json(await conversation.list());
+      return c.json(await conversation.list(c.get("userId")));
     } catch (err) {
       return failure(c, err);
     }
   })
   .get("/:id", async (c) => {
     try {
-      return c.json(await conversation.get(c.req.param("id")));
+      return c.json(await conversation.get(c.get("userId"), c.req.param("id")));
     } catch (err) {
       return failure(c, err);
     }
@@ -36,7 +37,7 @@ export const conversationsRoute = new Hono()
   .delete("/:id", async (c) => {
     try {
       // 그 방에서 저장된 기억은 남는다 — 기억은 방과 독립이다(FR-015).
-      await conversation.remove(c.req.param("id"));
+      await conversation.remove(c.get("userId"), c.req.param("id"));
       return c.json({ ok: true });
     } catch (err) {
       return failure(c, err);
@@ -45,6 +46,7 @@ export const conversationsRoute = new Hono()
   .delete("/:id/messages/:messageId", async (c) => {
     try {
       await conversation.removeMessage(
+        c.get("userId"),
         c.req.param("id"),
         c.req.param("messageId"),
       );

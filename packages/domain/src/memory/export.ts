@@ -7,8 +7,9 @@ import { asc } from "drizzle-orm";
 import { db, memories } from "@navis/db";
 import type { MemoryExport } from "@navis/validation";
 import { toMemory, type MemoryRow } from "./mapping";
+import { ownedBy } from "./scope";
 
-export async function exportAll(now: Date = new Date()): Promise<MemoryExport> {
+export async function exportAll(userId: string, now: Date = new Date()): Promise<MemoryExport> {
   const rows = await db
     .select({
       id: memories.id,
@@ -19,6 +20,8 @@ export async function exportAll(now: Date = new Date()): Promise<MemoryExport> {
       createdAt: memories.createdAt,
     })
     .from(memories)
+    // 이 회원의 기억만 — 내보낸 파일에 남의 기억이 섞이면 안 된다(specs/002 FR-102).
+    .where(ownedBy(userId))
     // 파일은 처음부터 읽힌다 — 오래된 것부터.
     .orderBy(asc(memories.createdAt));
 

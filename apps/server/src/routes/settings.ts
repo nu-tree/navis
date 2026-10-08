@@ -1,4 +1,5 @@
 import { Hono, type Context } from "hono";
+import type { AppEnv } from "../types";
 import { settings } from "@navis/domain";
 import { claudeTokenInputSchema } from "@navis/validation";
 
@@ -6,10 +7,10 @@ import { claudeTokenInputSchema } from "@navis/validation";
 //
 // ★ 어떤 응답에도 토큰 원문이 없다(FR-037). PUT 도 받은 값을 되돌려주지 않고 상태만 준다.
 //   로그에도 남기지 않는다 — 오류 로그에 요청 본문을 찍지 않는다.
-export const settingsRoute = new Hono()
+export const settingsRoute = new Hono<AppEnv>()
   .get("/claude-token", async (c) => {
     try {
-      return c.json(await settings.claudeToken.status());
+      return c.json(await settings.claudeToken.status(c.get("userId")));
     } catch (err) {
       return failure(c, err);
     }
@@ -20,14 +21,14 @@ export const settingsRoute = new Hono()
     // 검증 오류의 detail 에 받은 값이 실릴 수 있다 — 싣지 않는다.
     if (!parsed.success) return c.json({ error: "토큰이 비어 있습니다." }, 400);
     try {
-      return c.json(await settings.claudeToken.set(parsed.data.token));
+      return c.json(await settings.claudeToken.set(c.get("userId"), parsed.data.token));
     } catch (err) {
       return failure(c, err);
     }
   })
   .delete("/claude-token", async (c) => {
     try {
-      return c.json(await settings.claudeToken.remove());
+      return c.json(await settings.claudeToken.remove(c.get("userId")));
     } catch (err) {
       return failure(c, err);
     }

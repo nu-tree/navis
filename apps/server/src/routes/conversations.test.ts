@@ -5,6 +5,10 @@ const TOKEN = "test-token";
 vi.stubEnv("API_TOKEN", TOKEN);
 vi.stubEnv("VOYAGE_API_KEY", "test-voyage-key");
 vi.stubEnv("NAVIS_SETTINGS_KEY", Buffer.alloc(32, 1).toString("base64"));
+vi.stubEnv("NAVIS_OWNER_ID", "00000000-0000-4000-8000-000000000001");
+
+/** 이 파일의 요청 회원(BFF 가 x-navis-user 로 붙이는 값). */
+const MEMBER = "00000000-0000-4000-8000-0000000000a1";
 
 const list = vi.fn();
 const get = vi.fn();
@@ -42,7 +46,7 @@ const req = (path: string, init: RequestInit = {}) =>
   app.fetch(
     new Request(`http://localhost${path}`, {
       ...init,
-      headers: { authorization: `Bearer ${TOKEN}`, ...(init.headers ?? {}) },
+      headers: { authorization: `Bearer ${TOKEN}`, "x-navis-user": MEMBER, ...(init.headers ?? {}) },
     }),
   );
 
@@ -102,7 +106,7 @@ describe("DELETE /conversations/:id", () => {
   it("방을 지운다", async () => {
     remove.mockResolvedValue(undefined);
     expect((await req("/conversations/room-1", { method: "DELETE" })).status).toBe(200);
-    expect(remove).toHaveBeenCalledWith("room-1");
+    expect(remove).toHaveBeenCalledWith(MEMBER, "room-1");
   });
 
   it("없는 방은 404", async () => {
@@ -118,7 +122,7 @@ describe("DELETE /conversations/:id/messages/:messageId", () => {
     removeMessage.mockResolvedValue(undefined);
     const res = await req("/conversations/room-1/messages/msg-1", { method: "DELETE" });
     expect(res.status).toBe(200);
-    expect(removeMessage).toHaveBeenCalledWith("room-1", "msg-1");
+    expect(removeMessage).toHaveBeenCalledWith(MEMBER, "room-1", "msg-1");
   });
 
   it("없는 메시지는 404", async () => {
