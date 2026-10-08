@@ -45,17 +45,18 @@ export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
   const onLoginPage = path === LOGIN_PATH;
 
-  if (!signedIn && !PUBLIC_PATHS.has(path)) {
-    const url = request.nextUrl.clone();
-    url.pathname = LOGIN_PATH;
-    return NextResponse.redirect(url);
-  }
+  /**
+   * 상대경로 리다이렉트. 절대 URL(nextUrl 기준)은 Cloud Run 안에서 내부 주소(0.0.0.0:8080)가 될 수 있다
+   * (auth/confirm/route.ts 주석). 위에서 갱신된 세션 쿠키도 함께 싣는다 — 버리면 다음 요청이 또 만료다.
+   */
+  const redirectTo = (to: string) => {
+    const res = new NextResponse(null, { status: 307, headers: { Location: to } });
+    for (const cookie of response.cookies.getAll()) res.cookies.set(cookie);
+    return res;
+  };
 
-  if (signedIn && onLoginPage) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/";
-    return NextResponse.redirect(url);
-  }
+  if (!signedIn && !PUBLIC_PATHS.has(path)) return redirectTo(LOGIN_PATH);
+  if (signedIn && onLoginPage) return redirectTo("/");
 
   return response;
 }
