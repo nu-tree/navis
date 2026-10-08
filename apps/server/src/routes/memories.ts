@@ -4,6 +4,7 @@ import { isEmbeddingError, isNotFound } from "@navis/domain/errors";
 import {
   recallInputSchema,
   recentInputSchema,
+  renameProjectInputSchema,
   saveInputSchema,
 } from "@navis/validation";
 
@@ -42,6 +43,29 @@ export const memoriesRoute = new Hono()
     }
     try {
       return c.json(await memory.recall(parsed.data));
+    } catch (err) {
+      return failure(c, err);
+    }
+  })
+  .get("/projects", async (c) => {
+    try {
+      return c.json(await memory.projects());
+    } catch (err) {
+      return failure(c, err);
+    }
+  })
+  // 이름 바꾸기 = 합치기. to 가 이미 있으면 merged: true 로 돌아온다. 없는 from 은 404.
+  .post("/projects/rename", async (c) => {
+    const body: unknown = await c.req.json().catch(() => null);
+    const parsed = renameProjectInputSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ error: "잘못된 요청", detail: parsed.error.issues }, 400);
+    }
+    if (parsed.data.from === parsed.data.to) {
+      return c.json({ error: "바꿀 이름이 지금 이름과 같다." }, 400);
+    }
+    try {
+      return c.json(await memory.renameProject(parsed.data));
     } catch (err) {
       return failure(c, err);
     }

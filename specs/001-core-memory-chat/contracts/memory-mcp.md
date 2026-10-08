@@ -24,7 +24,9 @@ createSdkMcpServer({ name: 'memory', tools: [ tool(...), ... ] })
 | --- | --- | --- | --- |
 | `save` | `SaveInput` | 저장된 기억 | FR-009~014. **중복 판정을 하지 않는다** |
 | `recall` | `RecallInput` | 유사 기억 + 점수 | FR-016~019 |
-| `recent` | `RecentInput` | 최근 기억 | 기간·분류로 좁힌 조회 |
+| `recent` | `RecentInput` | 기간 기억 **전건** (프로젝트별 묶음) | `since`·`until`(YYYY-MM-DD=KST 하루, `today`·`yesterday`). 유사도 컷 없음 |
+| `projects` | — | 스코프 목록 + 기억 수 | 표기 확인 |
+| `rename_project` | `RenameProjectInput` | `{ moved, merged }` | 이름 바꾸기 = 합치기. 없는 `from` 은 찾을 수 없음 오류 |
 | `todos` | `TodosInput` | 할 일 기억 | FR-026 |
 | `update` | `UpdateInput` | 수정된 기억 | FR-023, FR-024, FR-027 |
 | `remove` | `RemoveInput` | `{ ok }` | FR-025 |

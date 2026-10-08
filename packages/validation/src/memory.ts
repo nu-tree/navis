@@ -42,9 +42,23 @@ export const recallInputSchema = z.object({
 });
 export type RecallInput = z.infer<typeof recallInputSchema>;
 
+// 기간 경계. 날짜만 주면 한국 시간(KST) 하루로 읽는다 — since 는 그날 0시, until 은 그날 끝까지.
+// 'today' · 'yesterday' 도 받는다. 대화 모델은 오늘 날짜를 모를 수 있다.
+// 해석은 domain(memory/range.ts)의 몫이고, 여기선 형태만 막는다.
+export const DATE_BOUND_PATTERN =
+  /^(today|yesterday|\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})?)?)$/;
+export const dateBoundSchema = z
+  .string()
+  .regex(DATE_BOUND_PATTERN)
+  .optional()
+  .describe("YYYY-MM-DD(KST 하루) · ISO 시각 · 'today' · 'yesterday'");
+
 export const recentInputSchema = z.object({
   days: z.number().int().min(1).max(365).optional(),
-  limit: z.number().int().min(1).max(200).optional(),
+  since: dateBoundSchema,
+  until: dateBoundSchema,
+  // 기간 조회는 "그 기간 전건"이 목적이라 상한을 넉넉히 둔다.
+  limit: z.number().int().min(1).max(500).optional(),
   category: categorySchema.optional(),
   project: projectSchema,
 });
@@ -62,6 +76,13 @@ export const updateInputSchema = z.object({
   relatedIds: z.array(z.string()).optional(),
 });
 export type UpdateInput = z.infer<typeof updateInputSchema>;
+
+// 프로젝트 스코프 이름 바꾸기. to 가 이미 있으면 합치기(merge)가 된다 — 같은 연산이다.
+export const renameProjectInputSchema = z.object({
+  from: z.string().trim().min(1),
+  to: z.string().trim().min(1),
+});
+export type RenameProjectInput = z.infer<typeof renameProjectInputSchema>;
 
 export const removeInputSchema = z.object({ id: z.string().min(1) });
 export type RemoveInput = z.infer<typeof removeInputSchema>;
@@ -85,6 +106,22 @@ export const memorySchema = z.object({
   createdAt: z.string(), // ISO 8601
 });
 export type Memory = z.infer<typeof memorySchema>;
+
+export const projectSummarySchema = z.object({
+  project: z.string(),
+  count: z.number().int(),
+  lastAt: z.string(), // ISO 8601 — 가장 최근 기억
+});
+export type ProjectSummary = z.infer<typeof projectSummarySchema>;
+
+export const renameProjectResultSchema = z.object({
+  from: z.string(),
+  to: z.string(),
+  moved: z.number().int(),
+  /** to 가 이미 있던 스코프였다 — 두 스코프가 하나로 합쳐졌다. */
+  merged: z.boolean(),
+});
+export type RenameProjectResult = z.infer<typeof renameProjectResultSchema>;
 
 // 중복 판정을 하지 않으므로(FR-011) 저장은 항상 성공하고 갈래가 하나다.
 // 예전의 판별 유니온(skipped / duplicates)은 소비자를 잃어 접었다.

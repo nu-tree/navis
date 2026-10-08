@@ -1,12 +1,13 @@
 // 최근 기억 조회.
 //
-// US1 에서는 저장이 실제로 됐는지 확인하는 최소 조회로 쓰인다.
-// 필터(분류·프로젝트·기간) 전체는 US4 의 기억 화면에서 채운다.
+// 기간(since · until)을 주면 그 기간 기억을 **전건** 돌려준다 — 유사도 컷이 없다.
+// "오늘 한 일 정리"를 recall 로 하면 의미 top-N 만 올라와 그날 기억 일부를 놓친다(2026-10-07).
 
-import { and, desc, eq, gte, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, lt, or, sql } from "drizzle-orm";
 import { db, memories } from "@navis/db";
 import type { Memory, RecentInput } from "@navis/validation";
 import { toMemory, type MemoryRow } from "./mapping";
+import { parseSince, parseUntil } from "./range";
 
 /** 기본 개수. recentInputSchema 의 상한은 200 이다. */
 const DEFAULT_LIMIT = 50;
@@ -32,6 +33,8 @@ export async function recent(input: RecentInput = {}): Promise<Memory[]> {
     input.days
       ? gte(memories.createdAt, sql`now() - make_interval(days => ${input.days})`)
       : undefined,
+    input.since ? gte(memories.createdAt, parseSince(input.since)) : undefined,
+    input.until ? lt(memories.createdAt, parseUntil(input.until)) : undefined,
   ].filter((c) => c !== undefined);
 
   const rows = await db

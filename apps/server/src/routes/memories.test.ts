@@ -8,12 +8,16 @@ vi.stubEnv("VOYAGE_API_KEY", "test-voyage-key");
 const save = vi.fn();
 const recent = vi.fn();
 const recall = vi.fn();
+const projects = vi.fn();
+const renameProject = vi.fn();
 
 vi.mock("@navis/domain", () => ({
   memory: {
     save: (...a: unknown[]) => save(...a),
     recent: (...a: unknown[]) => recent(...a),
     recall: (...a: unknown[]) => recall(...a),
+    projects: (...a: unknown[]) => projects(...a),
+    renameProject: (...a: unknown[]) => renameProject(...a),
   },
   chat: { runTurn: vi.fn() },
 }));
@@ -120,7 +124,21 @@ describe("GET /memories", () => {
     );
   });
 
-  it("limit 상한(200)을 넘으면 400", async () => {
+  it("since · until 을 그대로 넘긴다", async () => {
+    recent.mockResolvedValue([]);
+    await req("/memories?since=2026-10-07&until=today");
+    expect(recent).toHaveBeenCalledWith(
+      expect.objectContaining({ since: "2026-10-07", until: "today" }),
+    );
+  });
+
+  it("형식이 틀린 since 는 400", async () => {
+    const res = await req("/memories?since=10월7일");
+    expect(res.status).toBe(400);
+    expect(recent).not.toHaveBeenCalled();
+  });
+
+  it("limit 상한(500)을 넘으면 400", async () => {
     const res = await req("/memories?limit=999");
     expect(res.status).toBe(400);
     expect(recent).not.toHaveBeenCalled();
@@ -204,3 +222,43 @@ describe("GET /memories/search", () => {
   });
 });
 
+
+describe("프로젝트 스코프", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const rename = (body: unknown) =>
+    req("/memories/projects/rename", { method: "POST", body: JSON.stringify(body) });
+
+  it("GET /memories/projects 가 목록을 돌려준다 — id 로 해석되지 않는다", async () => {
+    projects.mockResolvedValue([{ project: "navis", count: 3, lastAt: "2026-10-07T00:00:00.000Z" }]);
+    const res = await req("/memories/projects");
+    expect(res.status).toBe(200);
+    expect((await res.json()) as unknown[]).toHaveLength(1);
+  });
+
+  it("rename 결과를 그대로 돌려준다", async () => {
+    renameProject.mockResolvedValue({ from: "soopsns", to: "soop-sns", moved: 4, merged: true });
+    const res = await rename({ from: "soopsns", to: "soop-sns" });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { merged: boolean }).merged).toBe(true);
+  });
+
+  it("from 과 to 가 같으면 400", async () => {
+    const res = await rename({ from: "navis", to: " navis " });
+    expect(res.status).toBe(400);
+    expect(renameProject).not.toHaveBeenCalled();
+  });
+
+  it("빈 to 는 400", async () => {
+    const res = await rename({ from: "navis", to: "  " });
+    expect(res.status).toBe(400);
+  });
+
+  it("없는 from 은 404", async () => {
+    const e = new Error("project 를 찾을 수 없다: nope");
+    e.name = "NotFoundError";
+    renameProject.mockRejectedValue(e);
+    const res = await rename({ from: "nope", to: "navis" });
+    expect(res.status).toBe(404);
+  });
+});

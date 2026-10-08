@@ -47,6 +47,8 @@
 | --- | --- | --- | --- | --- |
 | `GET` | `/memories` | `RecentInput` (쿼리) | `Memory[]` | FR-021 |
 | `POST` | `/memories` | `SaveInput` | `Memory` | 수동 추가 |
+| `GET` | `/memories/projects` | — | `ProjectSummary[]` | 스코프 목록 |
+| `POST` | `/memories/projects/rename` | `RenameProjectInput` | `RenameProjectResult` \| 400 \| 404 | 이름 바꾸기 = 합치기 |
 | `GET` | `/memories/search` | `RecallInput` (쿼리) | `RecallHit[]` | FR-022 |
 | `GET` | `/memories/:id/neighbors` | `?limit` | `RecallHit[]` \| 404 | **FR-047** — 겹치는 기억 정리(R7) |
 | `PATCH` | `/memories/:id` | `UpdateInput` | `Memory` \| 404 | FR-023, FR-024, FR-027 |

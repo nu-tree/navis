@@ -13,6 +13,8 @@
 export { save } from "./save";
 export { recent } from "./recent";
 export { recall } from "./recall";
+export { projects, renameProject, similarProjects, projectKey } from "./projects";
+export { parseSince, parseUntil, kstDate } from "./range";
 export { rerank, decay, HALF_LIFE_DAYS } from "./rerank";
 export { embed, embedMany, EMBEDDING_DIMENSIONS } from "./embed";
 export { reembedAll, type ReembedOptions } from "./reembed";
