@@ -84,8 +84,8 @@ pnpm db:migrate     # 적용
 
 ## 배포
 
-Cloud Run 서비스 하나에 web(ingress) + server(사이드카). `./deploy/deploy.sh` 한 번이면
-빌드 · 배포가 끝난다. 최초 준비는 [`deploy/README.md`](deploy/README.md).
+Cloud Run 서비스 하나에 web(ingress) + server(사이드카). **`main` 에 push 하면** Cloud Build
+트리거가 빌드 · 배포한다. 최초 준비는 [`deploy/README.md`](deploy/README.md).
 
 ## 규약
 

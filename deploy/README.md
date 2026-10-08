@@ -11,14 +11,14 @@ Cloud Run 서비스 **하나**(`navis`)에 컨테이너 두 개를 올린다(헌
 - 최대 인스턴스 1, 최소 0. 안 쓰면 0 으로 내려가 과금되지 않고, 첫 요청에 콜드 스타트가 있다.
 - 비밀값은 Secret Manager 에 두고 필요한 컨테이너에만 주입한다(`service.yaml`).
 
-## 매 배포
+## 매 배포 — `main` 에 push 하면 끝
 
-```bash
-./deploy/deploy.sh
-```
+GitHub `main` 에 push 하면 Cloud Build 트리거(`rmgpgab-navis-…`, 전역)가 `deploy/cloudbuild.yaml` 로
+두 이미지를 linux/amd64 로 빌드 · 푸시하고 `service.yaml` 로 서비스를 갈아끼운다. 진행 상황은
+콘솔의 Cloud Build → 기록, 또는 `gcloud builds list --project=navis-497807 --limit=3`.
 
-Cloud Build 가 두 이미지를 linux/amd64 로 빌드 · 푸시하고 `service.yaml` 로 서비스를 갈아끼운다.
-끝나면 서비스 URL 을 출력한다.
+빌드에 필요한 Supabase 공개 값(`_NEXT_PUBLIC_SUPABASE_URL` · `_NEXT_PUBLIC_SUPABASE_ANON_KEY`)은
+**트리거의 대체 변수**에 들어 있다 — 레포에는 두지 않는다. 바꾸려면 트리거 설정을 고친다.
 
 **스키마가 바뀌었으면 배포 전에** 운영 DB 에 마이그레이션을 먼저 적용한다. 부팅 시 자동
 마이그레이션은 없다.
@@ -76,9 +76,9 @@ done
 gcloud iam service-accounts add-iam-policy-binding navis-run@$PROJECT.iam.gserviceaccount.com \
   --member=serviceAccount:$BUILD_SA --role=roles/iam.serviceAccountUser
 
-# 6. 배포 설정
-cp deploy/deploy.env.example deploy/deploy.env   # GCP_PROJECT · Supabase 공개 값 채우기
-./deploy/deploy.sh
+# 6. 배포 트리거 — Cloud Build → 트리거 → GitHub 저장소 연결, 브랜치 ^main$,
+#    구성 파일 deploy/cloudbuild.yaml, 대체 변수에 _NEXT_PUBLIC_SUPABASE_URL ·
+#    _NEXT_PUBLIC_SUPABASE_ANON_KEY 를 채운다. 그 뒤로는 main 에 push 하면 배포된다.
 
 # 7. ★ 배포 직후: 웹의 설정 화면에서 Claude 토큰을 등록한다(`claude setup-token` 으로 발급).
 #    등록하기 전에는 대화가 "설정에서 토큰을 등록하라"는 안내로 끝난다.
@@ -108,8 +108,7 @@ gcloud secrets add-iam-policy-binding navis-settings-key \
   --member=serviceAccount:navis-run@$PROJECT.iam.gserviceaccount.com \
   --role=roles/secretmanager.secretAccessor
 
-# 2) 배포 — service.yaml 이 키를 넣고 토큰 비밀값은 더 넣지 않는다
-./deploy/deploy.sh
+# 2) 배포 — main 에 push. service.yaml 이 키를 넣고 토큰 비밀값은 더 넣지 않는다
 ```
 
 3. 웹의 **설정** 화면에서 토큰을 등록한다. 대화가 되는지 확인한다.

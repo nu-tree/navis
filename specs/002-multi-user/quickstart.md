@@ -18,7 +18,7 @@
 DATABASE_URL=<운영> pnpm db:migrate                                   # 0008
 DATABASE_URL=<운영> NAVIS_OWNER_ID=<uuid> pnpm --filter @navis/db assign-owner
 DATABASE_URL=<운영> pnpm db:migrate                                   # 0009
-./deploy/deploy.sh
+git push origin main                                                  # 트리거가 배포
 ```
 
 **기대**: assign-owner 가 출력한 테이블별 건수 = S0-4 의 건수. 0009 가 오류 없이 끝난다(= null 0건).
