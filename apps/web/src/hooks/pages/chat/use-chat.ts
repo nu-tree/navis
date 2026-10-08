@@ -3,8 +3,9 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { parseChatEvents } from "@navis/api";
 import type { ChatRequest, Message } from "@navis/validation";
-import type { SendInput } from "./chat-input";
-import { turnStore } from "./turn-store";
+import type { SendInput } from "@/features/chat/chat-input";
+import { turnStore } from "@/features/chat/turn-store";
+import { useCancelChat } from "@/hooks/apis/chat/use-cancel-chat";
 
 type UseChatInput = {
   /** 이 턴이 속한 방. 서버가 이걸로 에이전트 세션을 이어 붙인다. */
@@ -22,6 +23,7 @@ type UseChatInput = {
 // 턴 상태는 이 훅이 아니라 turnStore 가 방별로 들고 있다(turn-store.ts 주석). 방을 옮겨도
 // 스트림은 끝까지 읽히고, 돌아오면 같은 상태가 다시 보인다.
 export function useChat({ conversationId, messages, setMessages, onTurnEnd }: UseChatInput) {
+  const { mutate: cancelChat } = useCancelChat();
   const { streaming, tool, error, turnId } = useSyncExternalStore(
     turnStore.subscribe,
     () => turnStore.get(conversationId),
@@ -121,15 +123,8 @@ export function useChat({ conversationId, messages, setMessages, onTurnEnd }: Us
     }
   };
 
-  // 연결만 끊으면 서버는 계속 생성한다. 반드시 cancel 을 불러야 멈춘다.
-  const stop = async () => {
-    const id = turnId;
-    if (!id) return;
-    await fetch("/api/chat/cancel", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ turnId: id }),
-    }).catch(() => {});
+  const stop = () => {
+    if (turnId) cancelChat(turnId);
   };
 
   return { messages, streaming, tool, error, send, stop };

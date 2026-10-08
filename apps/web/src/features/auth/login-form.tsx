@@ -1,27 +1,22 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { AlertCircle, ArrowRight, Loader2, Lock, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AuthField } from "./auth-field";
 import { PasswordInput } from "./password-input";
-import { useAuth } from "./use-auth";
+import { useSignIn } from "@/hooks/apis/auth/use-sign-in";
 
 export const LoginForm = () => {
-  const router = useRouter();
-  const { signIn, pending, error } = useAuth();
+  const { mutate: signIn, isPending: pending, error: signInError } = useSignIn();
+  const error = signInError?.message ?? null;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  const submit = async (event: React.FormEvent) => {
+  const submit = (event: React.FormEvent) => {
     event.preventDefault();
-    if (await signIn(email, password)) {
-      // replace 로 옮긴다 — 뒤로가기로 로그인 화면에 돌아오지 않게.
-      router.replace("/");
-      router.refresh();
-    }
+    signIn({ email, password });
   };
 
   return (
@@ -66,7 +61,7 @@ export const LoginForm = () => {
       <Button
         type="submit"
         disabled={pending}
-        className="group h-11 w-full bg-linear-to-r from-primary to-accent text-base font-semibold shadow-lg shadow-primary/25 hover:from-primary/90 hover:to-accent/90"
+        className="group h-11 w-full bg-linear-to-r cursor-pointer from-primary to-accent text-base font-semibold shadow-lg shadow-primary/25 hover:from-primary/90 hover:to-accent/90"
       >
         {pending ? (
           <>

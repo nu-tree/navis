@@ -5,7 +5,7 @@ import { ChatInput } from "./chat-input";
 import { MessageBubble } from "./message-bubble";
 import { MessageList } from "./message-list";
 import { TypingIndicator } from "./typing-indicator";
-import { useChat } from "./use-chat";
+import { useChat } from "@/hooks/pages/chat/use-chat";
 import { useChatMessages } from "@/hooks/pages/chat/use-chat-messages";
 
 type Props = {
