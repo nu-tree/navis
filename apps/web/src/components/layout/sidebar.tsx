@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { Brain, LogOut, MessageSquare, Plus, Settings, Trash2 } from "lucide-react";
+import { Brain, CircleHelp, LogOut, MessageSquare, Plus, Settings, Trash2 } from "lucide-react";
 import type { ConversationSummary } from "@navis/validation";
 import { Button } from "@/components/ui/button";
 import { useSignOut } from "@/hooks/apis/auth/use-sign-out";
 import { supabaseEnv } from "@/lib/supabase";
+import { useOnboardingStore } from "@/store/onboarding-store";
 import {
   Sidebar,
   SidebarContent,
@@ -36,6 +37,7 @@ export function NavisSidebar({
   onRemove,
 }: Readonly<Props>) {
   const { mutate: signOut } = useSignOut();
+  const openOnboarding = useOnboardingStore((s) => s.setOpen);
   const configured = supabaseEnv() !== null;
 
   return (
@@ -46,6 +48,7 @@ export function NavisSidebar({
         </div>
 
         <Button
+          data-tour="new-chat"
           variant="outline"
           onClick={onCreate}
           className="w-full justify-start group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
@@ -96,7 +99,7 @@ export function NavisSidebar({
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild tooltip="기억">
+            <SidebarMenuButton asChild tooltip="기억" data-tour="memories">
               <Link href="/memories">
                 <Brain />
                 <span>기억</span>
@@ -104,7 +107,13 @@ export function NavisSidebar({
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild tooltip="설정">
+            <SidebarMenuButton tooltip="사용법" data-tour="help" onClick={() => openOnboarding(true)}>
+              <CircleHelp />
+              <span>사용법</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild tooltip="설정" data-tour="settings">
               <Link href="/settings">
                 <Settings />
                 <span>설정</span>

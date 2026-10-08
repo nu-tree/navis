@@ -28,6 +28,7 @@ export const ModelPicker = ({ value, onChange, disabled }: Readonly<Props>) => (
   <DropdownMenu>
     <DropdownMenuTrigger asChild>
       <Button
+        data-tour="model"
         variant="ghost"
         size="sm"
         disabled={disabled}

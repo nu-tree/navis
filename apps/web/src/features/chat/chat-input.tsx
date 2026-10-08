@@ -132,6 +132,7 @@ export const ChatInput = ({
       {/* 테두리·배경·포커스 표시는 이 컨테이너가 갖는다 — textarea 와 툴바가
           한 상자로 보여야 하므로. 그래서 안쪽 Textarea 의 chrome 은 상쇄한다. */}
       <div
+        data-tour="chat-input"
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
@@ -199,6 +200,7 @@ export const ChatInput = ({
             variant="ghost"
             size="icon-lg"
             aria-label="이미지 첨부"
+            data-tour="attach"
             disabled={attachments.isFull || busy}
             onClick={() => fileInput.current?.click()}
           >
