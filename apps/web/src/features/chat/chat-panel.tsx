@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useRef } from "react";
 import { ChatInput } from "./chat-input";
 import { MessageBubble } from "./message-bubble";
 import { MessageList } from "./message-list";
 import { TypingIndicator } from "./typing-indicator";
+import { useStickToBottom } from "@/hooks/common/use-stick-to-bottom";
 import { useChat } from "@/hooks/pages/chat/use-chat";
 import { useConversationMessageList } from "@/hooks/apis/conversation/use-conversation-message-list";
 import { useDeleteConversationMessage } from "@/hooks/apis/conversation/use-delete-conversation-message";
@@ -23,14 +23,8 @@ export const ChatPanel = ({ conversationId, onTurnEnd }: Readonly<Props>) => {
     conversationId,
     ...(onTurnEnd ? { onTurnEnd } : {}),
   });
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  // 새 메시지·델타는 항상 바닥에 붙는다. 그려진 뒤 내려야 하므로 effect 에서.
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  }, [messages, streaming]);
+  // 새 메시지·델타가 오면 바닥으로 따라간다. 위로 올려 읽는 중이면 그대로 둔다.
+  const { ref: scrollRef, onScroll, stick } = useStickToBottom<HTMLDivElement>([messages, streaming]);
 
   const busy = streaming !== null;
   const empty = messages.length === 0 && !busy;
@@ -60,7 +54,12 @@ export const ChatPanel = ({ conversationId, onTurnEnd }: Readonly<Props>) => {
           </ul>
         </div>
       ) : (
-        <MessageList ref={scrollRef} messages={messages} onRemove={removeMessage}>
+        <MessageList
+          ref={scrollRef}
+          onScroll={onScroll}
+          messages={messages}
+          onRemove={removeMessage}
+        >
           {/* 스트리밍 중인 답변. 확정되면 done 이벤트가 messages 로 옮긴다. */}
           {streaming ? (
             <MessageBubble
@@ -82,7 +81,15 @@ export const ChatPanel = ({ conversationId, onTurnEnd }: Readonly<Props>) => {
         </MessageList>
       )}
 
-      <ChatInput busy={busy} onSend={send} onStop={stop} />
+      <ChatInput
+        busy={busy}
+        onSend={(input) => {
+          // 보낸 직후엔 읽던 위치와 상관없이 바닥으로 — 내 질문과 답이 보여야 한다.
+          stick();
+          void send(input);
+        }}
+        onStop={stop}
+      />
     </div>
   );
 };

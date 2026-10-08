@@ -28,7 +28,14 @@ export async function* parseChatEvents(
         .map((l) => l.slice(5).trim())
         .join("\n");
       if (!data) continue; // `: ping` 같은 주석 프레임
-      const parsed = chatEventSchema.safeParse(JSON.parse(data));
+      let json: unknown;
+      try {
+        json = JSON.parse(data);
+      } catch {
+        // 깨진 프레임 하나 때문에 스트림 전체를 끊지 않는다 — 그 프레임만 건너뛴다.
+        continue;
+      }
+      const parsed = chatEventSchema.safeParse(json);
       // 모르는 이벤트는 조용히 버린다 — 서버가 새 이벤트를 추가해도
       // 구버전 클라이언트가 깨지지 않게.
       if (parsed.success) yield parsed.data;

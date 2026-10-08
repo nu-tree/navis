@@ -15,6 +15,26 @@ type UseChatInput = {
   onTurnEnd?: () => void;
 };
 
+/** 서버가 거절한 요청. 문구가 사람이 읽을 수 있게 정리돼 있다. */
+class ChatRequestError extends Error {}
+
+/**
+ * 실패 응답 → 사람이 읽을 문구. BFF · server 는 `{ error: "..." }` 로 답한다 — 그 문구를 쓰고,
+ * 원문(JSON 등)은 콘솔에만 남긴다.
+ */
+const failureMessage = async (res: Response): Promise<string> => {
+  const raw = await res.text().catch(() => "");
+  console.error(`[use-chat] ${res.status} ${raw}`);
+  if (res.status === 401) return "로그인이 필요합니다.";
+  try {
+    const { error } = JSON.parse(raw) as { error?: unknown };
+    if (typeof error === "string" && error) return error;
+  } catch {
+    // JSON 이 아니면 아래 기본 문구.
+  }
+  return "응답을 받지 못했습니다. 잠시 뒤 다시 시도해주세요.";
+};
+
 // 한 대화방의 턴. 브라우저는 /api/chat(BFF)만 부른다 — apps/server 의 토큰은
 // Next 서버에만 있다.
 //
@@ -31,16 +51,36 @@ export function useChat({ conversationId, onTurnEnd }: UseChatInput) {
   const update = (patch: Partial<ChatTurn>) =>
     useChatTurnStore.getState().update(conversationId, patch);
 
+  const messageListOptions = getConversationMessageListQueryOptions(conversationId);
+
   const append = (...incoming: Message[]) =>
-    queryClient.setQueryData(
-      getConversationMessageListQueryOptions(conversationId).queryKey,
-      (old = []) => [...old, ...incoming],
-    );
+    queryClient.setQueryData(messageListOptions.queryKey, (old = []) => [...old, ...incoming]);
+
+  /**
+   * 질문을 붙이기 전에 진행 중인 목록 조회와 순서를 맞춘다. 안 맞추면 늦게 도착한 조회 결과가
+   * 캐시를 통째로 덮어 방금 보낸 질문이 사라진다.
+   *
+   * - 아직 받아온 게 없다(처음 여는 방): 그 조회를 **기다린다**. 취소하면 이전 대화가 안 보인다.
+   * - 이미 있다(다시 연 방의 재조회): **취소한다**. 이 탭에서 오간 메시지는 이미 캐시에 있다.
+   */
+  const syncMessageList = async () => {
+    if (queryClient.getQueryData(messageListOptions.queryKey) === undefined) {
+      // 진행 중인 조회가 있으면 그 결과를 함께 기다린다(중복 요청을 만들지 않는다).
+      await queryClient.ensureQueryData(messageListOptions).catch(() => undefined);
+    } else {
+      await queryClient.cancelQueries({ queryKey: messageListOptions.queryKey });
+    }
+  };
 
   const send = async ({ text, images, model }: SendInput) => {
     // 이 방에서 턴이 도는 중엔 새 턴을 만들지 않는다. 다른 방은 상관없다.
     if (getChatTurn(conversationId).streaming !== null) return;
 
+    const id = crypto.randomUUID();
+    // 진행 중 표시를 먼저 켠다 — 아래 await 사이에 한 번 더 눌러도 두 번 보내지 않는다.
+    update({ streaming: "", tool: null, error: null, turnId: id });
+
+    await syncMessageList();
     append({
       id: crypto.randomUUID(),
       role: "user",
@@ -49,10 +89,20 @@ export function useChat({ conversationId, onTurnEnd }: UseChatInput) {
       // 화면에 첨부를 보여주기 위해서만 담는다 — 서버는 저장 시 비운다.
       ...(images?.length ? { images } : {}),
     });
-    const id = crypto.randomUUID();
-    update({ streaming: "", tool: null, error: null, turnId: id });
+
     // 중지 뒤 도착한 델타가 다음 턴에 섞이지 않게, 이 턴의 로컬 버퍼를 따로 둔다.
     let text_ = "";
+    // 조각마다 화면에 반영하면 조각마다 답 전체의 마크다운을 다시 해석한다(답 길이의 제곱).
+    // 화면 갱신 주기에 한 번만 반영한다 — 조각이 아무리 잘게 와도 초당 최대 60번이다.
+    let frame: number | null = null;
+    const flush = () => {
+      frame = null;
+      update({ streaming: text_ });
+    };
+    const cancelFlush = () => {
+      if (frame !== null) cancelAnimationFrame(frame);
+      frame = null;
+    };
 
     try {
       const body: ChatRequest = {
@@ -67,25 +117,25 @@ export function useChat({ conversationId, onTurnEnd }: UseChatInput) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
-      if (!res.ok || !res.body) {
-        throw new Error(await res.text().catch(() => res.statusText));
-      }
+      if (!res.ok || !res.body) throw new ChatRequestError(await failureMessage(res));
 
       for await (const event of parseChatEvents(res.body)) {
         switch (event.type) {
           case "delta":
             text_ += event.text;
-            update({ streaming: text_ });
+            frame ??= requestAnimationFrame(flush);
             break;
           case "status":
             update({ tool: event.tool });
             break;
           case "done":
+            cancelFlush();
             // 최종 전문은 서버가 권위다 — 델타를 이어 붙인 것과 다를 수 있다.
             // message 에 saved 가 실려 오므로 저장 표시도 여기서 함께 확정된다.
             append(event.message);
             break;
           case "aborted":
+            cancelFlush();
             // 중지 시점까지 온 부분 답변은 화면에 남긴다 — 사라지면 사용자는
             // 무엇이 중단됐는지 알 수 없다.
             //
@@ -109,8 +159,15 @@ export function useChat({ conversationId, onTurnEnd }: UseChatInput) {
         }
       }
     } catch (err) {
-      update({ error: err instanceof Error ? err.message : String(err) });
+      // 연결 자체가 끊긴 경우(fetch 의 TypeError 등)는 원문이 사람에게 의미가 없다.
+      console.error("[use-chat]", err);
+      update({
+        error: err instanceof ChatRequestError ? err.message : "연결이 끊겼습니다. 다시 시도해주세요.",
+      });
     } finally {
+      // ★ 예약된 반영을 먼저 지운다. 아래에서 턴을 끝낸 뒤 그게 돌면 끝난 턴이
+      //   "스트리밍 중"으로 되살아난다.
+      cancelFlush();
       // 오류는 남긴다 — 방을 떠난 사이 실패했어도 돌아와서 볼 수 있어야 한다.
       update({ streaming: null, tool: null, turnId: null });
       // 목록의 제목·마지막 메시지·정렬을 갱신한다.
