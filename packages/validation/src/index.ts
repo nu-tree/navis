@@ -7,3 +7,4 @@
 export * from "./memory";
 export * from "./chat";
 export * from "./conversation";
+export * from "./settings";

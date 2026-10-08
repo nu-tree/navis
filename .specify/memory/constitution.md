@@ -27,7 +27,8 @@ navis 는 제2의 뇌다. **기억 저장 / 기억 불러오기**, 그리고 그
   SDK · React · Next 가 들어오는 순간 React Native 번들에서 못 쓰게 되고, 이 패키지가
   분리된 이유가 사라진다.
 - DB 와 Agent SDK 를 아는 계층은 `packages/domain` **하나**다. 그래서 `DATABASE_URL`
-  과 `CLAUDE_CODE_OAUTH_TOKEN` 을 아는 배포 단위가 하나로 유지된다.
+  과 설정 암호화 키 `NAVIS_SETTINGS_KEY`(Claude 토큰을 푸는 키)를 아는 배포 단위가 하나로
+  유지된다.
 - `apps/web` · `apps/mobile` 은 `@navis/db` · `@navis/domain` 을 import 하지 않는다.
   HTTP(`@navis/api`)로만 서버를 부르고, `@navis/api` 는 web 의 **서버 사이드**에서만
   쓴다.
@@ -105,7 +106,9 @@ props 는 그 컴포넌트가 **직접 쓰는 것만** 받는다.
 - 배포: **Google Cloud Run 서비스 하나**(`deploy/service.yaml`). web 이 외부 요청을 받는
   ingress 컨테이너, server 는 같은 서비스의 사이드카로 `localhost:4000` 에서만 듣는다 —
   인터넷에 열리지 않는다. 최대 인스턴스는 **1** 이다(진행 중인 턴의 `AbortController` 가
-  프로세스 로컬이다). 비밀값은 Secret Manager 에서 필요한 컨테이너에만 주입한다.
+  프로세스 로컬이다). 비밀값은 Secret Manager 에서 필요한 컨테이너에만 주입한다 — server 에는
+  `API_TOKEN` · `DATABASE_URL` · `VOYAGE_API_KEY` · `NAVIS_SETTINGS_KEY` · `NAVIS_MCP_TOKEN`,
+  web 에는 `NAVIS_API_TOKEN` 하나. Claude 토큰은 비밀값이 아니라 설정 화면에서 등록한다.
   Railway 는 쓰지 않는다. 마이그레이션은 여전히 배포와 분리된 수동 단계다.
 
 ### 보안 (타협 불가)
@@ -124,6 +127,12 @@ props 는 그 컴포넌트가 **직접 쓰는 것만** 받는다.
 - 로그인하지 않은 상태에서는 어떤 화면도 내용을 보여주지 않는다. BFF 는 세션이 없으면
   **401 JSON** 을 돌려준다 — 리다이렉트하지 않는다. `fetch` 호출자가 HTML 을 받으면 파싱이
   깨진다.
+- **Claude 토큰은 설정 화면에서 등록하고, DB 에 암호문으로만 둔다.** 환경변수로 넣지 않는다.
+  - 저장된 토큰은 어떤 화면 · 응답 · 로그에도 원문으로 다시 나타나지 않는다. 보여줄 수 있는
+    것은 등록 여부 · 끝 4자리 · 변경 시각뿐이다(FR-037).
+  - 암호화는 AES-256-GCM, 키 `NAVIS_SETTINGS_KEY` 는 **server 컨테이너에만** 주입한다.
+    암호문(DB)과 키(서버 환경)가 서로 다른 곳에 있어야 DB 가 새도 토큰이 새지 않는다(FR-055).
+  - 복호화가 실패하면 "미등록"으로 뭉개지 않고 오류로 다룬다 — 키가 바뀐 것을 알아야 한다.
 - `apps/server` 는 **기본 잠금**이다. `app.use("*")` 로 전부 막고 예외만 나열한다.
   보호할 경로를 나열하는 방식은 쓰지 않는다 — 라우트를 추가하다 하나 빠뜨리면 공개된다.
 - Agent SDK 의 내장 파일 · 셸 도구(`Read`/`Write`/`Edit`/`Bash`)를 열지 않는다.
@@ -229,4 +238,4 @@ props 는 그 컴포넌트가 **직접 쓰는 것만** 받는다.
   작업에서 정리한다.
 - 런타임 개발 지침은 `README.md`(구조 · 규약)와 `STRUCTURE.md`(이관 지도)를 본다.
 
-**Version**: 1.4.0 | **Ratified**: 2026-09-10 | **Last Amended**: 2026-10-07
+**Version**: 1.5.0 | **Ratified**: 2026-09-10 | **Last Amended**: 2026-10-08

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const TOKEN = "test-token";
 vi.stubEnv("API_TOKEN", TOKEN);
 vi.stubEnv("VOYAGE_API_KEY", "test-voyage-key");
+vi.stubEnv("NAVIS_SETTINGS_KEY", Buffer.alloc(32, 1).toString("base64"));
 
 const save = vi.fn();
 const recent = vi.fn();

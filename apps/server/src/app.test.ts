@@ -11,6 +11,7 @@ const TOKEN = "test-token-do-not-use-in-prod";
 // env.ts 는 부팅 때 환경변수를 확인한다 — 모듈을 import 하기 전에 채워야 한다.
 vi.stubEnv("API_TOKEN", TOKEN);
 vi.stubEnv("VOYAGE_API_KEY", "test-voyage-key");
+vi.stubEnv("NAVIS_SETTINGS_KEY", Buffer.alloc(32, 1).toString("base64"));
 
 let app: { fetch: (req: Request) => Response | Promise<Response> };
 
@@ -37,6 +38,7 @@ describe("기본 잠금", () => {
     "/chat/cancel",
     "/memories",
     "/memories/search",
+    "/settings/claude-token",
     "/memories/export",
     "/conversations",
     "/settings/persona",

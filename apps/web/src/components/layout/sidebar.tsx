@@ -104,9 +104,11 @@ export function NavisSidebar({
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton tooltip="설정">
-              <Settings />
-              <span>설정</span>
+            <SidebarMenuButton asChild tooltip="설정">
+              <Link href="/settings">
+                <Settings />
+                <span>설정</span>
+              </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
 

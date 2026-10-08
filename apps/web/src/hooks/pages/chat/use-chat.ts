@@ -46,7 +46,7 @@ const failureMessage = async (res: Response): Promise<string> => {
 export function useChat({ conversationId, onTurnEnd }: UseChatInput) {
   const queryClient = useQueryClient();
   const { mutate: cancelChat } = useCancelChat();
-  const { streaming, tool, error, turnId } = useChatTurn(conversationId);
+  const { streaming, tool, error, errorCode, turnId } = useChatTurn(conversationId);
   // 스트림 루프는 렌더 밖에서 돈다 — 구독 없이 getState() 로 읽고 쓴다.
   const update = (patch: Partial<ChatTurn>) =>
     useChatTurnStore.getState().update(conversationId, patch);
@@ -78,7 +78,7 @@ export function useChat({ conversationId, onTurnEnd }: UseChatInput) {
 
     const id = crypto.randomUUID();
     // 진행 중 표시를 먼저 켠다 — 아래 await 사이에 한 번 더 눌러도 두 번 보내지 않는다.
-    update({ streaming: "", tool: null, error: null, turnId: id });
+    update({ streaming: "", tool: null, error: null, errorCode: null, turnId: id });
 
     await syncMessageList();
     append({
@@ -153,7 +153,7 @@ export function useChat({ conversationId, onTurnEnd }: UseChatInput) {
             }
             break;
           case "error":
-            update({ error: event.message });
+            update({ error: event.message, errorCode: event.code ?? null });
             break;
           // thinking 은 아직 화면에 쓰지 않는다.
         }
@@ -179,5 +179,5 @@ export function useChat({ conversationId, onTurnEnd }: UseChatInput) {
     if (turnId) cancelChat(turnId);
   };
 
-  return { streaming, tool, error, send, stop };
+  return { streaming, tool, error, errorCode, send, stop };
 }

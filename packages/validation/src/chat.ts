@@ -50,6 +50,11 @@ export const chatEventSchema = z.discriminatedUnion("type", [
   }),
   // 사용자/타임아웃 중지
   z.object({ type: z.literal("aborted"), reason: z.string() }),
-  z.object({ type: z.literal("error"), message: z.string() }),
+  z.object({
+    type: z.literal("error"),
+    message: z.string(),
+    // 화면이 문구가 아니라 종류로 분기한다 — 토큰 오류면 설정 화면 링크를 붙인다(FR-056).
+    code: z.enum(["claude_token_missing", "claude_token_rejected"]).optional(),
+  }),
 ]);
 export type ChatEvent = z.infer<typeof chatEventSchema>;

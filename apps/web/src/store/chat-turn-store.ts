@@ -1,6 +1,9 @@
 "use client";
 
 import { create } from "zustand";
+import type { ChatEvent } from "@navis/validation";
+
+export type ChatErrorCode = NonNullable<Extract<ChatEvent, { type: "error" }>["code"]>;
 
 // 방별 진행 중인 턴 — 서버 데이터가 아니라 화면 상태다. 서버 데이터(메시지)는 쿼리 캐시에 있다.
 //
@@ -17,11 +20,19 @@ export type ChatTurn = {
   streaming: string | null;
   tool: string | null;
   error: string | null;
+  /** 오류의 종류. 토큰 오류면 화면이 설정 화면 링크를 붙인다(FR-056). */
+  errorCode: ChatErrorCode | null;
   /** 중지에 쓴다. */
   turnId: string | null;
 };
 
-export const IDLE_TURN: ChatTurn = { streaming: null, tool: null, error: null, turnId: null };
+export const IDLE_TURN: ChatTurn = {
+  streaming: null,
+  tool: null,
+  error: null,
+  errorCode: null,
+  turnId: null,
+};
 
 type ChatTurnStore = {
   turns: Record<string, ChatTurn>;

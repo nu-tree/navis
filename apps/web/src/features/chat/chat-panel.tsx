@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { ChatInput } from "./chat-input";
 import { MessageBubble } from "./message-bubble";
 import { MessageList } from "./message-list";
@@ -19,7 +20,7 @@ type Props = {
 export const ChatPanel = ({ conversationId, onTurnEnd }: Readonly<Props>) => {
   const { data: messages = [] } = useConversationMessageList(conversationId);
   const { mutate: removeMessage } = useDeleteConversationMessage(conversationId);
-  const { streaming, tool, error, send, stop } = useChat({
+  const { streaming, tool, error, errorCode, send, stop } = useChat({
     conversationId,
     ...(onTurnEnd ? { onTurnEnd } : {}),
   });
@@ -76,7 +77,15 @@ export const ChatPanel = ({ conversationId, onTurnEnd }: Readonly<Props>) => {
           {busy && !streaming ? <TypingIndicator label={tool ?? undefined} /> : null}
 
           {error ? (
-            <p className="text-sm text-destructive">⚠️ {error}</p>
+            <p className="text-sm text-destructive">
+              ⚠️ {error}
+              {/* 토큰 문제면 고칠 곳으로 바로 보낸다(FR-056). */}
+              {errorCode ? (
+                <Link href="/settings" className="ml-2 font-medium underline underline-offset-4">
+                  설정으로 가기
+                </Link>
+              ) : null}
+            </p>
           ) : null}
         </MessageList>
       )}

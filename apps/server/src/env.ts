@@ -1,5 +1,8 @@
 // 환경변수는 부팅 때 한 번 확인한다 — 첫 요청에서 500 으로 알게 되면 늦다.
 
+import { randomBytes } from "node:crypto";
+import { parseKey } from "@navis/domain/settings";
+
 function required(name: string): string {
   const v = process.env[name];
   if (!v) {
@@ -25,17 +28,26 @@ export const env = {
    * 없으면 `/mcp` 는 닫힌다(404) — MCP 를 쓰지 않는 환경을 막지 않는다.
    */
   mcpToken: process.env.NAVIS_MCP_TOKEN || null,
+  /**
+   * 설정(Claude 토큰) 암호화 키 — 32바이트 base64(FR-055). DB 가 새도 토큰이 새지 않게 키는
+   * 이 컨테이너 환경에만 있다. 없으면 토큰을 저장도 사용도 못 하므로 부팅을 막는다.
+   */
+  settingsKey: required("NAVIS_SETTINGS_KEY"),
 };
+
+// 길이가 틀린 키는 첫 턴이 아니라 지금 알아야 한다.
+try {
+  parseKey(env.settingsKey);
+} catch {
+  throw new Error(
+    `NAVIS_SETTINGS_KEY 는 32바이트 base64 여야 한다. 예: ${randomBytes(32).toString("base64")} ` +
+      "(openssl rand -base64 32)",
+  );
+}
 
 if (env.mcpToken && env.mcpToken === env.apiToken) {
   // 같은 값이면 분리한 의미가 없다 — Claude Code 쪽 자격이 새면 대화 API 까지 열린다.
   throw new Error("NAVIS_MCP_TOKEN 은 API_TOKEN 과 달라야 한다.");
 }
 
-// Agent SDK 는 process.env 에서 직접 집어가므로 여기서 값을 쓰진 않는다.
-// 다만 없으면 첫 채팅에서야 실패하므로 부팅 때 미리 경고한다.
-if (!process.env.CLAUDE_CODE_OAUTH_TOKEN) {
-  console.warn(
-    "[server] CLAUDE_CODE_OAUTH_TOKEN 이 없다 — 채팅이 실패한다. `claude setup-token` 으로 발급할 것.",
-  );
-}
+// Claude 토큰은 환경변수가 아니라 설정 화면에서 등록한다(US5) — 여기서 확인하지 않는다.

@@ -6,7 +6,7 @@ import type { Memory } from "@navis/validation";
 import { Button } from "@/components/ui/button";
 import { useDeleteMemory } from "@/hooks/apis/memory/use-delete-memory";
 import { cn } from "cn";
-import { ConfirmDeleteButton } from "./confirm-delete-button";
+import { ConfirmDeleteButton } from "@/components/common/confirm-delete-button";
 import { MemoryEditor } from "./memory-editor";
 import { MemoryMeta } from "./memory-meta";
 

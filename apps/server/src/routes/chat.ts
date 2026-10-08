@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { chat, conversation } from "@navis/domain";
+import { isClaudeTokenError } from "@navis/domain/errors";
 import {
   cancelRequestSchema,
   chatRequestSchema,
@@ -114,6 +115,11 @@ export const chatRoute = new Hono()
         if (abortController.signal.aborted) {
           // 부분 답변은 기록하지 않는다(Q3=B). 남는 것은 사용자의 질문뿐이다.
           await send({ type: "aborted", reason: "사용자 중지" });
+        } else if (isClaudeTokenError(err)) {
+          // 토큰 문제는 종류(code)로 싣는다 — 화면이 설정 화면으로 안내한다(FR-056).
+          // 사용자 질문은 이미 기록됐다(FR-048).
+          console.error(`[chat] 토큰 오류 turnId=${req.turnId}: ${err.kind}`);
+          await send({ type: "error", message: err.message, code: err.kind });
         } else {
           const message = err instanceof Error ? err.message : String(err);
           console.error(`[chat] 턴 실패 turnId=${req.turnId}: ${message}`);

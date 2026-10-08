@@ -40,6 +40,26 @@ export class TurnInProgressError extends Error {
   }
 }
 
+/** Claude 토큰이 등록되지 않았다 → 대화는 설정 화면으로 가라는 안내로 끝난다(FR-056). */
+export class ClaudeTokenMissingError extends Error {
+  readonly kind = "claude_token_missing" as const;
+
+  constructor() {
+    super("Claude 토큰이 등록되지 않았습니다. 설정 화면에서 등록해주세요.");
+    this.name = "ClaudeTokenMissingError";
+  }
+}
+
+/** Claude 가 토큰을 거부했다(만료 · 잘못된 값) → 설정 화면에서 교체하라는 안내(FR-056). */
+export class ClaudeTokenRejectedError extends Error {
+  readonly kind = "claude_token_rejected" as const;
+
+  constructor(readonly reason: string) {
+    super("Claude 가 토큰을 거부했습니다. 만료됐거나 잘못된 값입니다 — 설정 화면에서 교체해주세요.");
+    this.name = "ClaudeTokenRejectedError";
+  }
+}
+
 export const isNotFound = (e: unknown): e is NotFoundError =>
   e instanceof NotFoundError;
 
@@ -48,3 +68,8 @@ export const isEmbeddingError = (e: unknown): e is EmbeddingError =>
 
 export const isTurnInProgress = (e: unknown): e is TurnInProgressError =>
   e instanceof TurnInProgressError;
+
+export const isClaudeTokenError = (
+  e: unknown,
+): e is ClaudeTokenMissingError | ClaudeTokenRejectedError =>
+  e instanceof ClaudeTokenMissingError || e instanceof ClaudeTokenRejectedError;

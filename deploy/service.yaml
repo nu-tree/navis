@@ -49,7 +49,9 @@ spec:
               cpu: "1"
               memory: 512Mi
 
-        # ★ 원칙 II: DATABASE_URL · CLAUDE_CODE_OAUTH_TOKEN 은 이 컨테이너에만 준다.
+        # ★ 원칙 II: DATABASE_URL · NAVIS_SETTINGS_KEY 는 이 컨테이너에만 준다.
+        #   Claude 토큰은 환경변수로 넣지 않는다 — 설정 화면에서 등록하면 NAVIS_SETTINGS_KEY 로
+        #   암호화해 DB 에 둔다(US5). 키와 암호문이 서로 다른 곳에 있어야 DB 가 새도 토큰이 안 샌다.
         #   ports 가 없으므로 외부에 열리지 않는다. PORT 는 ingress 에만 주입되므로
         #   server 는 기본값 4000 으로 뜬다(apps/server/src/index.ts).
         - name: server
@@ -70,10 +72,10 @@ spec:
                 secretKeyRef:
                   name: navis-voyage-api-key
                   key: latest
-            - name: CLAUDE_CODE_OAUTH_TOKEN
+            - name: NAVIS_SETTINGS_KEY
               valueFrom:
                 secretKeyRef:
-                  name: navis-claude-oauth-token
+                  name: navis-settings-key
                   key: latest
             # 외부 MCP(Claude Code)용. API_TOKEN 과 다른 값이다(헌장 보안 절).
             - name: NAVIS_MCP_TOKEN

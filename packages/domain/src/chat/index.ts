@@ -1,8 +1,8 @@
 // 대화 턴 실행 — Agent SDK 를 돌려 한 턴을 스트리밍한다.
 //
-// 두뇌는 Claude Code 구독 OAuth 토큰으로 돈다. SDK 가 process.env 의
-// CLAUDE_CODE_OAUTH_TOKEN 을 알아서 집으므로 여기서 토큰을 다루지 않는다
-// (`claude setup-token` 으로 발급 → apps/server/.env).
+// 두뇌는 Claude Code 구독 OAuth 토큰으로 돈다. 토큰은 설정 화면에서 등록해 DB 에 암호문으로
+// 있고(../settings), 턴마다 `options.env` 로 넘긴다 — process.env 에 기대지 않는다(US5).
+// 그래서 토큰을 바꿔도 재배포가 필요 없다.
 //
 // 예전 구현에서 의도적으로 가져오지 않은 것들:
 //  - 파일/셸 도구(Read/Write/Edit/Bash). 서버에 소스 트리가 없어 얻는 게 없고,
@@ -18,6 +18,8 @@ import { DEFAULT_MODEL, type Model } from "@navis/validation";
 import { withHistory, type HistoryMessage } from "./history";
 import { toImageBlocks } from "./images";
 import { createFetchGuard } from "./fetch-guard";
+import { ClaudeTokenMissingError, ClaudeTokenRejectedError } from "../errors";
+import { claudeToken } from "../settings";
 import {
   ALLOWED_MEMORY_TOOLS,
   MEMORY_SERVER_NAME,
@@ -25,7 +27,7 @@ import {
   type MemoryToolTally,
 } from "../memory/mcp";
 
-// TODO: settings 모듈이 생기면 DB 의 사용자 시스템 프롬프트로 대체한다(US5).
+// 성격(시스템 프롬프트)은 코드의 기본값을 쓴다. 화면에서 바꾸지 않는다(FR-057).
 const SYSTEM_PROMPT = [
   "너는 나비스(navis) — 사용자의 제2의 뇌이자 개인 비서다.",
   "",
@@ -140,10 +142,17 @@ export type TurnResult = {
   savedCount: number;
 };
 
+/** Claude 가 이 오류로 답하면 토큰 문제다 — 설정 화면에서 바꿔야 한다. */
+const TOKEN_ERRORS = new Set(["authentication_failed", "oauth_org_not_allowed"]);
+
 export async function runTurn(
   input: TurnInput,
   cb: TurnCallbacks = {},
 ): Promise<TurnResult> {
+  // 토큰이 없으면 Claude 를 부르지 않는다 — 부르면 SDK 가 알아보기 힘든 인증 오류를 낸다.
+  const token = await claudeToken.resolve();
+  if (!token) throw new ClaudeTokenMissingError();
+
   // 디스크에 세션이 있을 때만 잇는다. 없으면 새 세션 + 기록 복원.
   const resume =
     input.resumeSessionId && liveSessions.has(input.resumeSessionId)
@@ -212,6 +221,9 @@ export async function runTurn(
       // 로컬 설정(CLAUDE.md, settings.json) 무시 — 서버는 어느 디렉터리에서
       // 뜨든 같게 동작해야 한다.
       settingSources: [],
+      // ★ env 는 서브프로세스 환경을 **통째로 바꾼다**(병합이 아니다) — PATH · HOME 이 필요해
+      //   process.env 를 펼친다. 토큰은 DB 값이 이긴다. 예전 환경변수가 남아 있어도 쓰지 않는다.
+      env: { ...process.env, CLAUDE_CODE_OAUTH_TOKEN: token },
       // 부분 메시지(text_delta)를 받아야 스트리밍이 된다.
       includePartialMessages: true,
       // adaptive 라 쉬운 질문엔 생각하지 않는다. effort 기본값(high)은 "안녕"
@@ -253,6 +265,11 @@ export async function runTurn(
         }
       }
       continue;
+    }
+
+    // 인증 실패는 assistant 메시지의 error 로 온다. result 의 subtype 만 보면 "실패"로 뭉개진다.
+    if (message.type === "assistant" && message.error && TOKEN_ERRORS.has(message.error)) {
+      throw new ClaudeTokenRejectedError(message.error);
     }
 
     if (message.type === "result") {

@@ -249,18 +249,24 @@ description: "핵심 나비스 — 기억과 대화 구현 작업 목록"
 **Independent test**: 토큰을 지운 뒤 질문하면 등록 안내가 나오고, 설정 화면에서 등록한 뒤 재배포
 없이 같은 질문에 답이 오면 통과. (`quickstart.md` S10)
 
-- [ ] T090 [US5] `packages/domain/src/settings/secret.ts` — AES-256-GCM 암호화 · 복호화. 키는 `NAVIS_SETTINGS_KEY`(32바이트 base64)를 인자로 받는다(전역 env 를 직접 읽지 않는다 — 테스트가 키를 주입한다). 형식 `v1.<iv>.<tag>.<ciphertext>` (data-model.md 설정 절)
-- [ ] T091 [P] [US5] `packages/domain/src/settings/secret.test.ts` — 왕복 일치, 같은 평문 두 번 암호화 시 암호문이 다름(IV), 한 글자 변조 시 복호화 **실패**, 다른 키로 복호화 실패, 형식이 아닌 값 거부
-- [ ] T092 [US5] `packages/domain/src/settings/index.ts` — `claudeToken.status()`(`{ registered, last4, updatedAt }`) · `set(token)` · `remove()` · `resolve()`(턴에서 쓸 평문). 키는 `claude_oauth_token`. **`status()` 의 반환값에 평문이 들어갈 길이 없게** 타입으로 막는다. 서버 인스턴스가 하나(헌장 배포 절)이므로 평문을 프로세스 메모리에 캐시하고 `set` · `remove` 때 무효화한다 — 매 턴 DB 조회 · 복호화를 하지 않는다(성능 절). 옛 성격 이관 주석을 지운다
-- [ ] T093 [P] [US5] `packages/domain/src/settings/index.test.ts` — `status()` 직렬화 결과에 평문이 없음, 공백뿐인 값 `set` 거부, `remove` 후 `resolve()` 가 `null`, `set` 직후 캐시가 새 값을 돌려줌
-- [ ] T094 [US5] `packages/domain/src/chat/index.ts` — 턴 시작 시 `claudeToken.resolve()` 로 토큰을 얻어 `query()` 의 `options.env` 로 넘긴다(`process.env` 에 기대지 않는다). 없으면 Claude 를 부르지 않고 `ClaudeTokenMissingError`, SDK 가 인증 실패를 내면 `ClaudeTokenRejectedError`(`packages/domain/src/errors.ts`). 상단의 "SDK 가 process.env 의 토큰을 알아서 집는다" 주석을 고친다
-- [ ] T095 [US5] `apps/server/src/routes/settings.ts` — `GET` · `PUT` · `DELETE /settings/claude-token`(contracts/server-http.md 설정 절). `apps/server/src/routes/chat.ts` 는 두 토큰 오류를 SSE `error` 의 `code`(`claude_token_missing` · `claude_token_rejected`)로 싣는다 — `packages/validation/src/chat.ts` 의 `error` 이벤트에 `code` 를 선택 필드로 추가. `apps/server/src/env.ts` 에서 `CLAUDE_CODE_OAUTH_TOKEN` 경고를 지우고 `NAVIS_SETTINGS_KEY` 를 **부팅 필수**로 검증한다
-- [ ] T096 [P] [US5] `apps/server/src/routes/settings.test.ts` — 토큰 없이 401(기본 잠금), `PUT` 응답 · 이후 `GET` 응답 본문에 보낸 토큰 문자열이 **없음**, 빈 값 400, `DELETE` 후 `registered: false`. `chat` 계약 테스트에 토큰 미등록 시 `error.code = claude_token_missing` 추가
-- [ ] T112 [US5] `apps/web/src/app/api/settings/claude-token/route.ts` BFF(세션 검증 → 중계)와 `apps/web/src/features/settings/use-claude-token.ts` 훅
-- [ ] T113 [US5] `apps/web/src/app/settings/page.tsx` + `apps/web/src/features/settings/claude-token-form.tsx` — 상태(등록 여부 · 끝 4자리 · 변경 시각), `type="password"` 입력, 교체 · 삭제. 저장이 끝나면 입력 칸을 비운다(원문을 화면 상태에 남기지 않는다). 사이드바에서 설정으로 가는 진입점을 둔다 — 화면 상한(SC-010)은 채팅 · 기억 · 설정 셋이다
-- [ ] T114 [US5] `apps/web/src/features/chat/` — `error.code` 가 토큰 오류면 메시지 아래에 설정 화면 링크를 붙인다
+- [X] T090 [US5] `packages/domain/src/settings/secret.ts` — AES-256-GCM 암호화 · 복호화. 키는 `NAVIS_SETTINGS_KEY`(32바이트 base64)를 인자로 받는다(전역 env 를 직접 읽지 않는다 — 테스트가 키를 주입한다). 형식 `v1.<iv>.<tag>.<ciphertext>` (data-model.md 설정 절)
+- [X] T091 [P] [US5] `packages/domain/src/settings/secret.test.ts` — 왕복 일치, 같은 평문 두 번 암호화 시 암호문이 다름(IV), 한 글자 변조 시 복호화 **실패**, 다른 키로 복호화 실패, 형식이 아닌 값 거부
+- [X] T092 [US5] `packages/domain/src/settings/index.ts` — `claudeToken.status()`(`{ registered, last4, updatedAt }`) · `set(token)` · `remove()` · `resolve()`(턴에서 쓸 평문). 키는 `claude_oauth_token`. **`status()` 의 반환값에 평문이 들어갈 길이 없게** 타입으로 막는다. 서버 인스턴스가 하나(헌장 배포 절)이므로 평문을 프로세스 메모리에 캐시하고 `set` · `remove` 때 무효화한다 — 매 턴 DB 조회 · 복호화를 하지 않는다(성능 절). 옛 성격 이관 주석을 지운다
+- [X] T093 [P] [US5] `packages/domain/src/settings/index.test.ts` — `status()` 직렬화 결과에 평문이 없음, 공백뿐인 값 `set` 거부, `remove` 후 `resolve()` 가 `null`, `set` 직후 캐시가 새 값을 돌려줌
+- [X] T094 [US5] `packages/domain/src/chat/index.ts` — 턴 시작 시 `claudeToken.resolve()` 로 토큰을 얻어 `query()` 의 `options.env` 로 넘긴다(`process.env` 에 기대지 않는다). 없으면 Claude 를 부르지 않고 `ClaudeTokenMissingError`, SDK 가 인증 실패를 내면 `ClaudeTokenRejectedError`(`packages/domain/src/errors.ts`). 상단의 "SDK 가 process.env 의 토큰을 알아서 집는다" 주석을 고친다
+- [X] T095 [US5] `apps/server/src/routes/settings.ts` — `GET` · `PUT` · `DELETE /settings/claude-token`(contracts/server-http.md 설정 절). `apps/server/src/routes/chat.ts` 는 두 토큰 오류를 SSE `error` 의 `code`(`claude_token_missing` · `claude_token_rejected`)로 싣는다 — `packages/validation/src/chat.ts` 의 `error` 이벤트에 `code` 를 선택 필드로 추가. `apps/server/src/env.ts` 에서 `CLAUDE_CODE_OAUTH_TOKEN` 경고를 지우고 `NAVIS_SETTINGS_KEY` 를 **부팅 필수**로 검증한다
+- [X] T096 [P] [US5] `apps/server/src/routes/settings.test.ts` — 토큰 없이 401(기본 잠금), `PUT` 응답 · 이후 `GET` 응답 본문에 보낸 토큰 문자열이 **없음**, 빈 값 400, `DELETE` 후 `registered: false`. `chat` 계약 테스트에 토큰 미등록 시 `error.code = claude_token_missing` 추가
+- [X] T112 [US5] `apps/web/src/app/api/settings/claude-token/route.ts` BFF(세션 검증 → 중계)와 `apps/web/src/features/settings/use-claude-token.ts` 훅
+- [X] T113 [US5] `apps/web/src/app/settings/page.tsx` + `apps/web/src/features/settings/claude-token-form.tsx` — 상태(등록 여부 · 끝 4자리 · 변경 시각), `type="password"` 입력, 교체 · 삭제. 저장이 끝나면 입력 칸을 비운다(원문을 화면 상태에 남기지 않는다). 사이드바에서 설정으로 가는 진입점을 둔다 — 화면 상한(SC-010)은 채팅 · 기억 · 설정 셋이다
+- [X] T114 [US5] `apps/web/src/features/chat/` — `error.code` 가 토큰 오류면 메시지 아래에 설정 화면 링크를 붙인다
 - [ ] T115 [US5] 배포 전환 — Secret Manager 에 `navis-settings-key`(`openssl rand -base64 32`)를 만들고 `deploy/service.yaml` 의 **server 컨테이너에만** 주입, `CLAUDE_CODE_OAUTH_TOKEN` 주입을 제거. `apps/server/.env.example` · `deploy/README.md` · 루트 `README.md` 를 맞춘다. **배포 직후 설정 화면에서 토큰을 등록해야 대화가 된다** — 순서를 README 에 적는다. 정상 동작을 확인한 뒤 Secret Manager 의 `navis-claude-oauth-token` 을 삭제한다
-- [ ] T116 [US5] 헌장 개정 — 원칙 II 의 "`CLAUDE_CODE_OAUTH_TOKEN` 을 아는 배포 단위" 문구, 보안 절(토큰 원문 비노출 · 암호화 저장 · 키는 server 에만), 스택 절의 배포 비밀값 목록을 갱신한다
+- [X] T116 [US5] 헌장 개정 — 원칙 II 의 "`CLAUDE_CODE_OAUTH_TOKEN` 을 아는 배포 단위" 문구, 보안 절(토큰 원문 비노출 · 암호화 저장 · 키는 server 에만), 스택 절의 배포 비밀값 목록을 갱신한다
+
+> **2026-10-08 구현 메모.** T112 의 훅은 훅 규칙대로 `apps/web/src/hooks/apis/settings/`
+> (`use-claude-token-status` · `use-update-claude-token` · `use-delete-claude-token`)에 있다.
+> T115 는 **코드 · 문서까지** 끝났다(`deploy/service.yaml` · `deploy/README.md` 의 전환 절 ·
+> `apps/server/.env.example`). Secret Manager 에 `navis-settings-key` 를 만들고 배포한 뒤 설정
+> 화면에서 토큰을 등록하고, 옛 `navis-claude-oauth-token` 을 지우는 것은 운영 단계라 남아 있다.
 
 **Checkpoint**: `quickstart.md` S10 통과(SC-019).
 

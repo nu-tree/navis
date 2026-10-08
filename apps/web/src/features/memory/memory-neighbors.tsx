@@ -3,7 +3,7 @@
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDeleteMemory } from "@/hooks/apis/memory/use-delete-memory";
 import { useMemoryNeighborList } from "@/hooks/apis/memory/use-memory-neighbor-list";
-import { ConfirmDeleteButton } from "./confirm-delete-button";
+import { ConfirmDeleteButton } from "@/components/common/confirm-delete-button";
 import { MemoryMeta } from "./memory-meta";
 
 /** 이 점수 이상이면 "겹친다"로 강조한다. 임베딩 모델이 바뀌면 다시 본다. */
