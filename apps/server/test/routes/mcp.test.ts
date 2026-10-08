@@ -91,3 +91,23 @@ describe("/mcp 도구", () => {
     ]);
   });
 });
+
+// 2026-10-08 — GET 에 SSE 스트림을 열었다가 바로 닫아 클라이언트가 초당 수십 번 재연결했다.
+// 스트림을 제공하지 않는 서버는 405 로 답한다(MCP 규격) — 클라이언트가 다시 붙지 않는다.
+describe("/mcp GET · DELETE", () => {
+  it.each(["GET", "DELETE"])("%s 는 405 + Allow: POST", async (method) => {
+    const res = await app.fetch(
+      new Request("http://localhost/mcp", {
+        method,
+        headers: { authorization: `Bearer ${MCP_TOKEN}`, accept: "text/event-stream" },
+      }),
+    );
+    expect(res.status).toBe(405);
+    expect(res.headers.get("allow")).toBe("POST");
+  });
+
+  it("GET 도 MCP 토큰 없이는 401 — 405 가 인증보다 먼저 새지 않는다", async () => {
+    const res = await app.fetch(new Request("http://localhost/mcp", { method: "GET" }));
+    expect(res.status).toBe(401);
+  });
+});

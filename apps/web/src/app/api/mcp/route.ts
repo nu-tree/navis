@@ -17,7 +17,7 @@ const FORWARD_REQUEST_HEADERS = [
   "mcp-protocol-version",
   "last-event-id",
 ];
-const FORWARD_RESPONSE_HEADERS = ["content-type", "mcp-session-id", "www-authenticate"];
+const FORWARD_RESPONSE_HEADERS = ["content-type", "mcp-session-id", "www-authenticate", "allow"];
 
 async function relay(request: Request): Promise<Response> {
   const headers = new Headers();
