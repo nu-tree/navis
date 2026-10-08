@@ -1,7 +1,7 @@
 // T017 — embed() 의 가드. STRUCTURE.md 8항이 지목한 무가드 인덱싱이 재발하지 않는지 본다.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { EmbeddingError } from "../errors";
-import { EMBEDDING_DIMENSIONS, embed, embedMany } from "./embed";
+import { EmbeddingError } from "../../src/errors";
+import { EMBEDDING_DIMENSIONS, embed, embedMany } from "../../src/memory/embed";
 
 const ok = (body: unknown) =>
   new Response(JSON.stringify(body), {

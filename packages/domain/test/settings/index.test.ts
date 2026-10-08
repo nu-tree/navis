@@ -8,7 +8,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { db, settings } from "@navis/db";
 
 vi.stubEnv("NAVIS_SETTINGS_KEY", randomBytes(32).toString("base64"));
-const { claudeToken } = await import("./index");
+const { claudeToken } = await import("../../src/settings/index");
 
 const KEY = "claude_oauth_token";
 const TOKEN = "sk-ant-oat01-test-token-abcd";

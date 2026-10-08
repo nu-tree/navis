@@ -37,12 +37,12 @@ vi.mock("@navis/db", () => ({
   },
 }));
 
-vi.mock("./embed", () => ({
+vi.mock("../../src/memory/embed", () => ({
   embed: vi.fn(async () => Array.from({ length: 1024 }, () => 0.1)),
 }));
 
-const { save } = await import("./save");
-const { embed } = await import("./embed");
+const { save } = await import("../../src/memory/save");
+const { embed } = await import("../../src/memory/embed");
 
 describe("save(USER_A)", () => {
   beforeEach(() => {

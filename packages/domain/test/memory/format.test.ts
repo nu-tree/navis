@@ -1,7 +1,7 @@
 // 기간 조회 응답 — 프로젝트별 묶음, 묶음 안은 시간순.
 import { describe, expect, it } from "vitest";
 import type { Memory } from "@navis/validation";
-import { formatByProject } from "./format";
+import { formatByProject } from "../../src/memory/format";
 import { projectKey } from "@navis/validation";
 
 const m = (content: string, project: string | null, createdAt: string): Memory => ({

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createFetchGuard, extractUrls, normalizeUrl } from "./fetch-guard";
+import { createFetchGuard, extractUrls, normalizeUrl } from "../../src/chat/fetch-guard";
 
 const opts = { signal: new AbortController().signal } as Parameters<
   ReturnType<typeof createFetchGuard>["canUseTool"]

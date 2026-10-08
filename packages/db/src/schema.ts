@@ -23,7 +23,7 @@ export const memories = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     // 주인 회원(Supabase 사용자 uuid). 외래 키는 걸지 않는다 — 다른 스키마의 테이블이다(specs/002).
-    // 주인 없는 행은 없다(FR-101) — 0008 추가 → assign-owner 채우기 → 0009 NOT NULL.
+    // 주인 없는 행은 없다(FR-101). 운영 전환(2026-10-08)은 0008 추가 → 기존 행 채우기 → 0009 NOT NULL.
     userId: uuid("user_id").notNull(),
     content: text("content").notNull(),
     category: text("category"),

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { withHistory } from "./history";
+import { withHistory } from "../../src/chat/history";
 
 const msg = (role: "user" | "assistant", text: string) => ({ role, text });
 

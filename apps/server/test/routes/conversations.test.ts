@@ -34,7 +34,7 @@ vi.mock("@navis/domain/errors", () => ({
   isEmbeddingError: () => false,
 }));
 
-const { app } = await import("./../app");
+const { app } = await import("../../src/app");
 
 const notFound = () => {
   const e = new Error("conversation 를 찾을 수 없다: zzz");

@@ -7,7 +7,7 @@ import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { USER_A, USER_B } from "../test-users";
 import { sql } from "drizzle-orm";
 import { db, conversations } from "@navis/db";
-import { NotFoundError } from "../errors";
+import { NotFoundError } from "../../src/errors";
 import {
   appendMessage,
   ensure,
@@ -17,7 +17,7 @@ import {
   removeMessage,
   setSessionId,
   titleFrom,
-} from "./index";
+} from "../../src/conversation/index";
 
 const PREFIX = "test-conv-";
 const id = (n: string) => `${PREFIX}${n}`;

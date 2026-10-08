@@ -30,7 +30,7 @@ vi.mock("@navis/domain", () => ({
   chat: {},
 }));
 
-const { app } = await import("./app");
+const { app } = await import("../src/app");
 
 const whoami = (headers: Record<string, string>) =>
   app.fetch(

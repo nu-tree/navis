@@ -7,7 +7,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { USER_A } from "../test-users";
 import { sql } from "drizzle-orm";
 import { db, memories } from "@navis/db";
-import { NotFoundError } from "../errors";
+import { NotFoundError } from "../../src/errors";
 
 const DIM = 1024;
 /** 축 하나만 1 인 벡터에 약간의 기울기 — 축이 같으면 가깝고, 다르면 멀다. */
@@ -22,18 +22,18 @@ const VECTORS: Record<string, number[]> = {
   "점심은 국밥": axis(10),
   "고친 내용": axis(20),
 };
-vi.mock("./embed", () => ({
+vi.mock("../../src/memory/embed", () => ({
   embed: vi.fn(async (text: string) => VECTORS[text] ?? axis(30)),
 }));
 
-const { save } = await import("./save");
-const { update } = await import("./update");
-const { remove } = await import("./remove");
-const { todos } = await import("./todos");
-const { neighbors } = await import("./neighbors");
-const { exportAll, serializeExport } = await import("./export");
-const { recent } = await import("./recent");
-const { embed } = await import("./embed");
+const { save } = await import("../../src/memory/save");
+const { update } = await import("../../src/memory/update");
+const { remove } = await import("../../src/memory/remove");
+const { todos } = await import("../../src/memory/todos");
+const { neighbors } = await import("../../src/memory/neighbors");
+const { exportAll, serializeExport } = await import("../../src/memory/export");
+const { recent } = await import("../../src/memory/recent");
+const { embed } = await import("../../src/memory/embed");
 
 const PROJECT = "test-mem-manage";
 const hasDb = Boolean(process.env.DATABASE_URL);

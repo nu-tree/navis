@@ -30,7 +30,7 @@ vi.mock("@navis/domain", () => ({
   settings: {},
 }));
 
-const { app } = await import("../app");
+const { app } = await import("../../src/app");
 
 const send = async () => {
   const res = await app.fetch(

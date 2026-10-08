@@ -117,32 +117,11 @@ gcloud secrets add-iam-policy-binding navis-settings-key \
 
 배포(2)와 등록(3) 사이에는 대화가 되지 않는다 — 몇 분이면 끝나지만 순서를 지킨다.
 
-## 다중 사용자 전환 (specs/002, 한 번만)
+## 다중 사용자 전환 (specs/002) — 2026-10-08 완료
 
-회원마다 기억 · 대화 · 설정을 나눈다. 순서를 지킨다 — 0009 와 배포 사이 몇 분은 옛 코드의 저장이
-실패한다(1인 운영이라 점검 시간으로 감수한다).
+운영 DB 의 기존 기억 · 대화 · 설정을 관리자(`navis-owner-id`)에게 옮기고 0008 · 0009 를 적용한 뒤
+배포했다. 한 번 쓰고 끝나는 도구(전환 스크립트 · 채우기 · 부분 마이그레이션)는 지웠다 — 다시
+필요하면 커밋 `ea7d4e0` 의 `packages/db/src/assign-owner.ts` 를 본다.
 
-```bash
-# 0) Supabase 대시보드 → Authentication → Sign In / Providers → "Allow new users to sign up" 끄기
-#    회원은 대시보드 → Users → "Invite user" / "Add user" 로만 만든다.
-#    JWT 만료를 10분으로 줄인다(Authentication → Sessions/JWT) — 막은 계정이 10분 안에 끊긴다.
-
-# 1) 관리자 uuid(대시보드 → Users 의 지금 계정 UID)를 비밀값으로
-printf '%s' '<관리자 UID>' | gcloud secrets create navis-owner-id --data-file=-
-gcloud secrets add-iam-policy-binding navis-owner-id \
-  --member=serviceAccount:navis-run@$PROJECT.iam.gserviceaccount.com \
-  --role=roles/secretmanager.secretAccessor
-
-# 2) 전환 전 건수 기록 + pgvector 버전 확인(0.8 이상이어야 hnsw.iterative_scan)
-#    select count(*) from memories; … conversations; … settings;
-#    select extversion from pg_extension where extname = 'vector';
-
-# 3) 마이그레이션 · 채우기 · 마이그레이션 · 배포 — 연달아
-DATABASE_URL=<운영> pnpm db:migrate                                    # 0008 user_id 추가
-DATABASE_URL=<운영> NAVIS_OWNER_ID=<관리자 UID> pnpm --filter @navis/db assign-owner
-DATABASE_URL=<운영> pnpm db:migrate                                    # 0009 NOT NULL
-./deploy/deploy.sh
-```
-
-4. assign-owner 가 출력한 건수 = 2) 의 건수인지 본다. 관리자로 로그인해 기억 · 방 · 설정이 그대로인지 본다.
-5. 회원을 만들 때: 대시보드에서 초대 → 회원이 로그인 → 설정 화면에서 자기 Claude 토큰 등록.
+회원 추가: Supabase 대시보드 → Users 에서 초대 · 생성 → 회원이 로그인 → 설정 화면에서 자기 Claude
+토큰 등록. 새로 만드는 빈 DB 는 평소처럼 `pnpm db:migrate` 한 번이면 된다.

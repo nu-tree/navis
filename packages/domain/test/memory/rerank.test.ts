@@ -1,7 +1,7 @@
 // T037 — 재정렬은 순수 함수다. FR-017(대등하면 최근 우선)의 경계를 고정한다.
 import { describe, expect, it } from "vitest";
 import type { RecallHit } from "@navis/validation";
-import { HALF_LIFE_DAYS, decay, rerank } from "./rerank";
+import { HALF_LIFE_DAYS, decay, rerank } from "../../src/memory/rerank";
 
 const NOW = new Date("2026-09-11T00:00:00.000Z");
 const daysAgo = (n: number) =>

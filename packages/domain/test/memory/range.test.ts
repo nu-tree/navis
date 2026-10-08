@@ -1,6 +1,6 @@
 // 기간 경계 — KST 하루로 읽히는지, until 이 그날 끝까지 포함하는지가 계약이다.
 import { describe, expect, it } from "vitest";
-import { kstDate, parseSince, parseUntil } from "./range";
+import { kstDate, parseSince, parseUntil } from "../../src/memory/range";
 
 // 2026-10-08 01:30 KST = 2026-10-07 16:30 UTC. UTC 로 읽으면 "오늘"이 하루 밀리는 시각이다.
 const now = new Date("2026-10-07T16:30:00Z");

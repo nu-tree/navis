@@ -1,6 +1,6 @@
 // T106 — data URL → 이미지 블록. 조용히 버리지 않는 것이 이 파일의 요점이다.
 import { describe, expect, it } from "vitest";
-import { MAX_IMAGES, toImageBlock, toImageBlocks } from "./images";
+import { MAX_IMAGES, toImageBlock, toImageBlocks } from "../../src/chat/images";
 
 const png = (data = "AAAA") => `data:image/png;base64,${data}`;
 

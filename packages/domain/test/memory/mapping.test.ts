@@ -7,7 +7,7 @@ import {
   toMemory,
   toMetadata,
   type MemoryRow,
-} from "./mapping";
+} from "../../src/memory/mapping";
 
 const row = (over: Partial<MemoryRow> = {}): MemoryRow => ({
   id: "11111111-1111-1111-1111-111111111111",

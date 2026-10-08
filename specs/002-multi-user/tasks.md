@@ -191,3 +191,6 @@ T011 server routes 계약
 
 테스트: domain 179 · server 84 통과(분리 테스트 포함). 로그인이 켜진 브라우저 두 계정으로의 확인은
 운영 전환 뒤 quickstart S2 로 한다.
+
+**운영 전환 (2026-10-08)**: 리비전 `navis-00013` 배포 완료. 전환에 쓴 일회성 도구(`assign-owner` ·
+`migrate-to` · `deploy/migrate-multi-user.sh`)는 끝난 뒤 지웠다.

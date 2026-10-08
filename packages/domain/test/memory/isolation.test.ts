@@ -6,25 +6,25 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db, memories } from "@navis/db";
-import { NotFoundError } from "../errors";
+import { NotFoundError } from "../../src/errors";
 import { USER_A, USER_B } from "../test-users";
 
 // 같은 내용이면 같은 벡터 — 내용이 같아도 남의 기억이 이웃으로 나오지 않는지 본다.
 const DIM = 1024;
 const vec = (seed: number) => Array.from({ length: DIM }, (_, k) => (k === seed ? 1 : 0));
-vi.mock("./embed", () => ({
+vi.mock("../../src/memory/embed", () => ({
   embed: vi.fn(async (text: string) => vec(text.includes("국밥") ? 1 : 2)),
 }));
 
-const { save } = await import("./save");
-const { recent } = await import("./recent");
-const { recall } = await import("./recall");
-const { todos } = await import("./todos");
-const { update } = await import("./update");
-const { remove } = await import("./remove");
-const { neighbors } = await import("./neighbors");
-const { exportAll } = await import("./export");
-const { projects, renameProject, similarProjects } = await import("./projects");
+const { save } = await import("../../src/memory/save");
+const { recent } = await import("../../src/memory/recent");
+const { recall } = await import("../../src/memory/recall");
+const { todos } = await import("../../src/memory/todos");
+const { update } = await import("../../src/memory/update");
+const { remove } = await import("../../src/memory/remove");
+const { neighbors } = await import("../../src/memory/neighbors");
+const { exportAll } = await import("../../src/memory/export");
+const { projects, renameProject, similarProjects } = await import("../../src/memory/projects");
 
 const PROJECT = "test-iso";
 const hasDb = Boolean(process.env.DATABASE_URL);

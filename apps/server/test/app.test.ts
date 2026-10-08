@@ -17,7 +17,7 @@ vi.stubEnv("NAVIS_OWNER_ID", "00000000-0000-4000-8000-000000000001");
 let app: { fetch: (req: Request) => Response | Promise<Response> };
 
 beforeAll(async () => {
-  ({ app } = await import("./app"));
+  ({ app } = await import("../src/app"));
 });
 
 const get = (path: string, token?: string) =>

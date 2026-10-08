@@ -44,7 +44,7 @@ vi.mock("@navis/domain/errors", () => ({
   isEmbeddingError: (e: unknown) => e instanceof FakeEmbeddingError,
 }));
 
-const { app } = await import("./../app");
+const { app } = await import("../../src/app");
 
 const memory = {
   id: "m1",

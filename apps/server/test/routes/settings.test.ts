@@ -36,7 +36,7 @@ vi.mock("@navis/domain", () => ({
   chat: { runTurn: vi.fn() },
 }));
 
-const { app } = await import("../app");
+const { app } = await import("../../src/app");
 
 const req = (
   method: string,

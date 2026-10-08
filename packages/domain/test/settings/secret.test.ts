@@ -1,7 +1,7 @@
 // T091 — 설정 값 암호화의 계약.
 import { randomBytes } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { decrypt, encrypt, parseKey, SecretError } from "./secret";
+import { decrypt, encrypt, parseKey, SecretError } from "../../src/settings/secret";
 
 const key = randomBytes(32);
 const TOKEN = "sk-ant-oat01-example-token-value";

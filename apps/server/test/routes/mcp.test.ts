@@ -17,7 +17,7 @@ vi.stubEnv("NAVIS_MCP_TOKEN", MCP_TOKEN);
 let app: { fetch: (req: Request) => Response | Promise<Response> };
 
 beforeAll(async () => {
-  ({ app } = await import("../app"));
+  ({ app } = await import("../../src/app"));
 });
 
 const rpc = (body: unknown, token?: string) =>
