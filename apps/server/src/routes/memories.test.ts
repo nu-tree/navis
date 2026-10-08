@@ -127,11 +127,11 @@ describe("GET /memories", () => {
     expect((await res.json()) as unknown[]).toHaveLength(1);
   });
 
-  it("쿼리의 limit·days 를 숫자로 넘긴다", async () => {
+  it("쿼리의 limit·days·offset 을 숫자로 넘긴다", async () => {
     recent.mockResolvedValue([]);
-    await req("/memories?limit=10&days=7&category=todo");
+    await req("/memories?limit=10&days=7&offset=50&category=todo");
     expect(recent).toHaveBeenCalledWith(
-      expect.objectContaining({ limit: 10, days: 7, category: "todo" }),
+      expect.objectContaining({ limit: 10, days: 7, offset: 50, category: "todo" }),
     );
   });
 

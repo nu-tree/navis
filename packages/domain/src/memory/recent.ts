@@ -40,7 +40,8 @@ export async function recent(input: RecentInput = {}): Promise<Memory[]> {
     .where(conditions.length ? and(...conditions) : undefined)
     // memories_created_at_idx 가 created_at DESC 로 있다.
     .orderBy(desc(memories.createdAt))
-    .limit(input.limit ?? DEFAULT_LIMIT);
+    .limit(input.limit ?? DEFAULT_LIMIT)
+    .offset(input.offset ?? 0);
 
   return rows.map((row) => toMemory(row satisfies MemoryRow));
 }

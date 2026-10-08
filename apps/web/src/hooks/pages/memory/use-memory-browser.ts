@@ -18,9 +18,6 @@ export type Period = (typeof PERIODS)[number]["value"];
 export const PROJECT_ALL = "__all";
 export const PROJECT_PERSONAL = "__personal";
 
-/** 목록 한 번에 받을 개수. recentInputSchema 상한은 500. */
-const LIST_LIMIT = 200;
-
 export type BrowsedMemory = { memory: Memory; score?: number };
 
 /**
@@ -48,19 +45,23 @@ export const useMemoryBrowser = () => {
   const days = PERIODS.find((p) => p.value === period)?.days;
 
   const searching = query.length > 0;
-  const list = useMemoryList({ ...filters, ...(days ? { days } : {}), limit: LIST_LIMIT }, !searching);
+  const list = useMemoryList({ ...filters, ...(days ? { days } : {}) }, !searching);
   const search = useMemorySearch({ query, ...filters, limit: 50 });
   const active = searching ? search : list;
 
   const items: BrowsedMemory[] = searching
     ? (search.data ?? [])
-    : (list.data ?? []).map((memory) => ({ memory }));
+    : (list.data?.pages.flat() ?? []).map((memory) => ({ memory }));
 
   return {
     items,
     isLoading: active.isLoading,
     error: active.error?.message ?? null,
     searching,
+    // 검색은 상위 50건만 — 더 보기는 목록에만 있다.
+    hasMore: !searching && list.hasNextPage,
+    loadingMore: list.isFetchingNextPage,
+    loadMore: () => void list.fetchNextPage(),
     query,
     search: (text: string) => setQuery(text.trim()),
     clearSearch: () => setQuery(""),

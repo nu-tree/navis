@@ -18,7 +18,7 @@ import {
 /** 쿼리스트링은 전부 문자열로 온다. 숫자 필드만 골라 되돌린다. */
 const numericQuery = (raw: Record<string, string>) => {
   const out: Record<string, unknown> = { ...raw };
-  for (const key of ["limit", "days"] as const) {
+  for (const key of ["limit", "days", "offset"] as const) {
     if (raw[key] !== undefined) out[key] = Number(raw[key]);
   }
   // 불리언은 "true" 만 참이다. "false" 를 Boolean() 하면 참이 된다.

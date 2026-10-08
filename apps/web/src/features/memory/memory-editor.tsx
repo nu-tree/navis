@@ -24,6 +24,9 @@ type Props = {
   onOpenChange: (open: boolean) => void;
 };
 
+/** Select 는 빈 값을 항목으로 쓸 수 없다 — "분류 없음"의 자리표시 값. */
+const NO_CATEGORY = "__none";
+
 const parseTags = (raw: string) =>
   raw
     .split(",")
@@ -39,7 +42,7 @@ export const MemoryEditor = ({ memory, open, onOpenChange }: Readonly<Props>) =>
   const { mutate: updateMemory, isPending } = useUpdateMemory();
 
   const [content, setContent] = useState(memory.content);
-  const [category, setCategory] = useState<Category | undefined>(memory.category ?? undefined);
+  const [category, setCategory] = useState<Category | null>(memory.category);
   const [project, setProject] = useState(memory.project ?? "");
   const [tags, setTags] = useState(memory.tags.join(", "));
 
@@ -49,7 +52,8 @@ export const MemoryEditor = ({ memory, open, onOpenChange }: Readonly<Props>) =>
     const patch: UpdateInput = {
       id: memory.id,
       ...(content.trim() !== memory.content ? { content: content.trim() } : {}),
-      ...(category && category !== memory.category ? { category } : {}),
+      // null 이면 분류를 비운다.
+      ...(category !== memory.category ? { category } : {}),
       // 빈 문자열이면 서버가 개인 기억으로 되돌린다.
       ...(project.trim() !== (memory.project ?? "") ? { project: project.trim() } : {}),
       ...(nextTags.join(",") !== memory.tags.join(",") ? { tags: nextTags } : {}),
@@ -63,8 +67,10 @@ export const MemoryEditor = ({ memory, open, onOpenChange }: Readonly<Props>) =>
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <form onSubmit={submit} className="space-y-4">
+      {/* 긴 기억이면 창이 화면을 넘는다 — 창 높이를 묶고 안에서 스크롤한다. */}
+      <DialogContent className="max-h-[90dvh] overflow-y-auto">
+        {/* DialogContent 는 grid 라 자식이 내용 폭만큼 늘어난다 — min-w-0 으로 창 폭에 묶는다. */}
+        <form onSubmit={submit} className="min-w-0 space-y-4">
           <DialogHeader>
             <DialogTitle>기억 고치기</DialogTitle>
             <DialogDescription>내용을 고치면 이후 검색과 대화에서도 고친 내용으로 찾습니다.</DialogDescription>
@@ -75,15 +81,20 @@ export const MemoryEditor = ({ memory, open, onOpenChange }: Readonly<Props>) =>
             value={content}
             onChange={(e) => setContent(e.target.value)}
             required
-            className="min-h-28"
+            // Textarea 는 내용만큼 자란다(field-sizing-content). 긴 기억은 안에서 스크롤한다.
+            className="max-h-[45dvh] min-h-28 wrap-anywhere"
           />
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <Select value={category} onValueChange={(v) => setCategory(v as Category)}>
+            <Select
+              value={category ?? NO_CATEGORY}
+              onValueChange={(v) => setCategory(v === NO_CATEGORY ? null : (v as Category))}
+            >
               <SelectTrigger aria-label="분류" className="w-full">
-                <SelectValue placeholder="분류 없음" />
+                <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value={NO_CATEGORY}>분류 없음</SelectItem>
                 {CATEGORIES.map((c) => (
                   <SelectItem key={c} value={c}>
                     {CATEGORY_LABELS[c]}

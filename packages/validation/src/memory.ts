@@ -69,6 +69,9 @@ export const recentInputSchema = z.object({
   until: dateBoundSchema,
   // 기간 조회는 "그 기간 전건"이 목적이라 상한을 넉넉히 둔다.
   limit: z.number().int().min(1).max(500).optional(),
+  // 기억 화면의 "더 보기". 최신순이라 그 사이 새 기억이 저장되면 한 칸씩 밀린다 — 화면이
+  // 목록을 다시 받으면 맞춰진다. 이 규모에서는 커서보다 단순한 쪽을 쓴다.
+  offset: z.number().int().min(0).max(100_000).optional(),
   category: categorySchema.optional(),
   project: projectSchema,
   ...projectScopeFields,
@@ -78,7 +81,8 @@ export type RecentInput = z.infer<typeof recentInputSchema>;
 export const updateInputSchema = z.object({
   id: z.string().min(1),
   content: z.string().min(1).optional(),
-  category: categorySchema.optional(),
+  // null 이면 분류를 비운다. 생략하면 그대로 둔다.
+  category: categorySchema.nullable().optional(),
   // 할 일 완료/미완료
   done: z.boolean().optional(),
   // 빈 문자열이면 개인 기억으로 되돌림

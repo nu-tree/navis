@@ -91,6 +91,12 @@ describeDb("기억 직접 관리 (실제 DB)", () => {
       expect(out.done).toBe(false);
     });
 
+    it("category: null 이면 분류를 비운다", async () => {
+      const m = await put("점심은 국밥", { content: "", category: "idea" });
+      const out = await update({ id: m.id, category: null });
+      expect(out.category).toBeNull();
+    });
+
     it("빈 project 는 개인 기억으로 되돌린다", async () => {
       const m = await put("점심은 국밥");
       const out = await update({ id: m.id, project: "" });
@@ -188,6 +194,18 @@ describeDb("기억 직접 관리 (실제 DB)", () => {
       } finally {
         await remove(personal.id);
       }
+    });
+  });
+
+  describe("recent() offset", () => {
+    it("다음 쪽은 앞 쪽과 겹치지 않고 이어진다", async () => {
+      for (const c of ["하나", "둘", "셋"]) await put(c);
+      const scope = { project: PROJECT, exactProject: true } as const;
+      const first = await recent({ ...scope, limit: 2 });
+      const second = await recent({ ...scope, limit: 2, offset: 2 });
+      expect(first).toHaveLength(2);
+      expect(second).toHaveLength(1);
+      expect(new Set([...first, ...second].map((m) => m.id)).size).toBe(3);
     });
   });
 

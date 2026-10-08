@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toUploadDataUrl } from "@/utils/image-resize";
 
 /** 와이어 계약(chatRequestSchema.images)과 도메인(MAX_IMAGES)의 상한과 일치해야 한다. */
 export const MAX_IMAGES = 8;
@@ -10,13 +11,6 @@ const ACCEPTED = ["image/jpeg", "image/png", "image/gif", "image/webp"];
 
 export const ACCEPT_ATTR = ACCEPTED.join(",");
 
-const readAsDataUrl = (file: File) =>
-  new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(new Error(`${file.name} 을 읽지 못했다.`));
-    reader.readAsDataURL(file);
-  });
 
 /**
  * 첨부 이미지 상태. 파일 읽기와 상한 판정을 훅이 갖고, 화면은 결과만 그린다
@@ -47,7 +41,8 @@ export function useImageAttachments() {
     if (taken.length === 0) return;
 
     try {
-      const urls = await Promise.all(taken.map(readAsDataUrl));
+      // 큰 이미지는 보내기 전에 줄인다(utils/image-resize.ts).
+      const urls = await Promise.all(taken.map(toUploadDataUrl));
       setImages((prev) => [...prev, ...urls].slice(0, MAX_IMAGES));
     } catch (err) {
       setError(err instanceof Error ? err.message : "이미지를 읽지 못했다.");

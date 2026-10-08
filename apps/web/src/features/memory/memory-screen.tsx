@@ -43,6 +43,9 @@ export const MemoryScreen = () => {
                 isLoading={browser.isLoading}
                 error={browser.error}
                 emptyText={browser.searching ? "관련된 기억이 없어요." : "아직 기억이 없어요."}
+                hasMore={browser.hasMore}
+                loadingMore={browser.loadingMore}
+                onLoadMore={browser.loadMore}
               />
             </TabsContent>
 
