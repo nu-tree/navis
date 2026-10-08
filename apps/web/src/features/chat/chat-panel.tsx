@@ -15,14 +15,17 @@ type Props = {
   conversationId: string;
   /** 턴이 끝난 뒤 방 목록을 갱신한다. */
   onTurnEnd?: () => void;
+  /** 다른 탭에 있다가 답 알림을 누르면 그 방을 연다. */
+  onOpen?: (conversationId: string) => void;
 };
 
-export const ChatPanel = ({ conversationId, onTurnEnd }: Readonly<Props>) => {
+export const ChatPanel = ({ conversationId, onTurnEnd, onOpen }: Readonly<Props>) => {
   const { data: messages = [] } = useConversationMessageList(conversationId);
   const { mutate: removeMessage } = useDeleteConversationMessage(conversationId);
   const { streaming, tool, error, errorCode, send, stop } = useChat({
     conversationId,
     ...(onTurnEnd ? { onTurnEnd } : {}),
+    ...(onOpen ? { onOpen: () => onOpen(conversationId) } : {}),
   });
   // 새 메시지·델타가 오면 바닥으로 따라간다. 위로 올려 읽는 중이면 그대로 둔다.
   const { ref: scrollRef, onScroll, stick } = useStickToBottom<HTMLDivElement>([messages, streaming]);

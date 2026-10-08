@@ -23,7 +23,7 @@ export const Workspace = () => {
     >
       {/* key 로 방이 바뀔 때 패널 상태를 통째로 갈아끼운다 — 이전 방의
           스트리밍 버퍼나 오류가 새 방에 남지 않는다(FR-031). */}
-      <ChatPanel key={selectedId} conversationId={selectedId} onTurnEnd={refresh} />
+      <ChatPanel key={selectedId} conversationId={selectedId} onTurnEnd={refresh} onOpen={select} />
       <OnboardingTour />
     </AppShell>
   );

@@ -7,12 +7,15 @@ import type { SendInput } from "@/features/chat/chat-input";
 import { useCancelChat } from "@/hooks/apis/chat/use-cancel-chat";
 import { getConversationMessageListQueryOptions } from "@/hooks/apis/conversation/use-conversation-message-list";
 import { getChatTurn, useChatTurn, useChatTurnStore, type ChatTurn } from "@/store/chat-turn-store";
+import { notifyAnswer, requestAnswerNotificationPermission } from "@/utils/answer-notification";
 
 type UseChatInput = {
   /** 이 턴이 속한 방. 서버가 이걸로 에이전트 세션을 이어 붙인다. */
   conversationId: string;
   /** 턴이 끝난 뒤. 방 목록 갱신에 쓴다. */
   onTurnEnd?: () => void;
+  /** 다른 탭에 있다가 답 알림을 누르면 — 이 방을 연다. */
+  onOpen?: () => void;
 };
 
 /** 서버가 거절한 요청. 문구가 사람이 읽을 수 있게 정리돼 있다. */
@@ -43,7 +46,7 @@ const failureMessage = async (res: Response): Promise<string> => {
 //
 // 메시지는 그 방의 쿼리 캐시에 직접 쓴다. 패널이 닫혀 있어도 캐시는 살아 있으므로, 다른 방에
 // 가 있는 사이 끝난 답도 그 방 캐시에 들어가 돌아오면 바로 보인다.
-export function useChat({ conversationId, onTurnEnd }: UseChatInput) {
+export function useChat({ conversationId, onTurnEnd, onOpen }: UseChatInput) {
   const queryClient = useQueryClient();
   const { mutate: cancelChat } = useCancelChat();
   const { streaming, tool, error, errorCode, turnId } = useChatTurn(conversationId);
@@ -75,6 +78,9 @@ export function useChat({ conversationId, onTurnEnd }: UseChatInput) {
   const send = async ({ text, images, model }: SendInput) => {
     // 이 방에서 턴이 도는 중엔 새 턴을 만들지 않는다. 다른 방은 상관없다.
     if (getChatTurn(conversationId).streaming !== null) return;
+
+    // 첫 await 전 — 사파리는 사용자 동작 안에서만 권한을 물을 수 있다.
+    requestAnswerNotificationPermission();
 
     const id = crypto.randomUUID();
     // 진행 중 표시를 먼저 켠다 — 아래 await 사이에 한 번 더 눌러도 두 번 보내지 않는다.
@@ -133,6 +139,7 @@ export function useChat({ conversationId, onTurnEnd }: UseChatInput) {
             // 최종 전문은 서버가 권위다 — 델타를 이어 붙인 것과 다를 수 있다.
             // message 에 saved 가 실려 오므로 저장 표시도 여기서 함께 확정된다.
             append(event.message);
+            notifyAnswer({ conversationId, body: event.message.text, ...(onOpen ? { onClick: onOpen } : {}) });
             break;
           case "aborted":
             cancelFlush();
@@ -154,6 +161,7 @@ export function useChat({ conversationId, onTurnEnd }: UseChatInput) {
             break;
           case "error":
             update({ error: event.message, errorCode: event.code ?? null });
+            notifyAnswer({ conversationId, body: `⚠️ ${event.message}`, ...(onOpen ? { onClick: onOpen } : {}) });
             break;
           // thinking 은 아직 화면에 쓰지 않는다.
         }
