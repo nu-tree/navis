@@ -16,8 +16,8 @@ export const getConversationMessageListQueryOptions = (conversationId: string) =
       }
       return res.data.messages;
     },
-    // 방을 열 때마다(패널이 key 로 다시 마운트된다) 서버에서 다시 받는다 — 떠난 사이 끝난
-    // 턴의 답은 화면으로 배달되지 않고 서버에만 저장된다(turn-store.ts).
+    // 방을 열 때마다(패널이 key 로 다시 마운트된다) 서버에서 다시 받아 서버 기록과 맞춘다.
+    // 이 탭에서 오간 메시지는 use-chat 이 이 캐시에 직접 쓴다.
     staleTime: 0,
     // 창 포커스로는 다시 받지 않는다. 화면에만 있는 중지된 부분 답(FR-004)을 서버
     // 응답이 덮어 사라지게 한다.

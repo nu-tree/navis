@@ -6,7 +6,8 @@ import { MessageBubble } from "./message-bubble";
 import { MessageList } from "./message-list";
 import { TypingIndicator } from "./typing-indicator";
 import { useChat } from "@/hooks/pages/chat/use-chat";
-import { useChatMessages } from "@/hooks/pages/chat/use-chat-messages";
+import { useConversationMessageList } from "@/hooks/apis/conversation/use-conversation-message-list";
+import { useDeleteConversationMessage } from "@/hooks/apis/conversation/use-delete-conversation-message";
 
 type Props = {
   /** 열려 있는 방. 아직 첫 메시지를 보내지 않은 새 방도 id 를 갖는다. */
@@ -16,11 +17,10 @@ type Props = {
 };
 
 export const ChatPanel = ({ conversationId, onTurnEnd }: Readonly<Props>) => {
-  const { messages, setMessages, removeMessage } = useChatMessages(conversationId);
+  const { data: messages = [] } = useConversationMessageList(conversationId);
+  const { mutate: removeMessage } = useDeleteConversationMessage(conversationId);
   const { streaming, tool, error, send, stop } = useChat({
     conversationId,
-    messages,
-    setMessages,
     ...(onTurnEnd ? { onTurnEnd } : {}),
   });
   const scrollRef = useRef<HTMLDivElement>(null);
