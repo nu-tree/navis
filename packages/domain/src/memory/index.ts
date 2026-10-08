@@ -19,7 +19,7 @@ export { remove } from "./remove";
 export { todos } from "./todos";
 export { neighbors } from "./neighbors";
 export { exportAll, serializeExport } from "./export";
-export { projects, renameProject, similarProjects, projectKey } from "./projects";
+export { projects, renameProject, similarProjects } from "./projects";
 export { parseSince, parseUntil, kstDate } from "./range";
 export { rerank, decay, HALF_LIFE_DAYS } from "./rerank";
 export { embed, embedMany, EMBEDDING_DIMENSIONS } from "./embed";

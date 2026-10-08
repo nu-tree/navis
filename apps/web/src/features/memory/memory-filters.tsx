@@ -15,6 +15,7 @@ import {
   type useMemoryBrowser,
 } from "@/hooks/pages/memory/use-memory-browser";
 import { CATEGORY_LABELS } from "./category";
+import { ProjectManager } from "./project-manager";
 
 type Props = { browser: ReturnType<typeof useMemoryBrowser> };
 
@@ -102,6 +103,10 @@ export const MemoryFilters = ({ browser }: Readonly<Props>) => {
             </SelectContent>
           </Select>
         )}
+
+        <div className="flex-1" />
+        {/* 필터가 옛 이름을 보고 있었으면 새 이름으로 따라간다 — 안 그러면 빈 목록이 된다. */}
+        <ProjectManager onRenamed={(from, to) => browser.project === from && browser.setProject(to)} />
       </div>
     </div>
   );

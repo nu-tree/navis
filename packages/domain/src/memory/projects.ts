@@ -10,10 +10,11 @@
 
 import { count, desc, eq, isNotNull, max } from "drizzle-orm";
 import { db, memories } from "@navis/db";
-import type {
-  ProjectSummary,
-  RenameProjectInput,
-  RenameProjectResult,
+import {
+  projectKey,
+  type ProjectSummary,
+  type RenameProjectInput,
+  type RenameProjectResult,
 } from "@navis/validation";
 import { NotFoundError } from "../errors";
 
@@ -67,16 +68,6 @@ export async function renameProject(
     return { from, to, moved: moved.length, merged: Number(target?.n ?? 0) > 0 };
   });
 }
-
-/**
- * 표기만 다른 이름을 같은 키로 접는다: 대소문자 · 공백 · 하이픈 · 밑줄 · 점 등을 무시한다.
- * 'soopsns' · 'soop-sns' · 'Soop_SNS' 가 모두 같은 키다.
- *
- * 편집 거리 같은 느슨한 비교는 하지 않는다 — 'navis' 와 'nevis' 를 같다고 경고하면
- * 경고가 잡음이 되고, 잡음인 경고는 무시된다.
- */
-export const projectKey = (name: string): string =>
-  name.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
 
 /** name 과 키가 같지만 표기가 다른 기존 스코프들. */
 export async function similarProjects(name: string): Promise<string[]> {

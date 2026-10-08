@@ -125,6 +125,16 @@ export const projectSummarySchema = z.object({
 });
 export type ProjectSummary = z.infer<typeof projectSummarySchema>;
 
+/**
+ * 표기만 다른 프로젝트 이름을 같은 키로 접는다 — 대소문자 · 공백 · 하이픈 · 밑줄 · 점 등을 무시한다.
+ * 'soopsns' · 'soop-sns' · 'Soop_SNS' 가 모두 같은 키다. 서버(저장 시 경고)와 웹(합칠 후보 표시)이
+ * 같은 규칙을 써야 해서 여기 둔다.
+ *
+ * 편집 거리 같은 느슨한 비교는 하지 않는다 — 'navis' 와 'nevis' 를 같다고 하면 경고가 잡음이 된다.
+ */
+export const projectKey = (name: string): string =>
+  name.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+
 export const renameProjectResultSchema = z.object({
   from: z.string(),
   to: z.string(),

@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import type { Memory } from "@navis/validation";
 import { formatByProject } from "./format";
-import { projectKey } from "./projects";
+import { projectKey } from "@navis/validation";
 
 const m = (content: string, project: string | null, createdAt: string): Memory => ({
   id: content,
