@@ -8,6 +8,7 @@
 // 미리 만들지 않는다(헌장 원칙 I).
 
 import type { Category, Memory } from "@navis/validation";
+import { NotFoundError } from "../errors";
 
 /** DB 행의 metadata jsonb 안에 들어가는 것. */
 export type MemoryMetadata = {
@@ -115,3 +116,13 @@ export const mergeMetadata = (
 /** 빈 문자열이면 개인·전역 기억으로 되돌린다(updateInputSchema 주석의 규약). */
 export const normalizeProject = (raw: string | undefined): string | null | undefined =>
   raw === undefined ? undefined : raw.trim() === "" ? null : raw.trim();
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * 기억 id 는 uuid 다. 형식이 아니면 DB 에 묻기 전에 "없다"로 답한다 — 그대로 넘기면 Postgres 가
+ * 형식 오류를 던져 404 여야 할 것이 500 이 된다.
+ */
+export const assertMemoryId = (id: string) => {
+  if (!UUID.test(id)) throw new NotFoundError("memory", id);
+};

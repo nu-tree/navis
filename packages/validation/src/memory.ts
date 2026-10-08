@@ -20,6 +20,15 @@ export const projectSchema = z
   .optional()
   .describe("프로젝트 스코프 (선택). 조회 시 해당 프로젝트+개인 기억만.");
 
+// 프로젝트 필터의 범위. 기본(둘 다 없음)은 "그 프로젝트 + 개인 기억"(FR-018) — 대화에서 맥락을
+// 좁힐 때의 규칙이다. 기억 화면처럼 정리하는 자리에서는 정확히 그 범위만 봐야 한다.
+const projectScopeFields = {
+  /** project 와 함께 쓰면 개인 기억을 섞지 않고 그 프로젝트만. */
+  exactProject: z.boolean().optional(),
+  /** 개인 기억(프로젝트 없음)만. project 와 함께 쓰지 않는다. */
+  personalOnly: z.boolean().optional(),
+};
+
 // ── 도구 입력 ────────────────────────────────────────────────────────
 // MCP 도구 입력과 HTTP 요청 본문이 같은 모양이라 한 곳에서 정의한다.
 // 모델을 향한 설명문(description)은 MCP 등록부에 두고, 여기엔 형태만 둔다.
@@ -38,6 +47,7 @@ export const recallInputSchema = z.object({
   limit: z.number().int().min(1).max(50).optional(),
   category: categorySchema.optional(),
   project: projectSchema,
+  ...projectScopeFields,
   withRelated: z.boolean().optional(),
 });
 export type RecallInput = z.infer<typeof recallInputSchema>;
@@ -61,6 +71,7 @@ export const recentInputSchema = z.object({
   limit: z.number().int().min(1).max(500).optional(),
   category: categorySchema.optional(),
   project: projectSchema,
+  ...projectScopeFields,
 });
 export type RecentInput = z.infer<typeof recentInputSchema>;
 

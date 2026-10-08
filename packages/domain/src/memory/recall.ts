@@ -8,12 +8,13 @@
 // 전체 스캔이 된다. 기억이 1천 건일 땐 티가 안 나지만 SC-007(1초/1,000건)을 인덱스
 // 없이 지키는 건 규모가 커지면 무너진다.
 
-import { and, eq, isNull, or, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db, memories } from "@navis/db";
 import type { RecallHit, RecallInput } from "@navis/validation";
 import { embed } from "./embed";
 import { toMemory, type MemoryRow } from "./mapping";
 import { rerank } from "./rerank";
+import { projectScope } from "./scope";
 
 /** recallInputSchema 의 limit 상한과 반드시 일치해야 한다(FR-019). */
 const MAX_LIMIT = 50;
@@ -38,11 +39,7 @@ export async function recall(input: RecallInput): Promise<RecallHit[]> {
   const conditions = [
     sql`${memories.embedding} is not null`,
     input.category ? eq(memories.category, input.category) : undefined,
-    // 프로젝트가 주어지면 "그 프로젝트 + 개인 기억" 으로 좁힌다(FR-018).
-    // 개인 기억을 빼면 프로젝트 맥락에서 사용자 자신에 관한 것을 못 본다.
-    input.project
-      ? or(eq(memories.project, input.project), isNull(memories.project))
-      : undefined,
+    projectScope(input),
   ].filter((c) => c !== undefined);
 
   // ★ hnsw.ef_search 기본값은 40 이다. 후보를 그보다 많이 요청하면 인덱스가 쓰이는

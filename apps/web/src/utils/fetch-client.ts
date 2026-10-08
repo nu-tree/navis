@@ -7,12 +7,28 @@ export type FetchSuccess<T> = { ok: true; data: T; status: number };
 export type FetchFailure = { ok: false; error: { message: string; status: number } };
 export type FetchResult<T> = FetchSuccess<T> | FetchFailure;
 
-type FetchOptions = Omit<RequestInit, "body"> & { body?: unknown };
+type QueryValue = string | number | boolean | null | undefined;
+
+type FetchOptions = Omit<RequestInit, "body"> & {
+  body?: unknown;
+  /** 쿼리스트링. undefined · null · "" 는 싣지 않는다 — "필터 없음"과 "빈 필터"를 같게 본다. */
+  params?: Record<string, QueryValue>;
+};
+
+const withParams = (url: string, params?: Record<string, QueryValue>) => {
+  if (!params) return url;
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== "") search.append(key, String(value));
+  }
+  const qs = search.toString();
+  return qs ? `${url}?${qs}` : url;
+};
 type MethodOptions = Omit<FetchOptions, "method" | "body">;
 
 export async function fetchClient<T>(url: string, options?: FetchOptions): Promise<FetchResult<T>> {
-  const { body, headers, ...init } = options ?? {};
-  const res = await fetch(url, {
+  const { body, headers, params, ...init } = options ?? {};
+  const res = await fetch(withParams(url, params), {
     ...init,
     headers: {
       ...(body !== undefined ? { "content-type": "application/json" } : {}),
@@ -37,6 +53,10 @@ export function fetchGet<T>(url: string, options?: MethodOptions): Promise<Fetch
 
 export function fetchPost<T>(url: string, body?: unknown, options?: MethodOptions): Promise<FetchResult<T>> {
   return fetchClient<T>(url, { ...options, method: "POST", body });
+}
+
+export function fetchPatch<T>(url: string, body?: unknown, options?: MethodOptions): Promise<FetchResult<T>> {
+  return fetchClient<T>(url, { ...options, method: "PATCH", body });
 }
 
 export function fetchDelete<T>(url: string, body?: unknown, options?: MethodOptions): Promise<FetchResult<T>> {

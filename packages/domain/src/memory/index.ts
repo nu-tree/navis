@@ -5,14 +5,20 @@
 //   ../embedding.ts → embed()   ✅ 무가드 인덱싱을 가드로 감쌌다(STRUCTURE.md 8항)
 //   recent.ts     → recent()    ✅ 최소 구현. 필터 전체는 US4
 //   recall.ts     → recall()    ✅ 후보 N건 + 시간 가중치 재정렬(rerank.ts)
-//   update.ts     → update()    US4 (content 변경 시 재임베딩)
-//   remove.ts     → remove()    US4
-//   todos.ts      → todos()     US4
+//   update.ts     → update()    ✅ content 변경 시 재임베딩
+//   remove.ts     → remove()    ✅
+//   todos.ts      → todos()     ✅
+//   (신규) neighbors.ts · export.ts — 겹치는 기억 찾기 · 내보내기(FR-047, FR-050)
 //   graphify.ts   → 가져오지 않는다 (범위 밖)
 
 export { save } from "./save";
 export { recent } from "./recent";
 export { recall } from "./recall";
+export { update } from "./update";
+export { remove } from "./remove";
+export { todos } from "./todos";
+export { neighbors } from "./neighbors";
+export { exportAll, serializeExport } from "./export";
 export { projects, renameProject, similarProjects, projectKey } from "./projects";
 export { parseSince, parseUntil, kstDate } from "./range";
 export { rerank, decay, HALF_LIFE_DAYS } from "./rerank";

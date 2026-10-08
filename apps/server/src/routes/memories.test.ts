@@ -10,6 +10,11 @@ const recent = vi.fn();
 const recall = vi.fn();
 const projects = vi.fn();
 const renameProject = vi.fn();
+const update = vi.fn();
+const remove = vi.fn();
+const todos = vi.fn();
+const neighbors = vi.fn();
+const exportAll = vi.fn();
 
 vi.mock("@navis/domain", () => ({
   memory: {
@@ -18,6 +23,12 @@ vi.mock("@navis/domain", () => ({
     recall: (...a: unknown[]) => recall(...a),
     projects: (...a: unknown[]) => projects(...a),
     renameProject: (...a: unknown[]) => renameProject(...a),
+    update: (...a: unknown[]) => update(...a),
+    remove: (...a: unknown[]) => remove(...a),
+    todos: (...a: unknown[]) => todos(...a),
+    neighbors: (...a: unknown[]) => neighbors(...a),
+    exportAll: (...a: unknown[]) => exportAll(...a),
+    serializeExport: (d: unknown) => `${JSON.stringify(d, null, 2)}\n`,
   },
   chat: { runTurn: vi.fn() },
 }));
@@ -260,5 +271,81 @@ describe("프로젝트 스코프", () => {
     renameProject.mockRejectedValue(e);
     const res = await rename({ from: "nope", to: "navis" });
     expect(res.status).toBe(404);
+  });
+});
+
+describe("기억 직접 관리 (US4)", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const notFound = () => {
+    const e = new Error("memory 를 찾을 수 없다: x");
+    e.name = "NotFoundError";
+    return e;
+  };
+
+  it("PATCH 는 경로의 id 로 고친다 — 본문의 id 는 무시한다", async () => {
+    update.mockResolvedValue({ ...memory, content: "고친 내용" });
+    const res = await req("/memories/m1", {
+      method: "PATCH",
+      body: JSON.stringify({ id: "other", content: "고친 내용" }),
+    });
+    expect(res.status).toBe(200);
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ id: "m1", content: "고친 내용" }));
+  });
+
+  it("PATCH 의 잘못된 분류는 400", async () => {
+    const res = await req("/memories/m1", {
+      method: "PATCH",
+      body: JSON.stringify({ category: "garbage" }),
+    });
+    expect(res.status).toBe(400);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("없는 id 의 PATCH · DELETE · neighbors 는 404", async () => {
+    update.mockRejectedValue(notFound());
+    remove.mockRejectedValue(notFound());
+    neighbors.mockRejectedValue(notFound());
+    const patch = await req("/memories/x", { method: "PATCH", body: JSON.stringify({ done: true }) });
+    const del = await req("/memories/x", { method: "DELETE" });
+    const nb = await req("/memories/x/neighbors");
+    expect([patch.status, del.status, nb.status]).toEqual([404, 404, 404]);
+  });
+
+  it("DELETE 는 { ok }", async () => {
+    remove.mockResolvedValue({ ok: true });
+    const res = await req("/memories/m1", { method: "DELETE" });
+    expect(await res.json()).toEqual({ ok: true });
+  });
+
+  it("neighbors 의 limit 상한(20)을 넘으면 400", async () => {
+    const res = await req("/memories/m1/neighbors?limit=21");
+    expect(res.status).toBe(400);
+    expect(neighbors).not.toHaveBeenCalled();
+  });
+
+  it("todos 의 includeDone 은 'true' 만 참이다", async () => {
+    todos.mockResolvedValue([]);
+    await req("/memories/todos?includeDone=false");
+    expect(todos).toHaveBeenCalledWith(expect.objectContaining({ includeDone: false }));
+    await req("/memories/todos?includeDone=true");
+    expect(todos).toHaveBeenLastCalledWith(expect.objectContaining({ includeDone: true }));
+  });
+
+  // 정적 경로가 /:id 에 잡아먹히면 todos 가 "todos 라는 id 의 기억"이 된다.
+  it("/todos · /export 가 /:id 로 해석되지 않는다", async () => {
+    todos.mockResolvedValue([]);
+    exportAll.mockResolvedValue({ exportedAt: "x", count: 0, memories: [] });
+    await req("/memories/todos");
+    await req("/memories/export");
+    expect(todos).toHaveBeenCalled();
+    expect(exportAll).toHaveBeenCalled();
+  });
+
+  it("export 는 0건에서도 200 + count: 0 (FR-051)", async () => {
+    exportAll.mockResolvedValue({ exportedAt: "2026-10-08T00:00:00.000Z", count: 0, memories: [] });
+    const res = await req("/memories/export");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ exportedAt: "2026-10-08T00:00:00.000Z", count: 0, memories: [] });
   });
 });

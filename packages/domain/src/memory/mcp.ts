@@ -16,15 +16,28 @@ import { createSdkMcpServer, tool } from "@anthropic-ai/claude-agent-sdk";
 import {
   recallInputSchema,
   recentInputSchema,
+  removeInputSchema,
   renameProjectInputSchema,
   saveInputSchema,
+  todosInputSchema,
+  updateInputSchema,
+  type Memory,
 } from "@navis/validation";
 import { formatByProject } from "./format";
 import { projects, renameProject, similarProjects } from "./projects";
 import { kstDate } from "./range";
 import { recall } from "./recall";
 import { recent } from "./recent";
+import { remove } from "./remove";
 import { save } from "./save";
+import { todos } from "./todos";
+import { update } from "./update";
+
+/** 도구 응답의 기억 한 줄. 모델이 이어서 update · remove 를 부를 수 있게 id 를 싣는다. */
+const memoryLine = (m: Memory) => {
+  const meta = [m.category, m.project, m.done === true ? "완료" : null].filter(Boolean).join("/");
+  return `- [${m.createdAt.slice(0, 10)}${meta ? ` ${meta}` : ""}] ${m.content} (id=${m.id})`;
+};
 
 /** 기간 조회의 기본 상한. 하루치는 넉넉히 들어가고, 넘으면 응답에 그렇다고 적는다. */
 const RECENT_DEFAULT_LIMIT = 200;
@@ -48,6 +61,9 @@ export const MEMORY_TOOL_NAMES = [
   "recent",
   "projects",
   "rename_project",
+  "todos",
+  "update",
+  "remove",
 ] as const satisfies readonly string[];
 
 /**
@@ -254,6 +270,56 @@ export const createMemoryMcpServer = (tally: MemoryToolTally) =>
             },
           ],
         };
+      },
+    ),
+    tool(
+      "todos",
+      [
+        "할 일로 저장된 기억을 본다. 기본은 미완료만, includeDone 이면 완료된 것도 함께.",
+        "'남은 할 일', '할 일 뭐 있지' 같은 물음에 쓴다. 의미 검색(recall)보다 빠짐이 없다.",
+        "결과의 id 로 update(done) 를 불러 완료 처리할 수 있다.",
+      ].join("\n"),
+      todosInputSchema.shape,
+      async (args) => {
+        const list = await todos(args);
+        if (list.length === 0) {
+          return { content: [{ type: "text" as const, text: "남은 할 일이 없다." }] };
+        }
+        return {
+          content: [
+            { type: "text" as const, text: `할 일 ${list.length}건:\n${list.map(memoryLine).join("\n")}` },
+          ],
+        };
+      },
+    ),
+    tool(
+      "update",
+      [
+        "저장된 기억 하나를 고친다. 준 필드만 바뀐다.",
+        "",
+        "부를 때:",
+        "- 사용자가 기억이 틀렸다고 고쳐줄 때, 할 일을 끝냈다고 할 때(done: true)",
+        "- 새로 들은 사실이 이전 기억을 대체할 때 — 새로 save 하지 말고 고친다",
+        "",
+        "id 는 recall · recent · todos 결과에 있다. 모르면 먼저 찾는다 — 지어내지 않는다.",
+        "project 에 빈 문자열을 주면 개인 기억으로 되돌린다.",
+      ].join("\n"),
+      updateInputSchema.shape,
+      async (args) => {
+        const m = await update(args);
+        return { content: [{ type: "text" as const, text: `고쳤다.\n${memoryLine(m)}` }] };
+      },
+    ),
+    tool(
+      "remove",
+      [
+        "기억 하나를 지운다. 되돌릴 수 없다.",
+        "사용자가 지우라고 했을 때만 부른다. 틀린 기억은 지우지 말고 update 로 고친다.",
+      ].join("\n"),
+      removeInputSchema.shape,
+      async ({ id }) => {
+        await remove(id);
+        return { content: [{ type: "text" as const, text: `지웠다. id=${id}` }] };
       },
     ),
   ],

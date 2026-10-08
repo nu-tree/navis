@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Brain, LogOut, MessageSquare, Plus, Settings, Trash2 } from "lucide-react";
 import type { ConversationSummary } from "@navis/validation";
 import { Button } from "@/components/ui/button";
@@ -95,9 +96,11 @@ export function NavisSidebar({
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton tooltip="기억">
-              <Brain />
-              <span>기억</span>
+            <SidebarMenuButton asChild tooltip="기억">
+              <Link href="/memories">
+                <Brain />
+                <span>기억</span>
+              </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>

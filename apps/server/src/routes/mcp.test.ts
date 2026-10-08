@@ -81,8 +81,11 @@ describe("/mcp 도구", () => {
       "projects",
       "recall",
       "recent",
+      "remove",
       "rename_project",
       "save",
+      "todos",
+      "update",
     ]);
   });
 });

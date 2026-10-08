@@ -6,6 +6,8 @@ import {
   recentInputSchema,
   renameProjectInputSchema,
   saveInputSchema,
+  todosInputSchema,
+  updateInputSchema,
 } from "@navis/validation";
 
 // 기억 라우트. 인증은 app.ts 의 기본 잠금이 이미 걸어뒀다.
@@ -18,6 +20,10 @@ const numericQuery = (raw: Record<string, string>) => {
   const out: Record<string, unknown> = { ...raw };
   for (const key of ["limit", "days"] as const) {
     if (raw[key] !== undefined) out[key] = Number(raw[key]);
+  }
+  // 불리언은 "true" 만 참이다. "false" 를 Boolean() 하면 참이 된다.
+  for (const key of ["includeDone", "exactProject", "personalOnly"] as const) {
+    if (raw[key] !== undefined) out[key] = raw[key] === "true";
   }
   return out;
 };
@@ -43,6 +49,27 @@ export const memoriesRoute = new Hono()
     }
     try {
       return c.json(await memory.recall(parsed.data));
+    } catch (err) {
+      return failure(c, err);
+    }
+  })
+  .get("/todos", async (c) => {
+    const parsed = todosInputSchema.safeParse(numericQuery(c.req.query()));
+    if (!parsed.success) {
+      return c.json({ error: "잘못된 요청", detail: parsed.error.issues }, 400);
+    }
+    try {
+      return c.json(await memory.todos(parsed.data));
+    } catch (err) {
+      return failure(c, err);
+    }
+  })
+  // 0건이어도 200 + count: 0 (FR-051). 파일 이름은 받는 쪽(웹)이 정한다.
+  .get("/export", async (c) => {
+    try {
+      return c.body(memory.serializeExport(await memory.exportAll()), 200, {
+        "content-type": "application/json; charset=utf-8",
+      });
     } catch (err) {
       return failure(c, err);
     }
@@ -79,6 +106,41 @@ export const memoriesRoute = new Hono()
     try {
       // 중복 판정을 하지 않으므로 판별 유니온이 아니라 Memory 를 바로 돌려준다(FR-011).
       return c.json(await memory.save(parsed.data), 201);
+    } catch (err) {
+      return failure(c, err);
+    }
+  })
+  // ── /:id 계열 — 정적 경로(/search · /todos · /export · /projects) 뒤에 둔다 ──────────
+  .get("/:id/neighbors", async (c) => {
+    const raw = c.req.query("limit");
+    const limit = raw === undefined ? undefined : Number(raw);
+    if (limit !== undefined && (!Number.isInteger(limit) || limit < 1 || limit > 20)) {
+      return c.json({ error: "limit 은 1~20 의 정수여야 한다." }, 400);
+    }
+    try {
+      return c.json(await memory.neighbors(c.req.param("id"), limit));
+    } catch (err) {
+      return failure(c, err);
+    }
+  })
+  .patch("/:id", async (c) => {
+    const body: unknown = await c.req.json().catch(() => null);
+    // id 는 경로가 권위다 — 본문의 id 로 다른 기억을 고치지 못하게 덮어쓴다.
+    const parsed = updateInputSchema.safeParse(
+      typeof body === "object" && body !== null ? { ...body, id: c.req.param("id") } : body,
+    );
+    if (!parsed.success) {
+      return c.json({ error: "잘못된 요청", detail: parsed.error.issues }, 400);
+    }
+    try {
+      return c.json(await memory.update(parsed.data));
+    } catch (err) {
+      return failure(c, err);
+    }
+  })
+  .delete("/:id", async (c) => {
+    try {
+      return c.json(await memory.remove(c.req.param("id")));
     } catch (err) {
       return failure(c, err);
     }

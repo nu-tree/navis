@@ -3,11 +3,12 @@
 // 기간(since · until)을 주면 그 기간 기억을 **전건** 돌려준다 — 유사도 컷이 없다.
 // "오늘 한 일 정리"를 recall 로 하면 의미 top-N 만 올라와 그날 기억 일부를 놓친다(2026-10-07).
 
-import { and, desc, eq, gte, isNull, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
 import { db, memories } from "@navis/db";
 import type { Memory, RecentInput } from "@navis/validation";
 import { toMemory, type MemoryRow } from "./mapping";
 import { parseSince, parseUntil } from "./range";
+import { projectScope } from "./scope";
 
 /** 기본 개수. recentInputSchema 의 상한은 200 이다. */
 const DEFAULT_LIMIT = 50;
@@ -25,11 +26,7 @@ const COLUMNS = {
 export async function recent(input: RecentInput = {}): Promise<Memory[]> {
   const conditions = [
     input.category ? eq(memories.category, input.category) : undefined,
-    // 프로젝트가 주어지면 "그 프로젝트 + 개인 기억"으로 좁힌다 —
-    // 개인 기억을 빼면 프로젝트 맥락에서 사용자 자신에 관한 것을 못 본다(FR-018).
-    input.project
-      ? or(eq(memories.project, input.project), isNull(memories.project))
-      : undefined,
+    projectScope(input),
     input.days
       ? gte(memories.createdAt, sql`now() - make_interval(days => ${input.days})`)
       : undefined,

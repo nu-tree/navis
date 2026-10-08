@@ -184,27 +184,34 @@ description: "핵심 나비스 — 기억과 대화 구현 작업 목록"
 이후 검색에 반영되면 통과. 겹치는 3건을 1분 안에 1건으로 줄이면 함께 통과.
 (`quickstart.md` S7, S8, S9)
 
-- [ ] T062 [US4] `packages/domain/src/memory/recent.ts` 의 `recent()` 를 완성한다 — 분류 · 프로젝트 · 기간(`days` 최대 365) 필터, `limit` 최대 200, `created_at DESC`(FR-021)
-- [ ] T063 [US4] `packages/domain/src/memory/update.ts` 에 `update()` 를 구현한다. **`content` 를 바꾸면 임베딩을 재계산한다** — 안 하면 고친 내용으로 검색되지 않는다(FR-024). `project` 에 빈 문자열이 오면 개인 기억으로 되돌린다
-- [ ] T064 [P] [US4] `packages/domain/src/memory/update.test.ts` — `content` 변경 시 재임베딩이 호출되고 다른 필드만 바꿀 때는 호출되지 않는지, 없는 id 에 `NotFoundError` 인지 검증한다
-- [ ] T065 [US4] `packages/domain/src/memory/remove.ts` 에 `remove()` 를 구현한다. 없는 id 는 `NotFoundError`
-- [ ] T066 [US4] `packages/domain/src/memory/todos.ts` 에 `todos()` 를 구현한다. 기본은 **미완료만**, `includeDone` 이면 완료된 것도 함께(FR-026). `done` 은 `metadata` 안에 있다
-- [ ] T067 [US4] `packages/domain/src/memory/neighbors.ts` 에 이웃 조회를 구현한다. **그 기억의 벡터로 같은 HNSW 인덱스를 다시 타서** 유사 이웃 상위 k 를 반환한다. 전체 쌍 비교(O(n²))나 클러스터링을 하지 않는다(FR-047, R7)
-- [ ] T068 [P] [US4] `packages/domain/src/memory/neighbors.test.ts` — 자기 자신이 결과에서 빠지는지, 이웃이 없을 때 빈 배열인지, 없는 id 에 `NotFoundError` 인지 검증한다
-- [ ] T069 [US4] `packages/domain/src/memory/export.ts` 에 내보내기 직렬화를 구현한다. `{ exportedAt, count, memories }`, 들여쓰기 2칸 JSON. 기억이 **0건이어도 실패하지 않고** `count: 0` · `memories: []` 를 만든다(FR-050, FR-051, R8)
-- [ ] T070 [P] [US4] `packages/domain/src/memory/export.test.ts` — 각 기억에 `content` · `category` · `project` · `tags` · `done` · `createdAt` 이 모두 있는지(**누락 필드 0건**, SC-016), 0건 케이스를 검증한다
-- [ ] T071 [US4] `packages/domain/src/memory/mcp.ts` 에 `recent` · `todos` · `update` · `remove` 도구를 등록한다. **`graphify` 는 등록하지 않는다**(Q2)
-- [ ] T072 [US4] `apps/server/src/routes/memories.ts` 에 남은 엔드포인트를 붙인다: `GET /memories/:id/neighbors` · `PATCH /memories/:id` · `DELETE /memories/:id` · `GET /memories/todos` · `GET /memories/export`
-- [ ] T073 [P] [US4] `apps/server/src/routes/memories.test.ts` 에 계약 테스트를 추가한다 — 없는 id 에 404, `PATCH` 후 검색 결과가 바뀌는지, `export` 가 0건에서도 200 인지
-- [ ] T074 [US4] `apps/web/src/app/api/memories/` 아래에 BFF 라우트를 만든다
-- [ ] T075 [US4] `apps/web/src/features/memory/use-memories.ts` — 목록 · 필터 · 검색 상태를 훅이 갖는다
-- [ ] T076 [P] [US4] `apps/web/src/features/memory/use-memory-neighbors.ts` — 항목 하나의 이웃 조회. 목록 훅과 분리해 목록이 이웃 상태를 props 로 흘리지 않게 한다(헌장 원칙 V)
-- [ ] T077 [US4] `apps/web/src/features/memory/memory-list.tsx` — 최신순 목록, 분류 · 프로젝트 · 기간 필터. 도메인 타입을 아는 컴포넌트이므로 `features/` 에 둔다(헌장 원칙 III)
-- [ ] T078 [US4] `apps/web/src/features/memory/memory-item.tsx` — 항목 하나. 펼치면 이웃이 보인다. 이웃 영역은 **`children` 합성**으로 받는다(헌장 원칙 V)
-- [ ] T079 [P] [US4] `apps/web/src/features/memory/memory-editor.tsx` — 내용 · 분류 · 프로젝트 · 태그 수정
-- [ ] T080 [P] [US4] `apps/web/src/features/memory/todo-list.tsx` — 할 일만, 완료 토글, 완료 포함 보기
-- [ ] T081 [US4] `apps/web/src/app/memories/page.tsx` — 기억 화면. 목록 · 검색 · 할 일 · 내보내기를 한 화면에 둔다. **새 화면을 만들지 않는다** — 세 화면 상한(SC-010)
-- [ ] T082 [US4] `apps/web/src/features/memory/memory-export-button.tsx` 를 만들고 `apps/web/src/app/memories/page.tsx` 에 붙인다. 브라우저가 BFF 응답을 파일로 받는다
+- [X] T062 [US4] `packages/domain/src/memory/recent.ts` 의 `recent()` 를 완성한다 — 분류 · 프로젝트 · 기간(`days` 최대 365) 필터, `limit` 최대 200, `created_at DESC`(FR-021)
+- [X] T063 [US4] `packages/domain/src/memory/update.ts` 에 `update()` 를 구현한다. **`content` 를 바꾸면 임베딩을 재계산한다** — 안 하면 고친 내용으로 검색되지 않는다(FR-024). `project` 에 빈 문자열이 오면 개인 기억으로 되돌린다
+- [X] T064 [P] [US4] `packages/domain/src/memory/update.test.ts` — `content` 변경 시 재임베딩이 호출되고 다른 필드만 바꿀 때는 호출되지 않는지, 없는 id 에 `NotFoundError` 인지 검증한다
+- [X] T065 [US4] `packages/domain/src/memory/remove.ts` 에 `remove()` 를 구현한다. 없는 id 는 `NotFoundError`
+- [X] T066 [US4] `packages/domain/src/memory/todos.ts` 에 `todos()` 를 구현한다. 기본은 **미완료만**, `includeDone` 이면 완료된 것도 함께(FR-026). `done` 은 `metadata` 안에 있다
+- [X] T067 [US4] `packages/domain/src/memory/neighbors.ts` 에 이웃 조회를 구현한다. **그 기억의 벡터로 같은 HNSW 인덱스를 다시 타서** 유사 이웃 상위 k 를 반환한다. 전체 쌍 비교(O(n²))나 클러스터링을 하지 않는다(FR-047, R7)
+- [X] T068 [P] [US4] `packages/domain/src/memory/neighbors.test.ts` — 자기 자신이 결과에서 빠지는지, 이웃이 없을 때 빈 배열인지, 없는 id 에 `NotFoundError` 인지 검증한다
+- [X] T069 [US4] `packages/domain/src/memory/export.ts` 에 내보내기 직렬화를 구현한다. `{ exportedAt, count, memories }`, 들여쓰기 2칸 JSON. 기억이 **0건이어도 실패하지 않고** `count: 0` · `memories: []` 를 만든다(FR-050, FR-051, R8)
+- [X] T070 [P] [US4] `packages/domain/src/memory/export.test.ts` — 각 기억에 `content` · `category` · `project` · `tags` · `done` · `createdAt` 이 모두 있는지(**누락 필드 0건**, SC-016), 0건 케이스를 검증한다
+- [X] T071 [US4] `packages/domain/src/memory/mcp.ts` 에 `recent` · `todos` · `update` · `remove` 도구를 등록한다. **`graphify` 는 등록하지 않는다**(Q2)
+- [X] T072 [US4] `apps/server/src/routes/memories.ts` 에 남은 엔드포인트를 붙인다: `GET /memories/:id/neighbors` · `PATCH /memories/:id` · `DELETE /memories/:id` · `GET /memories/todos` · `GET /memories/export`
+- [X] T073 [P] [US4] `apps/server/src/routes/memories.test.ts` 에 계약 테스트를 추가한다 — 없는 id 에 404, `PATCH` 후 검색 결과가 바뀌는지, `export` 가 0건에서도 200 인지
+- [X] T074 [US4] `apps/web/src/app/api/memories/` 아래에 BFF 라우트를 만든다
+- [X] T075 [US4] `apps/web/src/features/memory/use-memories.ts` — 목록 · 필터 · 검색 상태를 훅이 갖는다
+- [X] T076 [P] [US4] `apps/web/src/features/memory/use-memory-neighbors.ts` — 항목 하나의 이웃 조회. 목록 훅과 분리해 목록이 이웃 상태를 props 로 흘리지 않게 한다(헌장 원칙 V)
+- [X] T077 [US4] `apps/web/src/features/memory/memory-list.tsx` — 최신순 목록, 분류 · 프로젝트 · 기간 필터. 도메인 타입을 아는 컴포넌트이므로 `features/` 에 둔다(헌장 원칙 III)
+- [X] T078 [US4] `apps/web/src/features/memory/memory-item.tsx` — 항목 하나. 펼치면 이웃이 보인다. 이웃 영역은 **`children` 합성**으로 받는다(헌장 원칙 V)
+- [X] T079 [P] [US4] `apps/web/src/features/memory/memory-editor.tsx` — 내용 · 분류 · 프로젝트 · 태그 수정
+- [X] T080 [P] [US4] `apps/web/src/features/memory/todo-list.tsx` — 할 일만, 완료 토글, 완료 포함 보기
+- [X] T081 [US4] `apps/web/src/app/memories/page.tsx` — 기억 화면. 목록 · 검색 · 할 일 · 내보내기를 한 화면에 둔다. **새 화면을 만들지 않는다** — 세 화면 상한(SC-010)
+- [X] T082 [US4] `apps/web/src/features/memory/memory-export-button.tsx` 를 만들고 `apps/web/src/app/memories/page.tsx` 에 붙인다. 브라우저가 BFF 응답을 파일로 받는다
+
+> **2026-10-08 구현 메모.** 웹 쪽은 훅 규칙(wemice hook-design)을 따라 위치가 바뀌었다 —
+> T075 · T076 의 훅은 `apps/web/src/hooks/apis/memory/`(`use-memory-list` · `use-memory-search` ·
+> `use-memory-todo-list` · `use-memory-neighbor-list` · `use-update-memory` · `use-delete-memory` ·
+> `use-export-memory`)와 `hooks/pages/memory/use-memory-browser.ts`(필터 · 검색 상태)에 있다.
+> T081 의 화면은 `features/memory/memory-screen.tsx` 이고 `app/memories/page.tsx` 는 서버 컴포넌트로
+> 그것만 렌더한다. T064 · T068 · T070 테스트는 `packages/domain/src/memory/manage.test.ts` 하나로 묶었다.
 
 **Checkpoint**: `quickstart.md` S7 · S8 · S9 통과.
 
