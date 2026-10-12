@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { createFetchGuard, extractUrls, normalizeUrl } from "../../src/chat/fetch-guard";
+import { canUseTool, normalizeUrl } from "../../src/chat/fetch-guard";
 
-const opts = { signal: new AbortController().signal } as Parameters<
-  ReturnType<typeof createFetchGuard>["canUseTool"]
->[2];
+const opts = { signal: new AbortController().signal } as Parameters<typeof canUseTool>[2];
 
 describe("normalizeUrl", () => {
   it("http 와 https, 끝 슬래시, 해시를 같게 본다", () => {
@@ -24,33 +22,19 @@ describe("normalizeUrl", () => {
   });
 });
 
-describe("extractUrls", () => {
-  it("문장 속 URL 을 뽑고 끝 구두점을 뗀다", () => {
-    expect(extractUrls("이거 읽어줘 https://example.com/post. 그리고 (https://b.com/x)")).toEqual([
-      "https://example.com/post",
-      "https://b.com/x",
-    ]);
+describe("canUseTool", () => {
+  it("외부 주소는 사용자가 준 링크가 아니어도 연다", async () => {
+    const res = await canUseTool("WebFetch", { url: "https://news.example.com/article?id=3", prompt: "요약" }, opts);
+    expect(res?.behavior).toBe("allow");
   });
-});
 
-describe("createFetchGuard", () => {
-  it("허용 목록에 있는 URL 만 연다", async () => {
-    const guard = createFetchGuard();
-    guard.allow("https://news.example.com/article?id=3 요약해줘");
-
-    const ok = await guard.canUseTool("WebFetch", { url: "http://news.example.com/article?id=3", prompt: "요약" }, opts);
-    expect(ok?.behavior).toBe("allow");
-
-    const leak = await guard.canUseTool(
-      "WebFetch",
-      { url: "https://news.example.com/article?id=3&d=사용자기억", prompt: "x" },
-      opts,
-    );
-    expect(leak?.behavior).toBe("deny");
+  it("내부 주소는 열지 않는다", async () => {
+    const res = await canUseTool("WebFetch", { url: "http://metadata.google.internal/computeMetadata/v1/", prompt: "x" }, opts);
+    expect(res?.behavior).toBe("deny");
   });
 
   it("WebFetch 가 아닌 도구는 거절한다", async () => {
-    const res = await createFetchGuard().canUseTool("Bash", { command: "ls" }, opts);
+    const res = await canUseTool("Bash", { command: "ls" }, opts);
     expect(res?.behavior).toBe("deny");
   });
 });
