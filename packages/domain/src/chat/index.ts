@@ -146,6 +146,9 @@ export type TurnResult = {
   savedCount: number;
 };
 
+/** 도구 호출로 나뉜 글 블록을 이을 때 — 문단 하나를 띄운다. */
+const TEXT_PART_SEPARATOR = "\n\n";
+
 /** Claude 가 이 오류로 답하면 토큰 문제다 — 설정 화면에서 바꿔야 한다. */
 const TOKEN_ERRORS = new Set(["authentication_failed", "oauth_org_not_allowed"]);
 
@@ -168,7 +171,14 @@ export async function runTurn(
       ? withHistory(input.prompt, input.history)
       : input.prompt;
 
-  let text = "";
+  // 이 턴의 글 블록들. 도구 호출을 사이에 두고 여러 개로 나뉜다.
+  //
+  // ★ result.result 를 최종 전문으로 쓰지 않는다. 그건 **마지막** assistant 메시지의 글뿐이라,
+  //   "답 → save 호출 → '기억에 남겼어요'" 순서면 앞의 답이 통째로 빠진다. done 이 오는 순간
+  //   스트리밍으로 보던 답이 그 한 줄로 바뀌고, 서버에도 그 한 줄만 기록됐다(2026-10-12 사용자 보고).
+  const textParts: string[] = [];
+  // 스트리밍에 이미 글이 나갔는지. 다음 글 블록 앞에 구분을 넣을지 판단한다.
+  let streamedText = false;
   let sessionId: string | null = resume;
   const toolsUsed: string[] = [];
 
@@ -246,9 +256,15 @@ export async function runTurn(
     if (message.type === "stream_event") {
       const ev = message.event;
       if (ev.type === "content_block_delta") {
-        if (ev.delta.type === "text_delta") cb.onDelta?.(ev.delta.text);
-        else if (ev.delta.type === "thinking_delta")
+        if (ev.delta.type === "text_delta") {
+          cb.onDelta?.(ev.delta.text);
+          streamedText = true;
+        } else if (ev.delta.type === "thinking_delta")
           cb.onThinking?.(ev.delta.thinking);
+      } else if (ev.type === "content_block_start" && ev.content_block.type === "text") {
+        // 글 블록 사이를 최종 전문(TEXT_PART_SEPARATOR 로 이음)과 같게 띄운다 — 안 그러면
+        // 스트리밍 중엔 붙어 보이다가 done 에서 갑자기 줄이 바뀐다.
+        if (streamedText) cb.onDelta?.(TEXT_PART_SEPARATOR);
       } else if (
         ev.type === "content_block_start" &&
         ev.content_block.type === "tool_use"
@@ -277,6 +293,14 @@ export async function runTurn(
       throw new ClaudeTokenRejectedError(message.error);
     }
 
+    // 완성된 assistant 메시지의 글. 델타를 이어 붙인 것보다 이쪽이 정확하다.
+    if (message.type === "assistant") {
+      for (const block of message.message.content) {
+        if (block.type === "text" && block.text.trim()) textParts.push(block.text.trim());
+      }
+      continue;
+    }
+
     if (message.type === "result") {
       // 세션 id 는 result 가 권위다 — 새 세션이면 여기서 처음 알게 된다.
       sessionId = message.session_id;
@@ -284,13 +308,13 @@ export async function runTurn(
         throw new Error(`Claude 응답 실패: ${message.subtype}`);
       }
       liveSessions.add(message.session_id);
-      // result.result 가 최종 전문이다. 델타를 이어 붙인 것보다 이쪽이 정확하다.
-      text = message.result;
+      // 모은 글이 없을 때만 result 로 대신한다(textParts 주석).
+      if (textParts.length === 0 && message.result.trim()) textParts.push(message.result.trim());
     }
   }
 
   return {
-    text: text.trim() || "(빈 응답)",
+    text: textParts.join(TEXT_PART_SEPARATOR) || "(빈 응답)",
     sessionId,
     toolsUsed,
     savedCount: tally.saved,
