@@ -1,7 +1,7 @@
 "use client";
 
 import { AppShell } from "./app-shell";
-import { NavisSidebar } from "./sidebar";
+import { NavisTopBar } from "./top-bar";
 import { ChatPanel } from "@/features/chat/chat-panel";
 import { OnboardingTour } from "@/features/onboarding/onboarding-tour";
 import { useConversationWorkspace } from "@/hooks/pages/conversation/use-conversation-workspace";
@@ -13,7 +13,7 @@ export const Workspace = () => {
   usePushBridge();
 
   return (
-    <AppShell sidebar={<NavisSidebar />}>
+    <AppShell header={<NavisTopBar />}>
       {/* "나비스" 방 id 가 오기 전엔 그리지 않는다(use-conversation-workspace 주석). */}
       {mainId ? <ChatPanel key={mainId} conversationId={mainId} onTurnEnd={refresh} /> : null}
       <OnboardingTour />

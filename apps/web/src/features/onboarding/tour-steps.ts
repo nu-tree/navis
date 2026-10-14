@@ -5,7 +5,7 @@ const at = (name: string) => `[data-tour="${name}"]`;
 
 /**
  * 첫 방문 튜토리얼 — 실제 버튼을 하나씩 짚으며 무엇을 할 수 있고 왜 좋은지 말한다.
- * 문구는 여기서만 고친다. 요소가 화면에 없으면(모바일에서 닫힌 사이드바 등) 가운데 말풍선으로 보인다.
+ * 문구는 여기서만 고친다. 요소가 화면에 없으면 가운데 말풍선으로 보인다.
  */
 export const tourSteps = ({ tokenRegistered }: { tokenRegistered: boolean }): DriveStep[] => [
   {
@@ -57,7 +57,7 @@ export const tourSteps = ({ tokenRegistered }: { tokenRegistered: boolean }): Dr
         "쌓인 기억을 훑어보고, <b>틀린 건 고쳐서 바로잡아요</b>. 할 일은 체크로 끝내요.<br/><br/>" +
         "<b>정리하거나 비울 필요는 없어요.</b> 기억은 나만 보고 다른 사람과 섞이지 않아요. " +
         "주제가 달라도 서로 꼬이지 않고, 많이 쌓일수록 나비스가 나를 더 잘 알아요.",
-      side: "right",
+      side: "bottom",
       align: "end",
     },
   },
@@ -66,7 +66,7 @@ export const tourSteps = ({ tokenRegistered }: { tokenRegistered: boolean }): Dr
     popover: {
       title: "이 안내는 언제든 다시",
       description: "헷갈리면 여기를 눌러 이 둘러보기를 다시 볼 수 있어요.",
-      side: "right",
+      side: "bottom",
       align: "end",
     },
   },
@@ -76,7 +76,7 @@ export const tourSteps = ({ tokenRegistered }: { tokenRegistered: boolean }): Dr
       ? {
           title: "준비 끝났어요 🎉",
           description: "Claude 토큰이 이미 등록돼 있어요. 이제 입력창에 아무 말이나 걸어 보세요. 내 기억은 나만 봐요.",
-          side: "right",
+          side: "bottom",
           align: "end",
         }
       : {
@@ -84,7 +84,7 @@ export const tourSteps = ({ tokenRegistered }: { tokenRegistered: boolean }): Dr
           description:
             "나비스는 <b>내 Claude 구독</b>으로 답해요. 설정에서 Claude 토큰을 한 번 등록하면 바로 대화할 수 있어요 " +
             "(터미널에서 <code>claude setup-token</code> 으로 발급). 토큰은 암호화해 보관하고 다시 보여주지 않아요.",
-          side: "right",
+          side: "bottom",
           align: "end",
         },
   },
