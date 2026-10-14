@@ -9,6 +9,7 @@ import { useStickToBottom } from "@/hooks/common/use-stick-to-bottom";
 import { useChat } from "@/hooks/pages/chat/use-chat";
 import { useConversationMessageList } from "@/hooks/apis/conversation/use-conversation-message-list";
 import { useLoadOlderMessages } from "@/hooks/pages/chat/use-load-older-messages";
+import { useSyncLatestMessages } from "@/hooks/pages/chat/use-sync-latest-messages";
 import { useDeleteConversationMessage } from "@/hooks/apis/conversation/use-delete-conversation-message";
 
 type Props = {
@@ -32,6 +33,8 @@ export const ChatPanel = ({ conversationId, onTurnEnd, onOpen }: Readonly<Props>
   const { ref: scrollRef, onScroll, stick } = useStickToBottom<HTMLDivElement>([messages, streaming]);
   // 위로 올리면 이전 메시지를 더 불러온다(specs/003 FR-026).
   const { onScroll: onScrollTop } = useLoadOlderMessages(conversationId, messages, scrollRef);
+  // 나비스가 먼저 건 말을 새로고침 없이 보이게(specs/003).
+  useSyncLatestMessages(conversationId);
 
   const busy = streaming !== null;
   const empty = messages.length === 0 && !busy;

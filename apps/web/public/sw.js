@@ -40,6 +40,10 @@ self.addEventListener("push", (event) => {
 
   event.waitUntil(
     (async () => {
+      // 열린 창에 새 메시지가 있다고 알린다 — 나비스가 먼저 건 말을 새로고침 없이 보이게
+      // (hooks/pages/chat/use-sync-latest-messages.ts). 알림을 띄우든 말든 보낸다.
+      const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      for (const w of windows) w.postMessage({ type: "new-message", conversationId: data.conversationId || null });
       if (!mustShow() && (await watching())) return;
       await self.registration.showNotification(data.title || "나비스", {
         body: data.body || "답변이 도착했어요.",
