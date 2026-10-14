@@ -19,6 +19,16 @@ const mustShow = () => {
   return /Safari/.test(ua) && !/Chrome|Chromium|Edg|Android/.test(ua);
 };
 
+/**
+ * 설치한 앱이면 작업 표시줄 · Dock 아이콘에 숫자를 찍는다 — 답이 온 방의 수(남아 있는 알림 수).
+ * 같은 방의 알림은 tag 로 하나로 합쳐지므로 방마다 1 이다. 창으로 돌아오면 화면이 지운다.
+ */
+const updateBadge = async () => {
+  if (!self.navigator.setAppBadge) return;
+  const count = (await self.registration.getNotifications()).length;
+  await (count > 0 ? self.navigator.setAppBadge(count) : self.navigator.clearAppBadge()).catch(() => undefined);
+};
+
 self.addEventListener("push", (event) => {
   const data = (() => {
     try {
@@ -31,8 +41,6 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     (async () => {
       if (!mustShow() && (await watching())) return;
-      // 설치한 앱이면 작업 표시줄 · Dock 아이콘에 점을 찍는다. 창으로 돌아오면 화면이 지운다.
-      if (self.navigator.setAppBadge) await self.navigator.setAppBadge().catch(() => undefined);
       await self.registration.showNotification(data.title || "나비스", {
         body: data.body || "답변이 도착했어요.",
         icon: "/icons/icon-192.png",
@@ -41,6 +49,7 @@ self.addEventListener("push", (event) => {
         tag: data.conversationId || "navis",
         data: { conversationId: data.conversationId || null },
       });
+      await updateBadge();
     })(),
   );
 });
@@ -48,6 +57,7 @@ self.addEventListener("push", (event) => {
 // 알림을 누르면 그 방을 연다 — 열린 창이 있으면 거기서, 없으면 새 창으로.
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
+  event.waitUntil(updateBadge());
   const conversationId = event.notification.data && event.notification.data.conversationId;
 
   event.waitUntil(
