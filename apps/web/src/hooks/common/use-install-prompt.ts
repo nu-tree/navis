@@ -26,6 +26,34 @@ if (typeof window !== "undefined") {
   });
 }
 
+/** 받아 둔 이벤트를 꺼내고 비운다. 한 이벤트로는 한 번만 띄울 수 있다 — 다음 기회는 크롬이 새 이벤트로 준다. */
+const takeDeferred = () => {
+  const event = deferred;
+  deferred = null;
+  emit();
+  return event;
+};
+
+/**
+ * 설치 창을 띄운다. 띄웠으면 true, 못 띄웠으면 false — 호출부가 설치 방법 안내로 넘어간다.
+ *
+ * ★ 훅 안에 두지 않는다. React Compiler 가 훅 안의 `const event = deferred` 를 모듈 변수 `deferred`
+ *   로 바꿔치기해서, 비운 뒤의 null 로 prompt() 를 불렀다 — 설치 버튼이 늘 아무 반응이 없었다
+ *   (2026-10-14, 배포 번들에서 확인). 컴파일러는 컴포넌트 · 훅만 건드리므로 모듈 함수로 둔다.
+ */
+const promptInstall = async (): Promise<boolean> => {
+  const event = takeDeferred();
+  if (!event) return false;
+  try {
+    await event.prompt();
+    await event.userChoice;
+    return true;
+  } catch (err) {
+    console.warn("[install] 설치 창을 띄우지 못했다", err);
+    return false;
+  }
+};
+
 /** 설치한 앱 창 안인가. 아이폰은 표준 대신 navigator.standalone 을 쓴다. */
 const readStandalone = () =>
   window.matchMedia("(display-mode: standalone)").matches ||
@@ -57,25 +85,5 @@ export const useInstallPrompt = () => {
     () => false,
   );
 
-  /**
-   * 설치 창을 띄운다. 띄웠으면 true. 크롬이 거부하면(같은 이벤트로 두 번째 · 최근에 닫아서 막힘 등)
-   * false — 호출부가 설치 방법 안내로 넘어간다. 조용히 삼키면 "눌러도 아무 반응 없음"이 된다.
-   */
-  const install = async (): Promise<boolean> => {
-    if (!deferred) return false;
-    const event = deferred;
-    // 한 이벤트로는 한 번만 띄울 수 있다. 다음 기회는 크롬이 새 이벤트로 준다.
-    deferred = null;
-    emit();
-    try {
-      await event.prompt();
-      await event.userChoice;
-      return true;
-    } catch (err) {
-      console.warn("[install] 설치 창을 띄우지 못했다", err);
-      return false;
-    }
-  };
-
-  return available ? install : null;
+  return available ? promptInstall : null;
 };
