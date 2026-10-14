@@ -57,13 +57,24 @@ export const useInstallPrompt = () => {
     () => false,
   );
 
-  const install = async () => {
-    if (!deferred) return;
+  /**
+   * 설치 창을 띄운다. 띄웠으면 true. 크롬이 거부하면(같은 이벤트로 두 번째 · 최근에 닫아서 막힘 등)
+   * false — 호출부가 설치 방법 안내로 넘어간다. 조용히 삼키면 "눌러도 아무 반응 없음"이 된다.
+   */
+  const install = async (): Promise<boolean> => {
+    if (!deferred) return false;
     const event = deferred;
-    // 한 이벤트로는 한 번만 띄울 수 있다.
+    // 한 이벤트로는 한 번만 띄울 수 있다. 다음 기회는 크롬이 새 이벤트로 준다.
     deferred = null;
     emit();
-    await event.prompt();
+    try {
+      await event.prompt();
+      await event.userChoice;
+      return true;
+    } catch (err) {
+      console.warn("[install] 설치 창을 띄우지 못했다", err);
+      return false;
+    }
   };
 
   return available ? install : null;

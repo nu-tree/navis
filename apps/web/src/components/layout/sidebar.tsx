@@ -118,7 +118,9 @@ export function NavisSidebar({
             <SidebarMenuItem>
               <SidebarMenuButton
                 tooltip="앱으로 설치"
-                onClick={() => (install ? void install() : setGuideOpen(true))}
+                onClick={async () => {
+                  if (!install || !(await install())) setGuideOpen(true);
+                }}
               >
                 <Download />
                 <span>앱으로 설치</span>
