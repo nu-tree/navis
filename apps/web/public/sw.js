@@ -19,6 +19,29 @@ const mustShow = () => {
   return /Safari/.test(ua) && !/Chrome|Chromium|Edg|Android/.test(ua);
 };
 
+/** 제목에 넣을 첫 마디의 최대 길이. 첫 문장이 더 길면 이 안의 마지막 띄어쓰기에서 끊고 본문으로 잇는다. */
+const HEADLINE_MAX = 40;
+
+/**
+ * 알림 제목 · 본문.
+ *
+ * 사파리로 설치한 앱(Dock에 추가 · 홈 화면)은 알림 맨 위에 앱 이름 "나비스"를 붙인다. 제목까지 "나비스"면
+ * 이름이 두 번 찍힌다 — 그래서 사파리에서는 답의 첫 마디를 제목으로, 나머지를 본문으로 쓴다.
+ * 크롬 · 엣지로 설치한 앱은 알림이 "Google Chrome" 이름으로 와서, 제목 "나비스"가 없으면 누가 보냈는지
+ * 알 수 없다 — 거기서는 그대로 둔다.
+ */
+const headline = (title, body) => {
+  if (!mustShow()) return { title, body };
+  const text = body.trim();
+  const cut = text.search(/[.!?。]\s|\n/);
+  const first = (cut === -1 ? text : text.slice(0, cut + 1)).trim();
+  if (!first) return { title, body };
+  if (first.length <= HEADLINE_MAX) return { title: first, body: text.slice(first.length).trim() };
+  const space = text.lastIndexOf(" ", HEADLINE_MAX);
+  const end = space > 0 ? space : HEADLINE_MAX;
+  return { title: `${text.slice(0, end)}…`, body: `…${text.slice(end).trim()}` };
+};
+
 /**
  * 설치한 앱이면 작업 표시줄 · Dock 아이콘에 숫자를 찍는다 — 답이 온 방의 수(남아 있는 알림 수).
  * 같은 방의 알림은 tag 로 하나로 합쳐지므로 방마다 1 이다. 창으로 돌아오면 화면이 지운다.
@@ -45,8 +68,9 @@ self.addEventListener("push", (event) => {
       const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
       for (const w of windows) w.postMessage({ type: "new-message", conversationId: data.conversationId || null });
       if (!mustShow() && (await watching())) return;
-      await self.registration.showNotification(data.title || "나비스", {
-        body: data.body || "답변이 도착했어요.",
+      const { title, body } = headline(data.title || "나비스", data.body || "답변이 도착했어요.");
+      await self.registration.showNotification(title, {
+        body,
         icon: "/icons/icon-192.png",
         badge: "/icons/icon-192.png",
         // 같은 방의 알림은 새 것으로 갈아끼운다.
