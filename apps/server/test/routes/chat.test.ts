@@ -19,6 +19,7 @@ const MEMBER = "00000000-0000-4000-8000-0000000000a1";
 const runTurn = vi.fn();
 const ensure = vi.fn(async () => ({ sessionId: null, messages: [] }));
 const appendMessage = vi.fn(async () => ({ id: "m1", role: "user", text: "x", createdAt: "" }));
+const notify = vi.fn(async () => undefined);
 vi.mock("@navis/domain", () => ({
   chat: { runTurn: (...a: unknown[]) => runTurn(...a) },
   conversation: {
@@ -28,6 +29,10 @@ vi.mock("@navis/domain", () => ({
   },
   memory: {},
   settings: {},
+  push: {
+    notify: (...a: unknown[]) => notify(...(a as [])),
+    excerpt: (t: string) => t,
+  },
 }));
 
 const { app } = await import("../../src/app");
@@ -150,5 +155,29 @@ describe("POST /chat — 회원 분리 (specs/002)", () => {
     expect(await mine.json()).toEqual({ ok: true, found: true });
     await reading;
     expect(aborted).toBe(true);
+  });
+});
+
+describe("POST /chat — 푸시 알림", () => {
+  it("답이 끝나면 그 회원에게 방 id 와 함께 알린다", async () => {
+    notify.mockClear();
+    runTurn.mockResolvedValueOnce({ text: "답", sessionId: null, toolsUsed: [], savedCount: 0 });
+    const events = await send();
+    expect(events.at(-1)).toMatchObject({ type: "done" });
+    expect(notify).toHaveBeenCalledWith(MEMBER, { title: "나비스", body: "답", conversationId: "room-1" });
+  });
+
+  it("실패도 알린다 — 질문해 두고 떠난 사람이 기다리지 않게", async () => {
+    notify.mockClear();
+    runTurn.mockRejectedValueOnce(new Error("boom"));
+    await send();
+    expect(notify).toHaveBeenCalledWith(MEMBER, expect.objectContaining({ body: "⚠️ boom" }));
+  });
+
+  it("푸시가 실패해도 done 은 그대로 간다", async () => {
+    notify.mockRejectedValueOnce(new Error("push down"));
+    runTurn.mockResolvedValueOnce({ text: "답", sessionId: null, toolsUsed: [], savedCount: 0 });
+    const events = await send();
+    expect(events.at(-1)).toMatchObject({ type: "done" });
   });
 });

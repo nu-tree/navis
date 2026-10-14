@@ -83,6 +83,17 @@ spec:
                 secretKeyRef:
                   name: navis-owner-id
                   key: latest
+            # 웹 푸시(창을 닫아도 오는 답 도착 알림). 공개 키는 비밀이 아니다 — 브라우저에 그대로 간다.
+            # 개인 키를 바꾸면 모든 기기가 구독을 다시 해야 한다(화면을 열면 저절로 된다).
+            - name: NAVIS_VAPID_PUBLIC_KEY
+              value: BA2fCi9l--DOz4dXoa-DDDlFsv-zNldVn3RraOe5_ORuNXRR60ItP7IYpwnIgye3lOZ0MP7LyNF127NLDpoVJBs
+            - name: NAVIS_VAPID_PRIVATE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: navis-vapid-private-key
+                  key: latest
+            - name: NAVIS_VAPID_SUBJECT
+              value: https://navis-2gk6vbz4kq-as.a.run.app
             # 외부 MCP(Claude Code)용. API_TOKEN 과 다른 값이다(헌장 보안 절).
             - name: NAVIS_MCP_TOKEN
               valueFrom:

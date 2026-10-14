@@ -125,6 +125,27 @@ gcloud secrets add-iam-policy-binding navis-settings-key \
 회원 추가: Supabase 대시보드 → Users 에서 초대 · 생성 → 회원이 로그인 → 설정 화면에서 자기 Claude
 토큰 등록. 새로 만드는 빈 DB 는 평소처럼 `pnpm db:migrate` 한 번이면 된다.
 
+## 웹 푸시 켜기 (한 번)
+
+창을 닫아도 답 도착 알림이 오게 한다. 공개 키는 `service.yaml` 에 들어 있고, 개인 키만 비밀값으로 둔다.
+키 한 쌍을 새로 만들면 `service.yaml` 의 `NAVIS_VAPID_PUBLIC_KEY` 도 함께 바꾼다.
+
+```bash
+# 1) 개인 키 비밀값 + 런타임 계정 읽기 권한
+printf '%s' '<VAPID 개인 키>' | gcloud secrets create navis-vapid-private-key --data-file=-
+gcloud secrets add-iam-policy-binding navis-vapid-private-key \
+  --member=serviceAccount:navis-run@$PROJECT.iam.gserviceaccount.com \
+  --role=roles/secretmanager.secretAccessor
+
+# 2) 운영 DB 에 0010(push_subscriptions) 적용 — 배포보다 먼저
+DATABASE_URL='<Supabase 풀러 URL>' pnpm db:migrate
+
+# 3) 배포 — main 에 push
+```
+
+비밀값이 없으면 배포가 실패한다(Cloud Run 이 secretKeyRef 를 못 찾는다). 0010 없이 배포하면 대화는 되고
+알림 켜기만 실패한다.
+
 ## 메일 템플릿 — 초대 · 비밀번호 재설정 (Supabase 대시보드, 한 번)
 
 이 앱은 세션을 쿠키로 둔다(`@supabase/ssr`). 기본 템플릿의 `{{ .ConfirmationURL }}` 은 로그인 정보를 주소의

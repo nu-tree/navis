@@ -85,3 +85,20 @@ export const settings = pgTable(
   },
   (t) => [primaryKey({ columns: [t.userId, t.key] })],
 );
+
+// 웹 푸시 구독 — 회원의 기기(브라우저 · 설치한 앱)마다 한 행. 창을 닫아도 답 도착을 알린다.
+// endpoint 가 기기의 주소라 전역 유일이다. 같은 기기에서 다른 회원으로 로그인하면 주인이 바뀐다.
+// 푸시 서비스가 404 · 410 을 주면(구독 해지 · 만료) domain 이 지운다.
+export const pushSubscriptions = pgTable(
+  "push_subscriptions",
+  {
+    endpoint: text("endpoint").primaryKey(),
+    userId: uuid("user_id").notNull(),
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("push_subscriptions_user_idx").on(t.userId)],
+);

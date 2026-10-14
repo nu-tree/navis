@@ -6,6 +6,8 @@
 // - 탭 제목 표시: 알림을 거절했거나 지원하지 않는 브라우저(아이폰 사파리 등)에서도 보인다.
 //   탭으로 돌아오면 원래 제목으로 되돌린다.
 
+import { pushActive, subscribePush } from "@/utils/push-subscription";
+
 const BADGE = "● ";
 
 const supported = () => typeof window !== "undefined" && "Notification" in window;
@@ -16,7 +18,10 @@ const supported = () => typeof window !== "undefined" && "Notification" in windo
  */
 export const requestAnswerNotificationPermission = () => {
   if (!supported() || Notification.permission !== "default") return;
-  Notification.requestPermission().catch(() => undefined);
+  Notification.requestPermission()
+    // 허락하면 창을 닫아도 오는 웹 푸시까지 켠다. 못 하는 브라우저면 아래 화면 알림만 쓴다.
+    .then((p) => (p === "granted" ? subscribePush() : false))
+    .catch(() => undefined);
 };
 
 /** 알림 본문 — 마크다운 기호를 걷어내고 앞부분만. */
@@ -60,6 +65,8 @@ type NotifyInput = {
 export const notifyAnswer = ({ conversationId, body, onClick }: NotifyInput) => {
   if (typeof document === "undefined" || !document.hidden) return;
   markTitle();
+  // 푸시를 받는 기기면 서비스 워커가 띄운다 — 여기서도 띄우면 두 번 울린다.
+  if (pushActive()) return;
   if (!supported() || Notification.permission !== "granted") return;
   try {
     const notification = new Notification("나비스", {

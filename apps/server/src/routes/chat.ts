@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import type { AppEnv } from "../types";
 import { streamSSE } from "hono/streaming";
-import { chat, conversation } from "@navis/domain";
+import { chat, conversation, push } from "@navis/domain";
 import { isClaudeTokenError, isNotFound } from "@navis/domain/errors";
 import {
   cancelRequestSchema,
@@ -24,6 +24,13 @@ const inFlight = new Map<string, { controller: AbortController; userId: string }
 // 같은 방에 진행 중인 턴. 클라이언트도 막지만(FR-008) 새로고침으로 우회되므로
 // 서버에서도 막는다.
 const activeConversations = new Set<string>();
+
+/** 회원의 기기들로 푸시. 사용자가 중지한 턴은 알리지 않는다 — 본인이 지금 보고 있다. */
+const notifyAnswer = (userId: string, conversationId: string, body: string) => {
+  push.notify(userId, { title: "나비스", body, conversationId }).catch((err: unknown) => {
+    console.error(`[chat] 푸시 실패: ${err instanceof Error ? err.message : String(err)}`);
+  });
+};
 
 export const chatRoute = new Hono<AppEnv>()
   .post("/", async (c) => {
@@ -121,6 +128,8 @@ export const chatRoute = new Hono<AppEnv>()
           // 이 턴에 실제로 저장된 기억이 있는지. 화면의 저장 표시 조건이 이것뿐이다.
           saved: result.savedCount > 0,
         });
+        // 창을 닫았거나 다른 앱에 가 있는 사람을 부른다. 기다리지 않는다 — 실패해도 답은 이미 기록됐다.
+        notifyAnswer(userId, req.conversationId, push.excerpt(result.text) || "답변이 도착했어요.");
       } catch (err) {
         if (abortController.signal.aborted) {
           // 부분 답변은 기록하지 않는다(Q3=B). 남는 것은 사용자의 질문뿐이다.
@@ -130,10 +139,12 @@ export const chatRoute = new Hono<AppEnv>()
           // 사용자 질문은 이미 기록됐다(FR-048).
           console.error(`[chat] 토큰 오류 turnId=${req.turnId}: ${err.kind}`);
           await send({ type: "error", message: err.message, code: err.kind });
+          notifyAnswer(userId, req.conversationId, `⚠️ ${err.message}`);
         } else {
           const message = err instanceof Error ? err.message : String(err);
           console.error(`[chat] 턴 실패 turnId=${req.turnId}: ${message}`);
           await send({ type: "error", message });
+          notifyAnswer(userId, req.conversationId, `⚠️ ${message}`);
         }
       } finally {
         inFlight.delete(req.turnId);

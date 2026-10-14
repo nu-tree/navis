@@ -7,6 +7,7 @@ import { health } from "./routes/health";
 import { conversationsRoute } from "./routes/conversations";
 import { mcpRoute } from "./routes/mcp";
 import { memoriesRoute } from "./routes/memories";
+import { pushRoute } from "./routes/push";
 import { settingsRoute } from "./routes/settings";
 
 // Hono 앱 조립. index.ts 와 분리해 테스트에서 app.fetch 를 직접 부를 수 있게 한다.
@@ -19,6 +20,7 @@ import { settingsRoute } from "./routes/settings";
 //   /me              — 요청 회원이 관리자인지 (web 이 지우기 버튼을 보일지 정한다)
 //   /conversations   — 대화방
 //   /settings        — Claude 구독 토큰 (US5)
+//   /push            — 웹 푸시 구독 (창을 닫아도 답 도착 알림)
 //   /mcp             — 외부 MCP (Claude Code). web /api/mcp 를 거쳐 들어온다
 export const app = new Hono<AppEnv>();
 
@@ -89,3 +91,4 @@ app.route("/memories", memoriesRoute);
 app.route("/conversations", conversationsRoute);
 app.route("/mcp", mcpRoute);
 app.route("/settings", settingsRoute);
+app.route("/push", pushRoute);

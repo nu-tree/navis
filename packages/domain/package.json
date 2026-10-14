@@ -9,7 +9,8 @@
     "./memory": "./src/memory/index.ts",
     "./chat": "./src/chat/index.ts",
     "./conversation": "./src/conversation/index.ts",
-    "./settings": "./src/settings/index.ts"
+    "./settings": "./src/settings/index.ts",
+    "./push": "./src/push/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -21,11 +22,13 @@
     "@navis/db": "workspace:*",
     "@navis/validation": "workspace:*",
     "drizzle-orm": "^0.45.2",
+    "web-push": "3.6.7",
     "zod": "^4.5.4"
   },
   "devDependencies": {
     "@navis/config": "workspace:*",
     "@types/node": "^22.0.0",
+    "@types/web-push": "3.6.4",
     "tsx": "^4.23.13",
     "typescript": "^5.9.3",
     "vitest": "^5.0.0"

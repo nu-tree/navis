@@ -5,4 +5,4 @@
 
 export { db } from "./client";
 export * as schema from "./schema";
-export { memories, conversations, settings } from "./schema";
+export { memories, conversations, settings, pushSubscriptions } from "./schema";

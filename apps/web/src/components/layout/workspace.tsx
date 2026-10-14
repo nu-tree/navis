@@ -5,9 +5,11 @@ import { NavisSidebar } from "./sidebar";
 import { ChatPanel } from "@/features/chat/chat-panel";
 import { OnboardingTour } from "@/features/onboarding/onboarding-tour";
 import { useConversationWorkspace } from "@/hooks/pages/conversation/use-conversation-workspace";
+import { usePushBridge } from "@/hooks/pages/conversation/use-push-bridge";
 
 export const Workspace = () => {
   const { rooms, selectedId, select, createDraft, remove, refresh } = useConversationWorkspace();
+  usePushBridge(select);
 
   return (
     <AppShell
