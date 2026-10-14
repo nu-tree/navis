@@ -12,7 +12,7 @@
 | `id` | uuid PK | `crypto.randomUUID()` |
 | `user_id` | uuid not null | 주인 |
 | `instruction` | text not null | 자연어 지시 한 문장. 1~1,000자 |
-| `label` | text not null | 화면 · 출처 표시용 짧은 요약. 모델이 정하고, 최대 40자 |
+| `label` | text not null | 약속 화면에 보일 짧은 요약. 모델이 정하고, 최대 40자 |
 | `schedule_kind` | text not null | `once` \| `cron` |
 | `run_at` | timestamptz null | `once` 일 때 실행 시각 |
 | `cron` | text null | `cron` 일 때 식. 항상 Asia/Seoul 로 해석 |
@@ -93,7 +93,7 @@
 origin?: {
   kind: "promise" | "promise-disabled";
   promiseId: string;
-  label: string;   // "⏰ 약속: {label}" 로 표시
+  label: string;   // 화면에 표시하지 않는다 — 기록 · 디버깅용(2026-10-14 사용자 결정)
 }
 ```
 

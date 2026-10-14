@@ -125,7 +125,7 @@ description: "먼저 말 거는 나비스 — 약속 작업 목록"
 
 **Goal**: 한 번짜리 약속을 대화로 만들고, 시각이 되면 메인 방에 나비스가 먼저 말을 건다. 알림도 온다.
 
-**Independent Test**: quickstart S1 — "2분 뒤에 물 마셨는지 물어봐줘" → 창 닫기 → 3분 안에 알림 → 메인 방에 출처 표시가 붙은 메시지 → 답하면 이어진다.
+**Independent Test**: quickstart S1 — "2분 뒤에 물 마셨는지 물어봐줘" → 창 닫기 → 3분 안에 알림 → 메인 방에 나비스가 먼저 쓴 메시지(출처 표시 없음) → 답하면 이어진다.
 
 ### 테스트
 
@@ -179,7 +179,7 @@ description: "먼저 말 거는 나비스 — 약속 작업 목록"
   - `POST /internal/tick`: `runner.accepting` 이 아니면 `{ claimed: 0 }`, 아니면 `promise.claimDue(5)` → 각 항목을 `runner.enqueue` 하고 **모두 끝날 때까지 기다린 뒤** 응답한다(R2).
   - 라우트 목록 주석을 갱신한다.
 - [X] T031 [US1] `apps/web/src/app/api/internal/tick/route.ts` 를 만든다. `/api/mcp` 와 같은 중계로 POST 만 받는다. `authorization` 헤더만 넘기고 세션 · web 토큰을 붙이지 않는다. 응답 본문은 그대로 넘긴다. `export const maxDuration` 등 Next 라우트 시간 제한이 30분 요청을 끊지 않는지 `node_modules/next/dist/docs/` 에서 확인하고 필요하면 설정한다.
-- [ ] T032 [US1] `apps/web/src/features/chat/message-bubble.tsx`: `message.origin` 이 있으면 말풍선 위에 작은 출처 줄 "⏰ 약속: {label}" 을 보인다(`promise-disabled` 는 "⚠️ 약속 꺼짐: {label}"). props 를 늘리지 않고 message 에서 읽는다.
+- [X] T032 [US1] ~~말풍선 출처 표시~~ — **하지 않는다**(2026-10-14 사용자 결정). 약속 메시지도 평소 나비스 답과 똑같이 보인다. `origin` 은 데이터에만 남는다.
 
 **Checkpoint**: 로컬 tick 루프(quickstart 준비 3)로 S1 · S11 · S15 · S16 을 통과한다.
 
