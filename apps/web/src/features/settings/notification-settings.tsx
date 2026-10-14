@@ -43,6 +43,7 @@ export const NotificationSettings = () => {
         <h2 className="font-semibold">알림</h2>
         <p className="text-sm text-muted-foreground">
           답이 도착하면 이 기기로 알려 드려요. 나비스 창을 닫아 둬도 와요. 기기마다 따로 켜요.
+          같은 컴퓨터에서는 설치한 나비스 앱 한 곳에서만 켜 두세요 — 브라우저와 앱 둘 다 켜면 두 번 와요.
         </p>
       </div>
 
