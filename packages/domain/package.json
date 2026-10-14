@@ -10,7 +10,8 @@
     "./chat": "./src/chat/index.ts",
     "./conversation": "./src/conversation/index.ts",
     "./settings": "./src/settings/index.ts",
-    "./push": "./src/push/index.ts"
+    "./push": "./src/push/index.ts",
+    "./promise": "./src/promise/api.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

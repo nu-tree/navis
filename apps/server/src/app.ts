@@ -4,6 +4,7 @@ import { env } from "./env";
 import type { AppEnv } from "./types";
 import { chatRoute } from "./routes/chat";
 import { health } from "./routes/health";
+import { internalRoute } from "./routes/internal";
 import { conversationsRoute } from "./routes/conversations";
 import { mcpRoute } from "./routes/mcp";
 import { memoriesRoute } from "./routes/memories";
@@ -22,6 +23,7 @@ import { settingsRoute } from "./routes/settings";
 //   /settings        — Claude 구독 토큰 (US5)
 //   /push            — 웹 푸시 구독 (창을 닫아도 답 도착 알림)
 //   /mcp             — 외부 MCP (Claude Code). web /api/mcp 를 거쳐 들어온다
+//   /internal/tick   — 약속 실행 (Cloud Scheduler 전용, specs/003). web /api/internal/tick 을 거친다
 export const app = new Hono<AppEnv>();
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -46,6 +48,12 @@ const apiAuth = bearerAuth({ token: env.apiToken }) as unknown as MiddlewareHand
 const mcpAuth = env.mcpToken
   ? (bearerAuth({ token: env.mcpToken }) as unknown as MiddlewareHandler<AppEnv>)
   : null;
+const tickAuth = env.tickToken
+  ? (bearerAuth({ token: env.tickToken }) as unknown as MiddlewareHandler<AppEnv>)
+  : null;
+
+/** 회원 헤더를 보지 않는 경로 — 자기 토큰으로만 열린다. */
+const TICK_PATH = "/internal/tick";
 
 // 기본 잠금 + /health 만 예외. 반대로(보호할 경로를 나열) 짜면 라우트를 추가하다
 // 하나 빠뜨리는 순간 공개된다.
@@ -60,12 +68,17 @@ app.use("*", async (c, next) => {
     c.set("userId", env.ownerId);
     return mcpAuth(c, next);
   }
+  // 약속 tick 도 자기 토큰으로만 연다. 회원 요청이 아니다 — 약속마다 주인 회원이 있다(specs/003 R10).
+  if (c.req.path === TICK_PATH) {
+    if (!tickAuth) return c.json({ error: "tick 이 설정되지 않았다." }, 404);
+    return tickAuth(c, next);
+  }
   return apiAuth(c, next);
 });
 
 // 서버 토큰을 통과한 요청에 회원을 붙인다. /health · /mcp 는 위에서 끝났다.
 app.use("*", async (c, next) => {
-  if (c.req.path === "/health" || c.req.path === "/mcp") return next();
+  if (c.req.path === "/health" || c.req.path === "/mcp" || c.req.path === TICK_PATH) return next();
   const userId = resolveUser(c.req.header("x-navis-user"));
   if (!userId) return c.json({ error: "회원을 알 수 없다." }, 401);
   c.set("userId", userId);
@@ -92,3 +105,4 @@ app.route("/conversations", conversationsRoute);
 app.route("/mcp", mcpRoute);
 app.route("/settings", settingsRoute);
 app.route("/push", pushRoute);
+app.route("/internal", internalRoute);

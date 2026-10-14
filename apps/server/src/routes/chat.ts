@@ -100,6 +100,7 @@ export const chatRoute = new Hono<AppEnv>()
         const result = await chat.runTurn(
           {
             userId,
+            conversationId: req.conversationId,
             prompt: req.text,
             resumeSessionId,
             history,

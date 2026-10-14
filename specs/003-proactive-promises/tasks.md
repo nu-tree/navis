@@ -129,7 +129,7 @@ description: "먼저 말 거는 나비스 — 약속 작업 목록"
 
 ### 테스트
 
-- [ ] T021 [P] [US1] `packages/domain/test/promise/schedule.test.ts`(순수): 한 번짜리 약속의 검증과 다음 회차를 검증한다.
+- [X] T021 [P] [US1] `packages/domain/test/promise/schedule.test.ts`(순수): 한 번짜리 약속의 검증과 다음 회차를 검증한다.
   - 과거 시각은 거절한다.
   - 오프셋 없는 ISO 는 거절한다.
   - 미래 시각은 `nextRun = at` 이고, 실행 후 다음 회차는 없다.
@@ -148,37 +148,37 @@ description: "먼저 말 거는 나비스 — 약속 작업 목록"
 
 ### 구현
 
-- [ ] T024 [P] [US1] `packages/domain/src/promise/schedule.ts`(순수)를 만든다.
+- [X] T024 [P] [US1] `packages/domain/src/promise/schedule.ts`(순수)를 만든다.
   - `validateSchedule(input, now)` → `{ kind, runAt | cron }` 또는 `ScheduleInvalidError`(errors.ts 에 추가, 이유 문구 포함).
   - `nextRunAfter(schedule, after)`: 놓친 회차를 건너뛰고 `after` 이후 첫 회차다.
   - `upcoming(schedule, now, 3)`
   - `describe(schedule)`: 사람이 읽는 KST 표기다.
   - 이 단계에서는 한 번짜리 갈래만 구현한다. cron 갈래는 US2(T033)에서 하고, 지금은 `ScheduleInvalidError("반복 약속은 아직 지원하지 않아요")` 를 던진다.
-- [ ] T025 [US1] `packages/domain/src/promise/index.ts` 를 만든다. CRUD 와 실행 상태를 다룬다.
+- [X] T025 [US1] `packages/domain/src/promise/index.ts` 를 만든다. CRUD 와 실행 상태를 다룬다.
   - CRUD: `create(userId, input, originConversationId)`(켜진 약속 **회원당 최대 20개** → `PromiseLimitError`), `list(userId, { includeEnded })`(최근 실행 3개 포함), `get` · `setEnabled` · `remove`(모두 회원으로 좁힘, 남의 것은 NotFoundError).
   - 실행 상태 함수:
     - `claimDue(limit=5)`: 한 트랜잭션에서 `SELECT … FOR UPDATE SKIP LOCKED` → `lease_until = now()+15분`, `promise_runs` 에 `running` 을 INSERT 한다. 시작 전에 임대가 만료된 `running` 을 `failed("서버가 실행 중에 멈췄어요")` 로 닫는다.
     - `complete(runId, outcome)`: `next_run_at = nextRunAfter(now)`, 한 번짜리는 `enabled=false` · `ended_at`, `last_run_at`, `memo`, `consecutive_failures` 를 쓰고 `lease_until = null` 로 만든다. 약속마다 `promise_runs` 를 최근 20개만 남긴다.
-- [ ] T026 [US1] `packages/domain/src/promise/mcp.ts` 를 만든다. 서버 둘(contracts/promise-tools.md).
+- [X] T026 [US1] `packages/domain/src/promise/mcp.ts` 를 만든다. 서버 둘(contracts/promise-tools.md).
   - `createPromiseMcpServer({ userId, conversationId })`: `create` · `list` · `update` · `cancel`. 응답에 다음 3회차와 id 를 싣는다.
   - `createPromiseRunMcpServer({ userId, promise, run, state })`: `notify`(실행당 1회, 두 번째는 isError) · `set_memo` · `finish`.
   - `notify` 는 `conversation.ensureMain` → `appendMessage(role "assistant", origin { kind "promise", promiseId, label })` 를 부르고, 메인 방 `session_id = null` · `session_turns = 0` 으로 만든다. 그다음 `push.notify(userId, { title: "나비스", body: push.excerpt(text), conversationId: mainId })` 를 기다리지 않고 보낸다. 결과는 `state` 에 기록한다(spoke, messageId).
   - `ALLOWED_PROMISE_TOOLS` · `ALLOWED_PROMISE_RUN_TOOLS` 를 export 한다.
-- [ ] T027 [US1] `packages/domain/src/chat/index.ts` 를 리팩터링한다.
+- [X] T027 [US1] `packages/domain/src/chat/index.ts` 를 리팩터링한다.
   - query 옵션 조립(토큰 · 도구 · canUseTool · env · 오류 분류 · 글 모으기)을 내부 함수 하나로 모으고, 그 위에 `runTurn`(대화)과 `runPromiseTurn`(약속)을 둔다.
   - `runTurn` 은 `mcpServers` 에 `promise` 서버를 추가하고 `allowedTools` 에 `ALLOWED_PROMISE_TOOLS` 를 더한다.
   - `runPromiseTurn({ userId, promise, run, history })`: resume 없음, 콜백 없음, 기억 · 웹 · `promise_run` 도구. 프롬프트는 research R5 블록(지시 · 메모 · 예정 · 지금(KST) · 지난 실행)이고 `withHistory` 로 메인 방 최근 20개를 앞에 붙인다.
   - `SYSTEM_PROMPT` 에 "## 약속" 절을 넣고, 약속 턴에는 "## 약속 실행" 절을 덧붙인다(contracts/promise-tools.md 문구).
-- [ ] T028 [US1] `packages/domain/src/promise/run.ts` 를 만든다. `executeRun(claimed)`: 메인 방 최근 20개를 읽고 `chat.runPromiseTurn` 을 실행한 뒤 결과를 분류한다. `notify` 를 불렀으면 `spoke`, 아니면 `silent`, 예외면 `failed`(토큰 오류는 err.message 를 그대로 쓴다). 마지막에 `promise.complete` 를 부른다. 예외를 밖으로 던지지 않는다. `packages/domain/src/index.ts` 에서 `promise` 네임스페이스로 export 한다.
-- [ ] T029 [US1] `apps/server/src/promise-runner.ts` 를 만든다. 직렬 큐다(R4).
+- [X] T028 [US1] `packages/domain/src/promise/run.ts` 를 만든다. `executeRun(claimed)`: 메인 방 최근 20개를 읽고 `chat.runPromiseTurn` 을 실행한 뒤 결과를 분류한다. `notify` 를 불렀으면 `spoke`, 아니면 `silent`, 예외면 `failed`(토큰 오류는 err.message 를 그대로 쓴다). 마지막에 `promise.complete` 를 부른다. 예외를 밖으로 던지지 않는다. `packages/domain/src/index.ts` 에서 `promise` 네임스페이스로 export 한다.
+- [X] T029 [US1] `apps/server/src/promise-runner.ts` 를 만든다. 직렬 큐다(R4).
   - `enqueue(claimed): Promise<RunResult>`: 실행 직전에 `turns.waitUntilIdle(userId, 10분)` → `promise.executeRun`.
   - 직렬화는 프라미스 체인 누산기 `let tail` 하나로 한다. 헌장 IV 가 허용하는 예외이며 근거 주석을 단다.
   - `stopAccepting()`: `process.on("SIGTERM")` 에서 부른다(`apps/server/src/index.ts`). 이후 tick 은 새로 선점하지 않는다(research R3).
-- [ ] T030 [US1] `apps/server/src/routes/internal.ts` 와 `apps/server/src/app.ts` 를 바꾼다.
+- [X] T030 [US1] `apps/server/src/routes/internal.ts` 와 `apps/server/src/app.ts` 를 바꾼다.
   - 기본 잠금에 `/internal/tick` 갈래를 `/mcp` 처럼 둔다. `env.tickToken` 이 없으면 404, 있으면 그 토큰의 bearerAuth 만 쓴다. 회원 헤더는 보지 않는다.
   - `POST /internal/tick`: `runner.accepting` 이 아니면 `{ claimed: 0 }`, 아니면 `promise.claimDue(5)` → 각 항목을 `runner.enqueue` 하고 **모두 끝날 때까지 기다린 뒤** 응답한다(R2).
   - 라우트 목록 주석을 갱신한다.
-- [ ] T031 [US1] `apps/web/src/app/api/internal/tick/route.ts` 를 만든다. `/api/mcp` 와 같은 중계로 POST 만 받는다. `authorization` 헤더만 넘기고 세션 · web 토큰을 붙이지 않는다. 응답 본문은 그대로 넘긴다. `export const maxDuration` 등 Next 라우트 시간 제한이 30분 요청을 끊지 않는지 `node_modules/next/dist/docs/` 에서 확인하고 필요하면 설정한다.
+- [X] T031 [US1] `apps/web/src/app/api/internal/tick/route.ts` 를 만든다. `/api/mcp` 와 같은 중계로 POST 만 받는다. `authorization` 헤더만 넘기고 세션 · web 토큰을 붙이지 않는다. 응답 본문은 그대로 넘긴다. `export const maxDuration` 등 Next 라우트 시간 제한이 30분 요청을 끊지 않는지 `node_modules/next/dist/docs/` 에서 확인하고 필요하면 설정한다.
 - [ ] T032 [US1] `apps/web/src/features/chat/message-bubble.tsx`: `message.origin` 이 있으면 말풍선 위에 작은 출처 줄 "⏰ 약속: {label}" 을 보인다(`promise-disabled` 는 "⚠️ 약속 꺼짐: {label}"). props 를 늘리지 않고 message 에서 읽는다.
 
 **Checkpoint**: 로컬 tick 루프(quickstart 준비 3)로 S1 · S11 · S15 · S16 을 통과한다.
@@ -191,13 +191,13 @@ description: "먼저 말 거는 나비스 — 약속 작업 목록"
 
 **Independent Test**: quickstart S2(짝수 시만 말하기) · S3(한 번만 알리기) · S4(최소 간격 · 상한) · S13(실패 3회 → 꺼짐).
 
-- [ ] T033 [P] [US2] `packages/domain/test/promise/schedule.test.ts` 에 cron 을 추가한다.
+- [X] T033 [P] [US2] `packages/domain/test/promise/schedule.test.ts` 에 cron 을 추가한다.
   - `0 21 * * *` 의 다음 회차가 KST 21:00 이다(UTC 12:00).
   - `*/30 * * * *` 는 간격 1시간 미만이라 거절하고, 이유에 제안 일정이 있다.
   - `0 * * * *` 는 통과한다.
   - 놓친 회차 3개가 있어도 `nextRunAfter(now)` 는 미래 첫 회차 하나다.
   - 잘못된 식은 거절한다.
-- [ ] T034 [US2] `packages/domain/src/promise/schedule.ts` 에 cron 갈래를 구현한다. `cron-parser`, `tz: "Asia/Seoul"`. 최소 간격은 다음 24회차의 인접 간격이 모두 1시간 이상인지로 검증한다(FR-005). `describe` 는 "매일 21:00" 처럼 흔한 형태를 사람 말로 바꾸고, 그 밖은 cron 원문과 다음 회차를 보여 준다. T024 의 임시 거절을 지운다.
+- [X] T034 [US2] `packages/domain/src/promise/schedule.ts` 에 cron 갈래를 구현한다. `cron-parser`, `tz: "Asia/Seoul"`. 최소 간격은 다음 24회차의 인접 간격이 모두 1시간 이상인지로 검증한다(FR-005). `describe` 는 "매일 21:00" 처럼 흔한 형태를 사람 말로 바꾸고, 그 밖은 cron 원문과 다음 회차를 보여 준다. T024 의 임시 거절을 지운다.
 - [ ] T035 [US2] `packages/domain/src/promise/index.ts` 의 `complete` 에 연속 실패 처리를 넣는다(R11). `failed` 면 `consecutive_failures + 1`, 아니면 0 이다. 반복 약속이 **연속 3회** 실패하면 `enabled=false`, `next_run_at=null` 로 만들고, 메인 방에 assistant 메시지 하나(`origin.kind = "promise-disabled"`, 본문 "'{label}' 약속이 세 번 연속 실패해서 껐어요. 이유: {마지막 error}")를 남긴 뒤 푸시를 보낸다. 한 번짜리 약속은 실패해도 끝남으로 둔다.
 - [ ] T036 [P] [US2] `packages/domain/test/promise/claim.test.ts` 에 추가한다(실 DB).
   - 반복 약속을 complete 하면 `next_run_at` 이 미래 첫 회차다.
