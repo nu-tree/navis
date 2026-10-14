@@ -134,13 +134,13 @@ description: "먼저 말 거는 나비스 — 약속 작업 목록"
   - 오프셋 없는 ISO 는 거절한다.
   - 미래 시각은 `nextRun = at` 이고, 실행 후 다음 회차는 없다.
   - 사람이 읽는 표기는 "10월 15일(수) 15:00" 처럼 KST 다.
-- [ ] T022 [P] [US1] `packages/domain/test/promise/claim.test.ts`(실 DB): 선점을 검증한다(R3).
+- [X] T022 [P] [US1] `packages/domain/test/promise/claim.test.ts`(실 DB): 선점을 검증한다(R3).
   - 기한이 된 약속만 집힌다.
   - 두 번 동시에 `claimDue()` 를 불러도 같은 약속은 한 번만 나온다(`Promise.all`).
   - `lease_until` 이 미래면 안 집힌다.
   - 임대가 만료된 `running` 실행은 `failed` 로 닫히고 다시 집힌다.
   - `LIMIT 5` 를 지킨다.
-- [ ] T023 [P] [US1] `apps/server/test/routes/internal.test.ts`(계약, domain · runner mock): tick 자격을 검증한다(R10).
+- [X] T023 [P] [US1] `apps/server/test/routes/internal.test.ts`(계약, domain · runner mock): tick 자격을 검증한다(R10).
   - 토큰 미설정이면 404.
   - 토큰이 없거나 `API_TOKEN` 이거나 MCP 토큰이면 401.
   - 맞는 토큰이면 200 `{ claimed, results }`.
