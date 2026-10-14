@@ -4,6 +4,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useDeleteMemory } from "@/hooks/apis/memory/use-delete-memory";
 import { useMemoryNeighborList } from "@/hooks/apis/memory/use-memory-neighbor-list";
 import { ConfirmDeleteButton } from "@/components/common/confirm-delete-button";
+import { useIsAdmin } from "@/hooks/apis/me/use-me";
 import { MemoryMeta } from "./memory-meta";
 
 /** 이 점수 이상이면 "겹친다"로 강조한다. 임베딩 모델이 바뀌면 다시 본다. */
@@ -18,6 +19,8 @@ type Props = { memoryId: string };
 export const MemoryNeighbors = ({ memoryId }: Readonly<Props>) => {
   const { data: hits = [], isLoading, error } = useMemoryNeighborList(memoryId, true);
   const { mutate: deleteMemory, isPending } = useDeleteMemory();
+  // 지우기는 관리자만 — 회원은 보고 고치기만 한다(server 가 403 으로도 막는다).
+  const admin = useIsAdmin();
 
   if (isLoading) return <Skeleton className="h-16 w-full" />;
   if (error) return <p className="text-xs text-destructive">{error.message}</p>;
@@ -25,7 +28,9 @@ export const MemoryNeighbors = ({ memoryId }: Readonly<Props>) => {
 
   return (
     <div className="space-y-2">
-      <p className="text-xs font-medium text-muted-foreground">비슷한 기억 — 겹치면 지우고 하나만 남기세요</p>
+      <p className="text-xs font-medium text-muted-foreground">
+        {admin ? "비슷한 기억 — 겹치면 지우고 하나만 남기세요" : "비슷한 기억"}
+      </p>
       <ul className="space-y-2">
         {hits.map(({ memory, score }) => (
           <li
@@ -37,7 +42,7 @@ export const MemoryNeighbors = ({ memoryId }: Readonly<Props>) => {
               <p className="text-sm break-words whitespace-pre-wrap">{memory.content}</p>
               <MemoryMeta memory={memory} score={score} />
             </div>
-            <ConfirmDeleteButton disabled={isPending} onConfirm={() => deleteMemory(memory.id)} />
+            {admin ? <ConfirmDeleteButton disabled={isPending} onConfirm={() => deleteMemory(memory.id)} /> : null}
           </li>
         ))}
       </ul>

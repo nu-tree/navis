@@ -30,6 +30,11 @@ export const MemoryScreen = () => {
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-3xl px-4 py-6">
+          {/* 초대한 회원이 "꼬일까봐" 기억을 전부 지운 일이 있었다(2026-10). 비우는 화면이 아니라 바로잡는 화면이다. */}
+          <p className="mb-4 rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+            기억은 나만 보고, 다른 사람이나 다른 주제와 섞이지 않아요. 쌓일수록 나비스가 나를 더 잘 알아요 —
+            <b className="font-semibold text-foreground"> 틀린 게 보이면 연필 버튼으로 고쳐 주세요.</b>
+          </p>
           <Tabs defaultValue="all">
             <TabsList className="mb-4">
               <TabsTrigger value="all">전체</TabsTrigger>

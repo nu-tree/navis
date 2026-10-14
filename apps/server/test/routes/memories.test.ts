@@ -5,7 +5,8 @@ const TOKEN = "test-token";
 vi.stubEnv("API_TOKEN", TOKEN);
 vi.stubEnv("VOYAGE_API_KEY", "test-voyage-key");
 vi.stubEnv("NAVIS_SETTINGS_KEY", Buffer.alloc(32, 1).toString("base64"));
-vi.stubEnv("NAVIS_OWNER_ID", "00000000-0000-4000-8000-000000000001");
+const OWNER = "00000000-0000-4000-8000-000000000001";
+vi.stubEnv("NAVIS_OWNER_ID", OWNER);
 
 /** 이 파일의 요청 회원(BFF 가 x-navis-user 로 붙이는 값). */
 const MEMBER = "00000000-0000-4000-8000-0000000000a1";
@@ -320,15 +321,28 @@ describe("기억 직접 관리 (US4)", () => {
     remove.mockRejectedValue(notFound());
     neighbors.mockRejectedValue(notFound());
     const patch = await req("/memories/x", { method: "PATCH", body: JSON.stringify({ done: true }) });
-    const del = await req("/memories/x", { method: "DELETE" });
+    const del = await req("/memories/x", { method: "DELETE", headers: { "x-navis-user": OWNER } });
     const nb = await req("/memories/x/neighbors");
     expect([patch.status, del.status, nb.status]).toEqual([404, 404, 404]);
   });
 
-  it("DELETE 는 { ok }", async () => {
+  it("DELETE 는 { ok } — 관리자", async () => {
     remove.mockResolvedValue({ ok: true });
-    const res = await req("/memories/m1", { method: "DELETE" });
+    const res = await req("/memories/m1", { method: "DELETE", headers: { "x-navis-user": OWNER } });
     expect(await res.json()).toEqual({ ok: true });
+    expect(remove).toHaveBeenCalledWith(OWNER, "m1");
+  });
+
+  it("DELETE 는 관리자가 아니면 403 — 지우지 않는다", async () => {
+    const res = await req("/memories/m1", { method: "DELETE" });
+    expect(res.status).toBe(403);
+    expect(remove).not.toHaveBeenCalled();
+  });
+
+  it("GET /me 는 관리자 여부를 알려준다", async () => {
+    expect(await (await req("/me")).json()).toEqual({ admin: false });
+    expect(await (await req("/me", { headers: { "x-navis-user": OWNER } })).json()).toEqual({ admin: true });
+    expect(await (await req("/me", { headers: { "x-navis-user": "owner" } })).json()).toEqual({ admin: true });
   });
 
   it("neighbors 의 limit 상한(20)을 넘으면 400", async () => {
