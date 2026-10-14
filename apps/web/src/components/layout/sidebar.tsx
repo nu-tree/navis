@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { Brain, CircleHelp, LogOut, MessageSquare, Plus, Settings, Trash2 } from "lucide-react";
+import { Brain, CircleHelp, Download, LogOut, MessageSquare, Plus, Settings, Trash2 } from "lucide-react";
 import type { ConversationSummary } from "@navis/validation";
 import { Button } from "@/components/ui/button";
 import { useSignOut } from "@/hooks/apis/auth/use-sign-out";
+import { useInstallPrompt } from "@/hooks/common/use-install-prompt";
 import { supabaseEnv } from "@/lib/supabase";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import {
@@ -39,6 +40,7 @@ export function NavisSidebar({
   const { mutate: signOut } = useSignOut();
   const openOnboarding = useOnboardingStore((s) => s.setOpen);
   const configured = supabaseEnv() !== null;
+  const install = useInstallPrompt();
 
   return (
     <Sidebar collapsible="offcanvas">
@@ -106,6 +108,15 @@ export function NavisSidebar({
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
+          {/* 설치할 수 있는 브라우저(크롬 · 엣지)에서, 아직 설치하지 않았을 때만 보인다. */}
+          {install ? (
+            <SidebarMenuItem>
+              <SidebarMenuButton tooltip="앱으로 설치" onClick={() => void install()}>
+                <Download />
+                <span>앱으로 설치</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ) : null}
           <SidebarMenuItem>
             <SidebarMenuButton tooltip="사용법" data-tour="help" onClick={() => openOnboarding(true)}>
               <CircleHelp />

@@ -72,5 +72,9 @@ export const config = {
   //
   // `/api/*` 도 제외한다. BFF 는 세션이 없을 때 **401 JSON** 을 돌려줘야 하는데,
   // 여기서 리다이렉트하면 fetch 호출자가 HTML 을 받아 파싱이 깨진다.
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|icon.png).*)"],
+  //
+  // 설치형 앱 파일(manifest · 아이콘)도 제외한다 — 브라우저가 쿠키 없이 받는다(app/manifest.ts).
+  matcher: [
+    "/((?!api|_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|manifest.webmanifest|icons/).*)",
+  ],
 };
