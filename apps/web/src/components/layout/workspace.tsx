@@ -8,24 +8,14 @@ import { useConversationWorkspace } from "@/hooks/pages/conversation/use-convers
 import { usePushBridge } from "@/hooks/pages/conversation/use-push-bridge";
 
 export const Workspace = () => {
-  const { rooms, selectedId, select, createDraft, remove, refresh } = useConversationWorkspace();
-  usePushBridge(select);
+  const { mainId, refresh } = useConversationWorkspace();
+  // 방이 하나라 알림이 가리키는 방으로 옮길 일이 없다. 배지 지우기 · 구독 갱신만 한다.
+  usePushBridge();
 
   return (
-    <AppShell
-      sidebar={
-        <NavisSidebar
-          rooms={rooms}
-          selectedId={selectedId}
-          onSelect={select}
-          onCreate={createDraft}
-          onRemove={remove}
-        />
-      }
-    >
-      {/* key 로 방이 바뀔 때 패널 상태를 통째로 갈아끼운다 — 이전 방의
-          스트리밍 버퍼나 오류가 새 방에 남지 않는다(FR-031). */}
-      <ChatPanel key={selectedId} conversationId={selectedId} onTurnEnd={refresh} onOpen={select} />
+    <AppShell sidebar={<NavisSidebar />}>
+      {/* "나비스" 방 id 가 오기 전엔 그리지 않는다(use-conversation-workspace 주석). */}
+      {mainId ? <ChatPanel key={mainId} conversationId={mainId} onTurnEnd={refresh} /> : null}
       <OnboardingTour />
     </AppShell>
   );

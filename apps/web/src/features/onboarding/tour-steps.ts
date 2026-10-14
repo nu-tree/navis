@@ -14,7 +14,7 @@ export const tourSteps = ({ tokenRegistered }: { tokenRegistered: boolean }): Dr
       description:
         "나비스는 <b>쓸수록 나를 더 잘 아는 비서</b>예요.<br/><br/>" +
         "보통 AI 는 대화방을 닫으면 처음부터 다시 설명해야 하죠. 나비스는 대화하면서 " +
-        "내가 결정한 것 · 할 일 · 알게 된 것을 <b>기억으로 쌓아요</b>. 방이 바뀌어도, 며칠이 지나도 이어지고, " +
+        "내가 결정한 것 · 할 일 · 알게 된 것을 <b>기억으로 쌓아요</b>. 며칠이 지나도 이어지고, " +
         "기억이 쌓일수록 설명 없이도 내 맥락에 맞게 답해요.<br/><br/>" +
         "그래서 나비스에서는 <b>기억이 곧 실력</b>이에요. 화면을 한 바퀴 둘러볼게요.",
     },
@@ -46,15 +46,6 @@ export const tourSteps = ({ tokenRegistered }: { tokenRegistered: boolean }): Dr
       title: "답하는 모델을 고를 수 있어요",
       description: "깊게 생각해야 하면 Opus, 빠른 답이 필요하면 가벼운 모델로. 기억은 모델과 상관없이 이어져요.",
       side: "top",
-      align: "start",
-    },
-  },
-  {
-    element: at("new-chat"),
-    popover: {
-      title: "주제가 바뀌면 새 대화로",
-      description: "대화방을 나눠도 기억은 하나로 이어져요. 다른 방에서 한 이야기도 \"전에 뭐라고 했지?\"로 찾을 수 있어요.",
-      side: "right",
       align: "start",
     },
   },

@@ -2,9 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Brain, CircleHelp, Download, LogOut, MessageSquare, Pin, Plus, Settings, Trash2 } from "lucide-react";
-import type { ConversationSummary } from "@navis/validation";
-import { Button } from "@/components/ui/button";
+import { Brain, CircleHelp, Download, LogOut, Settings } from "lucide-react";
 import { useSignOut } from "@/hooks/apis/auth/use-sign-out";
 import { InstallGuideDialog } from "@/features/install/install-guide-dialog";
 import { useInstallPrompt, useStandalone } from "@/hooks/common/use-install-prompt";
@@ -14,31 +12,18 @@ import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
-  SidebarGroup,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
-  SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarSeparator,
 } from "@/components/ui/sidebar";
 
-type Props = {
-  rooms: ConversationSummary[];
-  selectedId: string | null;
-  onSelect: (id: string) => void;
-  onCreate: () => void;
-  onRemove: (id: string) => void;
-};
-
-export function NavisSidebar({
-  rooms,
-  selectedId,
-  onSelect,
-  onCreate,
-  onRemove,
-}: Readonly<Props>) {
+/**
+ * 사이드바 — 기억 · 설정 · 설치 · 도움말. 방 목록과 "새 대화"는 없다: 대화는 "나비스" 방 하나로
+ * 이어진다(2026-10-14 사용자 결정, use-conversation-workspace 주석).
+ */
+export function NavisSidebar() {
   const { mutate: signOut } = useSignOut();
   const openOnboarding = useOnboardingStore((s) => s.setOpen);
   const configured = supabaseEnv() !== null;
@@ -52,59 +37,12 @@ export function NavisSidebar({
         <div className="flex items-center gap-2 px-2 py-1 text-lg font-extrabold">
           나비스
         </div>
-
-        <Button
-          data-tour="new-chat"
-          variant="outline"
-          onClick={onCreate}
-          className="w-full justify-start group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
-        >
-          <Plus />
-          <span className="group-data-[collapsible=icon]:hidden">새 대화</span>
-        </Button>
       </SidebarHeader>
 
       <SidebarSeparator />
 
-      <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>대화</SidebarGroupLabel>
-          <SidebarMenu>
-            {rooms.length === 0 ? (
-              <p className="px-2 py-1.5 text-xs text-muted-foreground">
-                아직 대화가 없어요.
-              </p>
-            ) : null}
-
-            {rooms.map((room) => (
-              <SidebarMenuItem key={room.id}>
-                <SidebarMenuButton
-                  isActive={room.id === selectedId}
-                  tooltip={room.title}
-                  onClick={() => onSelect(room.id)}
-                >
-                  {/* "나비스" 방은 맨 위에 고정된다(specs/003 R9) — 핀으로 구분한다. */}
-                  {room.isMain ? <Pin /> : <MessageSquare />}
-                  <span>{room.title}</span>
-                </SidebarMenuButton>
-
-                {/* 안읽음 배지는 두지 않는다 — 계약(ConversationSummary)에 없고,
-                    기기 간 동기화를 가져오지 않기로 하면서 의미를 잃었다.
-                    "나비스" 방은 지울 수 없다 — 버튼을 두지 않는다(서버도 409). */}
-                {room.isMain ? null : (
-                  <SidebarMenuAction
-                    showOnHover
-                    aria-label={`${room.title} 삭제`}
-                    onClick={() => onRemove(room.id)}
-                  >
-                    <Trash2 />
-                  </SidebarMenuAction>
-                )}
-              </SidebarMenuItem>
-            ))}
-          </SidebarMenu>
-        </SidebarGroup>
-      </SidebarContent>
+      {/* 비어 있어도 둔다 — 푸터를 바닥으로 밀어내는 자리다. */}
+      <SidebarContent />
 
       <SidebarFooter>
         <SidebarMenu>
