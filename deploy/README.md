@@ -146,6 +146,55 @@ DATABASE_URL='<Supabase 풀러 URL>' pnpm db:migrate
 비밀값이 없으면 배포가 실패한다(Cloud Run 이 secretKeyRef 를 못 찾는다). 0010 없이 배포하면 대화는 되고
 알림 켜기만 실패한다.
 
+## 약속 켜기 — 먼저 말 거는 나비스 (한 번, specs/003)
+
+정해진 때에 나비스가 먼저 말을 걸게 한다. 인스턴스가 0 으로 내려가므로 프로세스 안의 타이머로는 깨울 수
+없다 — **Cloud Scheduler 작업 하나**가 1분마다 `/api/internal/tick` 을 부른다. tick 은 할 일이 없으면 DB
+조회 한 번으로 끝나고 모델을 부르지 않는다. **순서가 중요하다.**
+
+```bash
+# 1) tick 토큰 비밀값 + 런타임 계정 읽기 권한 (2026-10-14 생성 완료)
+printf '%s' "$(openssl rand -hex 32)" | gcloud secrets create navis-tick-token --data-file=-
+gcloud secrets add-iam-policy-binding navis-tick-token \
+  --member=serviceAccount:navis-run@$PROJECT.iam.gserviceaccount.com \
+  --role=roles/secretmanager.secretAccessor
+
+# 2) 운영 DB 에 0011(messages · promises · promise_runs) 적용 — 배포보다 먼저.
+#    기존 대화(jsonb)를 messages 표로 옮긴다. conversations.messages 열은 아직 지우지 않는다.
+DATABASE_URL='<Supabase 풀러 URL>' pnpm db:migrate
+
+# 3) 배포 — main 에 push
+
+# 4) 따라잡기: 2) 와 3) 사이에 옛 코드가 jsonb 에 쓴 메시지를 옮긴다(중복 없음).
+#    packages/db/migrations/0011_messages_and_promises.sql 끝의 INSERT INTO "messages" … 문을 그대로 실행.
+
+# 5) 대조: 방별 jsonb 메시지 수 = messages 표의 수 (specs/003 quickstart S0)
+#    select count(*) from conversations c
+#     where jsonb_array_length(c.messages) <> (select count(*) from messages m where m.conversation_id = c.id);
+#    → 0 이어야 한다.
+
+# 6) Scheduler 작업 (API 를 처음 켠다)
+gcloud services enable cloudscheduler.googleapis.com
+gcloud scheduler jobs create http navis-tick \
+  --location=$REGION \
+  --schedule="* * * * *" \
+  --uri="https://navis-2gk6vbz4kq-as.a.run.app/api/internal/tick" \
+  --http-method=POST \
+  --headers="Authorization=Bearer $(gcloud secrets versions access latest --secret=navis-tick-token)" \
+  --attempt-deadline=1800s \
+  --max-retry-attempts=0
+```
+
+- **간격**: 기본 1분. 비용이 걱정되면 `gcloud scheduler jobs update http navis-tick --location=$REGION
+  --schedule="*/5 * * * *"` — 약속이 최대 5분 늦어질 뿐이다.
+- **attempt-deadline 30분 · 재시도 없음**: tick 은 약속 실행이 끝날 때까지 응답을 붙든다(Cloud Run 은 응답
+  뒤 CPU 를 거의 주지 않는다). 실패한 회차는 15분 임대가 끝나면 다음 tick 이 다시 집는다.
+- **끄기**: `gcloud scheduler jobs pause navis-tick --location=$REGION` — 대화는 그대로 되고 약속만 멈춘다.
+- **토큰을 바꾸면** 비밀값 새 버전을 만들고 재배포한 뒤, Scheduler 작업의 헤더도 같은 명령(`update http …
+  --update-headers=…`)으로 바꾼다.
+- 대조가 끝나면 `conversations.messages` 열을 지우는 0012 를 만들어 적용한다(tasks T013). 그 전에 만들면
+  `db:migrate` 한 번에 0011 과 열 삭제가 함께 적용돼 대조할 틈이 없다.
+
 ## 메일 템플릿 — 초대 · 비밀번호 재설정 (Supabase 대시보드, 한 번)
 
 이 앱은 세션을 쿠키로 둔다(`@supabase/ssr`). 기본 템플릿의 `{{ .ConfirmationURL }}` 은 로그인 정보를 주소의
