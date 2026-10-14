@@ -78,6 +78,13 @@
       "when": 1791946474766,
       "tag": "0010_add_push_subscriptions",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1791962831679,
+      "tag": "0011_messages_and_promises",
+      "breakpoints": true
     }
   ]
 }

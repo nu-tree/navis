@@ -1,7 +1,8 @@
 import { Hono, type Context } from "hono";
 import type { AppEnv } from "../types";
 import { conversation } from "@navis/domain";
-import { isNotFound } from "@navis/domain/errors";
+import { isMainRoomUndeletable, isNotFound } from "@navis/domain/errors";
+import { MESSAGE_PAGE_MAX, MESSAGE_PAGE_SIZE } from "@navis/validation";
 
 // 대화방 라우트. 인증은 app.ts 의 기본 잠금이 이미 걸어뒀다.
 //
@@ -12,6 +13,8 @@ function failure(c: Context, err: unknown) {
   // 오류의 **종류**로 판정한다. 메시지 문자열로 분기하면 문구를 다듬을 때
   // 404 가 500 이 된다(FR-041, STRUCTURE.md 7항).
   if (isNotFound(err)) return c.json({ error: err.message }, 404);
+  // "나비스" 방은 지울 수 없다(specs/003 R9).
+  if (isMainRoomUndeletable(err)) return c.json({ error: err.message }, 409);
 
   const message = err instanceof Error ? err.message : String(err);
   console.error(`[conversations] 실패: ${message}`);
@@ -21,8 +24,22 @@ function failure(c: Context, err: unknown) {
 export const conversationsRoute = new Hono<AppEnv>()
   .get("/", async (c) => {
     try {
-      // messages 를 싣지 않는 요약만 반환한다(FR-032).
+      // 메시지를 싣지 않는 요약만 반환한다(FR-032). 메인 방을 보장하고 맨 위에 둔다(specs/003 R9).
       return c.json(await conversation.list(c.get("userId")));
+    } catch (err) {
+      return failure(c, err);
+    }
+  })
+  // 이전 메시지 한 페이지(specs/003 FR-026). before 는 지금 화면의 가장 오래된 메시지 id.
+  .get("/:id/messages", async (c) => {
+    const before = c.req.query("before");
+    const rawLimit = c.req.query("limit");
+    const limit = rawLimit === undefined ? MESSAGE_PAGE_SIZE : Number(rawLimit);
+    if (!before || !Number.isInteger(limit) || limit < 1 || limit > MESSAGE_PAGE_MAX) {
+      return c.json({ error: `before 가 필요하고 limit 은 1~${MESSAGE_PAGE_MAX} 이어야 한다.` }, 400);
+    }
+    try {
+      return c.json(await conversation.page(c.get("userId"), c.req.param("id"), before, limit));
     } catch (err) {
       return failure(c, err);
     }

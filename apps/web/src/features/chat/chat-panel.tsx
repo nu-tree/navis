@@ -8,6 +8,7 @@ import { TypingIndicator } from "./typing-indicator";
 import { useStickToBottom } from "@/hooks/common/use-stick-to-bottom";
 import { useChat } from "@/hooks/pages/chat/use-chat";
 import { useConversationMessageList } from "@/hooks/apis/conversation/use-conversation-message-list";
+import { useLoadOlderMessages } from "@/hooks/pages/chat/use-load-older-messages";
 import { useDeleteConversationMessage } from "@/hooks/apis/conversation/use-delete-conversation-message";
 
 type Props = {
@@ -29,6 +30,8 @@ export const ChatPanel = ({ conversationId, onTurnEnd, onOpen }: Readonly<Props>
   });
   // 새 메시지·델타가 오면 바닥으로 따라간다. 위로 올려 읽는 중이면 그대로 둔다.
   const { ref: scrollRef, onScroll, stick } = useStickToBottom<HTMLDivElement>([messages, streaming]);
+  // 위로 올리면 이전 메시지를 더 불러온다(specs/003 FR-026).
+  const { onScroll: onScrollTop } = useLoadOlderMessages(conversationId, messages, scrollRef);
 
   const busy = streaming !== null;
   const empty = messages.length === 0 && !busy;
@@ -60,7 +63,10 @@ export const ChatPanel = ({ conversationId, onTurnEnd, onOpen }: Readonly<Props>
       ) : (
         <MessageList
           ref={scrollRef}
-          onScroll={onScroll}
+          onScroll={() => {
+            onScroll();
+            onScrollTop();
+          }}
           messages={messages}
           onRemove={removeMessage}
         >

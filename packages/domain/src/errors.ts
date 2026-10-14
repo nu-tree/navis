@@ -60,6 +60,44 @@ export class ClaudeTokenRejectedError extends Error {
   }
 }
 
+/** "나비스" 방은 지울 수 없다 → 409(specs/003 R9). */
+export class MainRoomUndeletableError extends Error {
+  readonly kind = "main_room_undeletable" as const;
+
+  constructor() {
+    super("나비스 방은 지울 수 없어요.");
+    this.name = "MainRoomUndeletableError";
+  }
+}
+
+/** 켜진 약속이 상한에 닿았다 → 422(FR-006). 문구는 모델 · 화면이 그대로 보여 준다. */
+export class PromiseLimitError extends Error {
+  readonly kind = "promise_limit" as const;
+
+  constructor(readonly limit: number) {
+    super(`켜진 약속이 이미 ${limit}개예요. 하나를 끄거나 지운 뒤에 만들 수 있어요.`);
+    this.name = "PromiseLimitError";
+  }
+}
+
+/** 약속 일정이 잘못됐다(과거 · 해석 불가 · 간격 1시간 미만) → 422. 이유가 곧 메시지다. */
+export class ScheduleInvalidError extends Error {
+  readonly kind = "schedule_invalid" as const;
+
+  constructor(reason: string) {
+    super(reason);
+    this.name = "ScheduleInvalidError";
+  }
+}
+
+export const isMainRoomUndeletable = (e: unknown): e is MainRoomUndeletableError =>
+  e instanceof MainRoomUndeletableError;
+
+export const isPromiseLimit = (e: unknown): e is PromiseLimitError => e instanceof PromiseLimitError;
+
+export const isScheduleInvalid = (e: unknown): e is ScheduleInvalidError =>
+  e instanceof ScheduleInvalidError;
+
 export const isNotFound = (e: unknown): e is NotFoundError =>
   e instanceof NotFoundError;
 

@@ -11,11 +11,17 @@ export const useConversationWorkspace = () => {
   const { data: rooms = [] } = useConversationList();
   const { mutate: deleteConversation } = useDeleteConversation();
 
-  // 열린 방은 항상 있다. 첫 렌더에 새 방 id 를 만들어 두고(지연 초기화), 서버에는
-  // 첫 메시지를 보낼 때 POST /chat 이 만든다 — 방 생성 전용 엔드포인트가 없는 이유다.
-  const [selectedId, setSelectedId] = useState(() => crypto.randomUUID());
+  // 사용자가 고른 방. 아직 고르지 않았으면(null) "나비스" 방을 연다(specs/003 R9) — 앱을 열면
+  // 늘 같은 자리의 대화가 보여야 한다. 목록이 오기 전에만 빈 초안을 잠깐 연다.
+  const [chosenId, setChosenId] = useState<string | null>(null);
+  // 새 방 id 는 미리 만들어 둔다(지연 초기화). 서버에는 첫 메시지를 보낼 때 POST /chat 이 만든다 —
+  // 방 생성 전용 엔드포인트가 없는 이유다.
+  const [fallbackDraftId] = useState(() => crypto.randomUUID());
+  const mainId = rooms.find((r) => r.isMain)?.id;
+  const selectedId = chosenId ?? mainId ?? fallbackDraftId;
 
-  const createDraft = () => setSelectedId(crypto.randomUUID());
+  const setSelectedId = (id: string) => setChosenId(id);
+  const createDraft = () => setChosenId(crypto.randomUUID());
 
   const remove = (id: string) => {
     // 열려 있던 방을 지우면 빈 방으로 옮긴다 — 지운 방을 계속 열어둘 수 없다.

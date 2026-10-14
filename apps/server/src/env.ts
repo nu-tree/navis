@@ -29,6 +29,12 @@ export const env = {
    */
   mcpToken: process.env.NAVIS_MCP_TOKEN || null,
   /**
+   * Cloud Scheduler 가 `/internal/tick` 을 부를 때 쓰는 Bearer 토큰(specs/003 R10).
+   * API_TOKEN · NAVIS_MCP_TOKEN 과 다른 값이어야 한다. 없으면 tick 이 닫힌다(404) — 약속이
+   * 실행되지 않을 뿐 대화는 그대로 된다.
+   */
+  tickToken: process.env.NAVIS_TICK_TOKEN || null,
+  /**
    * 설정(Claude 토큰) 암호화 키 — 32바이트 base64(FR-055). DB 가 새도 토큰이 새지 않게 키는
    * 이 컨테이너 환경에만 있다. 없으면 토큰을 저장도 사용도 못 하므로 부팅을 막는다.
    */
@@ -59,6 +65,11 @@ try {
 if (env.mcpToken && env.mcpToken === env.apiToken) {
   // 같은 값이면 분리한 의미가 없다 — Claude Code 쪽 자격이 새면 대화 API 까지 열린다.
   throw new Error("NAVIS_MCP_TOKEN 은 API_TOKEN 과 달라야 한다.");
+}
+
+if (env.tickToken && (env.tickToken === env.apiToken || env.tickToken === env.mcpToken)) {
+  // 같은 값이면 Scheduler 설정에 남은 토큰으로 대화 API 나 MCP 까지 열린다.
+  throw new Error("NAVIS_TICK_TOKEN 은 API_TOKEN · NAVIS_MCP_TOKEN 과 달라야 한다.");
 }
 
 // Claude 토큰은 환경변수가 아니라 설정 화면에서 등록한다(US5) — 여기서 확인하지 않는다.

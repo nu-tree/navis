@@ -24,7 +24,8 @@
    - 일정 `* * * * *` (비용이 걱정되면 `*/5 * * * *`)
    - 대상 `POST https://<서비스 주소>/api/internal/tick`, 헤더 `Authorization: Bearer <토큰>`
    - `attemptDeadline 1800s`, `maxRetryCount 0`
-5. S0 확인 뒤 0012(`conversations.messages` 제거)를 적용한다.
+5. **따라잡기**: 0011 적용과 새 코드 배포 사이에 옛 코드가 jsonb 에 쓴 메시지를 옮기려고, 0011 끝의 `INSERT INTO messages …` 문을 운영 DB 에 한 번 더 실행한다(`ON CONFLICT DO NOTHING` 이라 중복 없음).
+6. S0 확인 뒤 0012(`conversations.messages` 제거)를 적용한다.
 
 ## 시나리오
 

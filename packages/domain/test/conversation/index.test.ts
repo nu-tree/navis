@@ -1,18 +1,22 @@
-// T048 — 대화방 도메인. jsonb 연산과 목록 형태가 검증 대상이라 **실제 Postgres** 를 쓴다.
-// mock 으로는 `||` 이어붙이기나 `-> -1 ->> 'text'` 가 맞는지 알 수 없다.
+// T048 · specs/003 T010 — 대화방 도메인. 페이지 커서 · 목록의 마지막 메시지 서브쿼리 · 메인 방의
+// 부분 유일 인덱스가 검증 대상이라 **실제 Postgres** 를 쓴다. mock 으로는 그게 맞는지 알 수 없다.
 //
 // 로컬 개발 DB 를 쓰고, 테스트 전용 방 id 접두사로 격리한다. DATABASE_URL 이 없으면
 // 건너뛴다 — CI 에 DB 가 없어도 다른 테스트는 돌아야 한다.
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import { USER_A, USER_B } from "../test-users";
-import { sql } from "drizzle-orm";
+import { TEST_USERS, USER_A, USER_B } from "../test-users";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db, conversations } from "@navis/db";
-import { NotFoundError } from "../../src/errors";
+import { MainRoomUndeletableError, NotFoundError } from "../../src/errors";
 import {
   appendMessage,
+  detachSession,
   ensure,
+  ensureMain,
   get,
   list,
+  page,
+  recentForHistory,
   remove,
   removeMessage,
   setSessionId,
@@ -20,6 +24,12 @@ import {
 } from "../../src/conversation/index";
 
 const PREFIX = "test-conv-";
+
+// list() 가 테스트 회원의 메인 방을 만든다 — 접두사가 없으니 회원 · is_main 으로 지운다.
+const removeTestMainRooms = () =>
+  db
+    .delete(conversations)
+    .where(and(inArray(conversations.userId, [...TEST_USERS]), eq(conversations.isMain, true)));
 const id = (n: string) => `${PREFIX}${n}`;
 
 const hasDb = Boolean(process.env.DATABASE_URL);
@@ -49,6 +59,7 @@ describe("titleFrom()", () => {
 describeDb("대화방 회원 분리 (실제 DB, specs/002 T010)", () => {
   afterEach(async () => {
     await db.delete(conversations).where(sql`id like ${PREFIX + "iso-%"}`);
+    await removeTestMainRooms();
   });
 
   it("list(A) 에 B 의 방이 없다", async () => {
@@ -79,28 +90,47 @@ describeDb("대화방 회원 분리 (실제 DB, specs/002 T010)", () => {
     expect(room.title).toBe("B 의 제목");
     expect(room.messages).toHaveLength(0);
   });
+
+  it("남의 방은 page · recentForHistory 로도 읽을 수 없다", async () => {
+    await ensure(USER_B, id("iso-e"), "B");
+    const m1 = await appendMessage(USER_B, id("iso-e"), { role: "user", text: "1" });
+    await appendMessage(USER_B, id("iso-e"), { role: "user", text: "2" });
+    await expect(page(USER_A, id("iso-e"), m1.id)).rejects.toBeInstanceOf(NotFoundError);
+    expect(await recentForHistory(USER_A, id("iso-e"), 20)).toEqual([]);
+  });
+
+  it("메인 방은 회원마다 따로다", async () => {
+    const a = await ensureMain(USER_A);
+    const b = await ensureMain(USER_B);
+    expect(a.id).not.toBe(b.id);
+    await expect(get(USER_A, b.id)).rejects.toBeInstanceOf(NotFoundError);
+  });
 });
 
 describeDb("대화방 (실제 DB)", () => {
   beforeAll(async () => {
     await db.delete(conversations).where(sql`id like ${PREFIX + "%"}`);
+    await removeTestMainRooms();
   });
   afterEach(async () => {
     await db.delete(conversations).where(sql`id like ${PREFIX + "%"}`);
+    await removeTestMainRooms();
   });
 
   it("ensure 가 방을 만들고 첫 메시지로 제목을 정한다", async () => {
-    const c = await ensure(USER_A, id("a"), "배포는 어디로 할까?");
+    const s = await ensure(USER_A, id("a"), "배포는 어디로 할까?");
+    expect(s).toEqual({ id: id("a"), sessionId: null, sessionTurns: 0, isMain: false });
+    const c = await get(USER_A, id("a"));
     expect(c.title).toBe("배포는 어디로 할까?");
     expect(c.messages).toEqual([]);
-    expect(c.sessionId).toBeNull();
+    expect(c.hasMore).toBe(false);
   });
 
   // 제목을 덮으면 두 번째 메시지에서 방 이름이 바뀐다.
   it("ensure 를 두 번 불러도 제목이 바뀌지 않는다", async () => {
     await ensure(USER_A, id("b"), "첫 제목");
-    const again = await ensure(USER_A, id("b"), "두 번째 메시지");
-    expect(again.title).toBe("첫 제목");
+    await ensure(USER_A, id("b"), "두 번째 메시지");
+    expect((await get(USER_A, id("b"))).title).toBe("첫 제목");
   });
 
   it("appendMessage 가 기존 메시지를 지우지 않는다", async () => {
@@ -123,7 +153,8 @@ describeDb("대화방 (실제 DB)", () => {
   });
 
   it("appendMessage 가 updatedAt 을 올린다", async () => {
-    const before = await ensure(USER_A, id("e"), "x");
+    await ensure(USER_A, id("e"), "x");
+    const before = await get(USER_A, id("e"));
     await new Promise((r) => setTimeout(r, 10));
     await appendMessage(USER_A, id("e"), { role: "user", text: "하나" });
     const after = await get(USER_A, id("e"));
@@ -141,20 +172,19 @@ describeDb("대화방 (실제 DB)", () => {
     expect(mine).not.toHaveProperty("messages");
   });
 
-  it("list(USER_A) 가 메시지 수와 마지막 메시지만 요약한다", async () => {
+  it("list(USER_A) 가 마지막 메시지만 요약한다", async () => {
     await ensure(USER_A, id("g"), "x");
     await appendMessage(USER_A, id("g"), { role: "user", text: "처음" });
     await appendMessage(USER_A, id("g"), { role: "assistant", text: "마지막" });
 
     const mine = (await list(USER_A)).find((r) => r.id === id("g"));
-    expect(mine?.messageCount).toBe(2);
     expect(mine?.lastMessage).toBe("마지막");
+    expect(mine).not.toHaveProperty("messageCount");
   });
 
-  it("메시지가 없는 방은 lastMessage 가 null — 빈 배열에서 터지지 않는다", async () => {
+  it("메시지가 없는 방은 lastMessage 가 null", async () => {
     await ensure(USER_A, id("h"), "x");
     const mine = (await list(USER_A)).find((r) => r.id === id("h"));
-    expect(mine?.messageCount).toBe(0);
     expect(mine?.lastMessage).toBeNull();
   });
   // ────────────────────────────────────────────────────────────────────
@@ -167,10 +197,94 @@ describeDb("대화방 (실제 DB)", () => {
     expect(rows[0]?.id).toBe(id("i2"));
   });
 
+  // specs/003 R9
+  it("list 가 메인 방을 만들고 맨 위에 둔다 — 다른 방이 더 최근이어도", async () => {
+    await ensure(USER_A, id("main1"), "최근 방");
+    await appendMessage(USER_A, id("main1"), { role: "user", text: "x" });
+    const rows = await list(USER_A);
+    expect(rows[0]?.isMain).toBe(true);
+    expect(rows[0]?.title).toBe("나비스");
+    expect(rows.filter((r) => r.isMain)).toHaveLength(1);
+  });
+
+  it("ensureMain 은 동시에 여러 번 불려도 하나만 만든다", async () => {
+    const ids = await Promise.all([ensureMain(USER_A), ensureMain(USER_A), ensureMain(USER_A)]);
+    expect(new Set(ids.map((r) => r.id)).size).toBe(1);
+  });
+
+  it("메인 방은 지울 수 없다", async () => {
+    const main = await ensureMain(USER_A);
+    await expect(remove(USER_A, main.id)).rejects.toBeInstanceOf(MainRoomUndeletableError);
+    expect((await get(USER_A, main.id)).isMain).toBe(true);
+  });
+
+  // specs/003 R7 · FR-026
+  it("get 은 최근 50개만, page 로 이어 받으면 중복 · 누락이 없다", async () => {
+    await ensure(USER_A, id("p"), "x");
+    for (let i = 0; i < 120; i++) {
+      await appendMessage(USER_A, id("p"), { role: "user", text: String(i) });
+    }
+    const first = await get(USER_A, id("p"));
+    expect(first.messages).toHaveLength(50);
+    expect(first.hasMore).toBe(true);
+    expect(first.messages.at(-1)?.text).toBe("119");
+
+    const oldest = first.messages[0]?.id ?? "";
+    const second = await page(USER_A, id("p"), oldest);
+    expect(second.messages.map((m) => m.text)).toEqual(
+      Array.from({ length: 50 }, (_, i) => String(20 + i)),
+    );
+    expect(second.hasMore).toBe(true);
+
+    const third = await page(USER_A, id("p"), second.messages[0]?.id ?? "");
+    expect(third.messages.map((m) => m.text)).toEqual(
+      Array.from({ length: 20 }, (_, i) => String(i)),
+    );
+    expect(third.hasMore).toBe(false);
+  });
+
+  it("다른 방의 메시지 id 로 page 커서를 만들 수 없다", async () => {
+    await ensure(USER_A, id("q1"), "x");
+    await ensure(USER_A, id("q2"), "x");
+    const other = await appendMessage(USER_A, id("q2"), { role: "user", text: "q2" });
+    await expect(page(USER_A, id("q1"), other.id)).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it("recentForHistory 는 최근 N 개를 오래된 → 최근 순으로 준다", async () => {
+    await ensure(USER_A, id("r"), "x");
+    for (let i = 0; i < 25; i++) {
+      await appendMessage(USER_A, id("r"), { role: "user", text: String(i) });
+    }
+    const recent = await recentForHistory(USER_A, id("r"), 20);
+    expect(recent.map((m) => m.text)).toEqual(Array.from({ length: 20 }, (_, i) => String(5 + i)));
+  });
+
+  it("meta 필드(toolsUsed · saved · origin)가 왕복한다", async () => {
+    await ensure(USER_A, id("s"), "x");
+    const origin = { kind: "promise" as const, promiseId: "p-1", label: "물 마시기" };
+    await appendMessage(USER_A, id("s"), {
+      role: "assistant",
+      text: "물 드셨어요?",
+      toolsUsed: ["WebSearch"],
+      saved: true,
+      origin,
+    });
+    const [m] = (await get(USER_A, id("s"))).messages;
+    expect(m).toMatchObject({ toolsUsed: ["WebSearch"], saved: true, origin });
+  });
+
+  it("detachSession 은 세션과 턴 수를 비운다", async () => {
+    await ensure(USER_A, id("t"), "x");
+    await setSessionId(USER_A, id("t"), "s-1", 12);
+    await detachSession(USER_A, id("t"));
+    expect(await ensure(USER_A, id("t"), "x")).toMatchObject({ sessionId: null, sessionTurns: 0 });
+  });
+
   it("setSessionId 로 세션을 저장한다 — 재시작 후 맥락 이어가기의 근거", async () => {
     await ensure(USER_A, id("j"), "x");
-    await setSessionId(USER_A, id("j"), "session-abc");
+    await setSessionId(USER_A, id("j"), "session-abc", 3);
     expect((await get(USER_A, id("j"))).sessionId).toBe("session-abc");
+    expect((await ensure(USER_A, id("j"), "x")).sessionTurns).toBe(3);
   });
 
   it("removeMessage 가 하나만 지운다", async () => {

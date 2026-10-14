@@ -14,6 +14,7 @@ const list = vi.fn();
 const get = vi.fn();
 const remove = vi.fn();
 const removeMessage = vi.fn();
+const page = vi.fn();
 
 vi.mock("@navis/domain", () => ({
   memory: { save: vi.fn(), recent: vi.fn(), recall: vi.fn() },
@@ -23,6 +24,7 @@ vi.mock("@navis/domain", () => ({
     get: (...a: unknown[]) => get(...a),
     remove: (...a: unknown[]) => remove(...a),
     removeMessage: (...a: unknown[]) => removeMessage(...a),
+    page: (...a: unknown[]) => page(...a),
     ensure: vi.fn(),
     appendMessage: vi.fn(),
     setSessionId: vi.fn(),
@@ -31,6 +33,7 @@ vi.mock("@navis/domain", () => ({
 
 vi.mock("@navis/domain/errors", () => ({
   isNotFound: (e: unknown) => e instanceof Error && e.name === "NotFoundError",
+  isMainRoomUndeletable: (e: unknown) => e instanceof Error && e.name === "MainRoomUndeletableError",
   isEmbeddingError: () => false,
 }));
 
@@ -56,7 +59,7 @@ const summary = {
   sessionId: "sess-1",
   createdAt: "2026-09-01T00:00:00.000Z",
   updatedAt: "2026-09-02T00:00:00.000Z",
-  messageCount: 4,
+  isMain: false,
   lastMessage: "마지막 메시지",
 };
 
@@ -68,7 +71,8 @@ describe("GET /conversations", () => {
     list.mockResolvedValue([summary]);
     const body = (await (await req("/conversations")).json()) as unknown[];
     expect(body[0]).not.toHaveProperty("messages");
-    expect(body[0]).toMatchObject({ messageCount: 4, lastMessage: "마지막 메시지" });
+    expect(body[0]).toMatchObject({ isMain: false, lastMessage: "마지막 메시지" });
+    expect(body[0]).not.toHaveProperty("messageCount");
   });
 
   it("빈 목록은 빈 배열 — 404 가 아니다", async () => {
@@ -146,5 +150,52 @@ describe("기본 잠금", () => {
   ])("%s 는 토큰 없이 401", async (path) => {
     const res = await app.fetch(new Request(`http://localhost${path}`));
     expect(res.status).toBe(401);
+  });
+});
+
+// specs/003 T012 — 이전 메시지 페이지 · 메인 방 삭제
+describe("GET /conversations/:id/messages", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("before · limit 을 도메인에 넘기고 페이지를 그대로 돌려준다", async () => {
+    page.mockResolvedValue({ messages: [], hasMore: false });
+    const res = await req("/conversations/room-1/messages?before=m-1&limit=20");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ messages: [], hasMore: false });
+    expect(page).toHaveBeenCalledWith(MEMBER, "room-1", "m-1", 20);
+  });
+
+  it("limit 이 없으면 50", async () => {
+    page.mockResolvedValue({ messages: [], hasMore: false });
+    await req("/conversations/room-1/messages?before=m-1");
+    expect(page).toHaveBeenCalledWith(MEMBER, "room-1", "m-1", 50);
+  });
+
+  it.each([
+    ["before 없음", "/conversations/room-1/messages"],
+    ["limit 0", "/conversations/room-1/messages?before=m&limit=0"],
+    ["limit 101", "/conversations/room-1/messages?before=m&limit=101"],
+    ["limit 숫자 아님", "/conversations/room-1/messages?before=m&limit=abc"],
+  ])("%s 는 400", async (_name, path) => {
+    expect((await req(path)).status).toBe(400);
+    expect(page).not.toHaveBeenCalled();
+  });
+
+  it("없는 방 · 남의 방 · 없는 커서는 404", async () => {
+    page.mockRejectedValue(notFound());
+    expect((await req("/conversations/room-1/messages?before=m-1")).status).toBe(404);
+  });
+});
+
+describe("DELETE /conversations/:id — 나비스 방", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("메인 방은 409", async () => {
+    const e = new Error("나비스 방은 지울 수 없어요.");
+    e.name = "MainRoomUndeletableError";
+    remove.mockRejectedValue(e);
+    const res = await req("/conversations/main-1", { method: "DELETE" });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: "나비스 방은 지울 수 없어요." });
   });
 });

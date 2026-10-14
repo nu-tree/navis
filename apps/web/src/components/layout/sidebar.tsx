@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Brain, CircleHelp, Download, LogOut, MessageSquare, Plus, Settings, Trash2 } from "lucide-react";
+import { Brain, CircleHelp, Download, LogOut, MessageSquare, Pin, Plus, Settings, Trash2 } from "lucide-react";
 import type { ConversationSummary } from "@navis/validation";
 import { Button } from "@/components/ui/button";
 import { useSignOut } from "@/hooks/apis/auth/use-sign-out";
@@ -83,19 +83,23 @@ export function NavisSidebar({
                   tooltip={room.title}
                   onClick={() => onSelect(room.id)}
                 >
-                  <MessageSquare />
+                  {/* "나비스" 방은 맨 위에 고정된다(specs/003 R9) — 핀으로 구분한다. */}
+                  {room.isMain ? <Pin /> : <MessageSquare />}
                   <span>{room.title}</span>
                 </SidebarMenuButton>
 
                 {/* 안읽음 배지는 두지 않는다 — 계약(ConversationSummary)에 없고,
-                    기기 간 동기화를 가져오지 않기로 하면서 의미를 잃었다. */}
-                <SidebarMenuAction
-                  showOnHover
-                  aria-label={`${room.title} 삭제`}
-                  onClick={() => onRemove(room.id)}
-                >
-                  <Trash2 />
-                </SidebarMenuAction>
+                    기기 간 동기화를 가져오지 않기로 하면서 의미를 잃었다.
+                    "나비스" 방은 지울 수 없다 — 버튼을 두지 않는다(서버도 409). */}
+                {room.isMain ? null : (
+                  <SidebarMenuAction
+                    showOnHover
+                    aria-label={`${room.title} 삭제`}
+                    onClick={() => onRemove(room.id)}
+                  >
+                    <Trash2 />
+                  </SidebarMenuAction>
+                )}
               </SidebarMenuItem>
             ))}
           </SidebarMenu>

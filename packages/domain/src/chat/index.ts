@@ -117,8 +117,8 @@ export type TurnInput = {
   /** 이어갈 에이전트 세션. 없으면 새 세션으로 시작한다. */
   resumeSessionId?: string | null;
   /**
-   * 이 방의 이전 메시지(이번 질문 제외). 세션을 이어갈 수 없을 때만 쓴다(liveSessions 주석).
-   * 이어갈 수 있으면 SDK 세션이 맥락을 들고 있으므로 보지 않는다.
+   * 이 방의 최근 메시지(이번 질문 제외, 최근 20개). 세션을 이어갈 수 없을 때만 쓴다(liveSessions
+   * 주석, specs/003 R8). 이어갈 수 있으면 SDK 세션이 맥락을 들고 있으므로 보지 않는다.
    */
   history?: readonly HistoryMessage[];
   model?: Model;
@@ -167,10 +167,10 @@ export async function runTurn(
     input.resumeSessionId && liveSessions.has(input.resumeSessionId)
       ? input.resumeSessionId
       : null;
+  // 세션을 잇지 못하면(끊긴 세션 · 30턴 교체 · 약속 메시지로 비운 세션, specs/003 R8) 최근 기록을
+  // 앞에 붙인다. 새 방이면 기록이 비어 있어 그대로다.
   const promptText =
-    !resume && input.resumeSessionId && input.history?.length
-      ? withHistory(input.prompt, input.history)
-      : input.prompt;
+    !resume && input.history?.length ? withHistory(input.prompt, input.history) : input.prompt;
 
   // 이 턴의 글 블록들. 도구 호출을 사이에 두고 여러 개로 나뉜다.
   //

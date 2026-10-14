@@ -17,7 +17,14 @@ vi.stubEnv("NAVIS_OWNER_ID", "00000000-0000-4000-8000-000000000001");
 const MEMBER = "00000000-0000-4000-8000-0000000000a1";
 
 const runTurn = vi.fn();
-const ensure = vi.fn(async () => ({ sessionId: null, messages: [] }));
+const ensure = vi.fn(async () => ({
+  id: "room-1",
+  sessionId: null as string | null,
+  sessionTurns: 0,
+  isMain: false,
+}));
+const recentForHistory = vi.fn(async () => []);
+const setSessionId = vi.fn();
 const appendMessage = vi.fn(async () => ({ id: "m1", role: "user", text: "x", createdAt: "" }));
 const notify = vi.fn(async () => undefined);
 vi.mock("@navis/domain", () => ({
@@ -25,7 +32,11 @@ vi.mock("@navis/domain", () => ({
   conversation: {
     ensure: (...a: unknown[]) => ensure(...(a as [])),
     appendMessage: (...a: unknown[]) => appendMessage(...(a as [])),
-    setSessionId: vi.fn(),
+    recentForHistory: (...a: unknown[]) => recentForHistory(...(a as [])),
+    setSessionId: (...a: unknown[]) => setSessionId(...(a as [])),
+    // 실제 판정 함수와 같은 규칙(domain 테스트가 덮는다).
+    shouldStartFreshSession: (r: { sessionId: string | null; sessionTurns: number }) =>
+      !r.sessionId || r.sessionTurns >= 30,
   },
   memory: {},
   settings: {},
@@ -179,5 +190,28 @@ describe("POST /chat — 푸시 알림", () => {
     runTurn.mockResolvedValueOnce({ text: "답", sessionId: null, toolsUsed: [], savedCount: 0 });
     const events = await send();
     expect(events.at(-1)).toMatchObject({ type: "done" });
+  });
+});
+
+// specs/003 R8 — 긴 방의 세션 교체
+describe("POST /chat — 세션 교체", () => {
+  it("30턴을 이어 쓴 세션은 잇지 않고, 최근 기록을 넘기며 턴 수를 1 로 센다", async () => {
+    ensure.mockResolvedValueOnce({ id: "room-1", sessionId: "old", sessionTurns: 30, isMain: true });
+    recentForHistory.mockResolvedValueOnce([{ id: "h", role: "user", text: "이전", createdAt: "" }] as never);
+    runTurn.mockResolvedValueOnce({ text: "답", sessionId: "new", toolsUsed: [], savedCount: 0 });
+    await send();
+    expect(runTurn.mock.calls.at(-1)?.[0]).toMatchObject({
+      resumeSessionId: null,
+      history: [{ text: "이전" }],
+    });
+    expect(setSessionId).toHaveBeenLastCalledWith(MEMBER, "room-1", "new", 1);
+  });
+
+  it("같은 세션을 이어 쓰면 턴 수를 하나 올린다", async () => {
+    ensure.mockResolvedValueOnce({ id: "room-1", sessionId: "s", sessionTurns: 4, isMain: false });
+    runTurn.mockResolvedValueOnce({ text: "답", sessionId: "s", toolsUsed: [], savedCount: 0 });
+    await send();
+    expect(runTurn.mock.calls.at(-1)?.[0]).toMatchObject({ resumeSessionId: "s" });
+    expect(setSessionId).toHaveBeenLastCalledWith(MEMBER, "room-1", "s", 5);
   });
 });

@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import type { AppEnv } from "../types";
+import * as turns from "../turns";
 import { streamSSE } from "hono/streaming";
 import { chat, conversation, push } from "@navis/domain";
 import { isClaudeTokenError, isNotFound } from "@navis/domain/errors";
@@ -21,9 +22,8 @@ import {
 // 멈출 수 없다.
 const inFlight = new Map<string, { controller: AbortController; userId: string }>();
 
-// 같은 방에 진행 중인 턴. 클라이언트도 막지만(FR-008) 새로고침으로 우회되므로
-// 서버에서도 막는다.
-const activeConversations = new Set<string>();
+/** 세션을 새로 열 때 앞에 붙일 최근 메시지 수(specs/003 R8). withHistory 의 한도와 같다. */
+const HISTORY_MESSAGES = 20;
 
 /** 회원의 기기들로 푸시. 사용자가 중지한 턴은 알리지 않는다 — 본인이 지금 보고 있다. */
 const notifyAnswer = (userId: string, conversationId: string, body: string) => {
@@ -41,7 +41,10 @@ export const chatRoute = new Hono<AppEnv>()
     const req = parsed.data;
     const userId = c.get("userId");
 
-    if (activeConversations.has(req.conversationId)) {
+    // 같은 방에 진행 중인 턴이 있으면 막는다. 클라이언트도 막지만(FR-008) 새로고침으로 우회되므로
+    // 서버에서도 막는다. 여기서 자리를 잡고, 스트림을 열기 전에 실패하면 풀어 준다.
+    // 회원도 함께 올린다 — 약속 실행이 이 회원의 대화가 끝나길 기다린다(specs/003 R4).
+    if (!turns.begin(req.conversationId, userId)) {
       return c.json({ error: "이미 진행 중인 턴이 있다." }, 409);
     }
 
@@ -53,26 +56,30 @@ export const chatRoute = new Hono<AppEnv>()
     //   남의 방 id 면 ensure 가 NotFoundError — 스트림을 열지 않고 404, 질문도 기록하지 않는다
     //   (specs/002 contracts/identity.md).
     let resumeSessionId: string | null = null;
-    // 이번 질문을 붙이기 **전**의 메시지. 세션을 이어갈 수 없을 때 맥락 복원에 쓴다
-    // (domain/chat 의 liveSessions 주석). ensure 가 이미 읽어 온 것이라 추가 조회가 없다.
+    // 지금 세션으로 이어 쓴 턴 수. 한도에 닿으면 새 세션으로 시작한다(specs/003 R8).
+    let sessionTurns = 0;
+    // 이번 질문을 붙이기 **전**의 최근 메시지. 세션을 이어갈 수 없을 때 맥락 복원에 쓴다
+    // (domain/chat 의 liveSessions 주석). 방 전체를 읽지 않는다 — 끝없이 긴 "나비스" 방이 있다.
     let history: Message[] = [];
     try {
       const room = await conversation.ensure(userId, req.conversationId, req.text);
-      resumeSessionId = room.sessionId;
-      history = room.messages;
+      if (!conversation.shouldStartFreshSession(room)) {
+        resumeSessionId = room.sessionId;
+        sessionTurns = room.sessionTurns;
+      }
+      history = await conversation.recentForHistory(userId, req.conversationId, HISTORY_MESSAGES);
       await conversation.appendMessage(userId, req.conversationId, {
         role: "user",
         text: req.text,
         // 첨부는 이 턴의 입력으로만 쓰고 원본을 남기지 않는다(스키마 주석).
       });
     } catch (err) {
+      turns.end(req.conversationId);
       if (isNotFound(err)) return c.json({ error: "대화방을 찾을 수 없다." }, 404);
       const message = err instanceof Error ? err.message : String(err);
       console.error(`[chat] 사용자 메시지 기록 실패 turnId=${req.turnId}: ${message}`);
       return c.json({ error: message }, 500);
     }
-
-    activeConversations.add(req.conversationId);
 
     return streamSSE(c, async (stream) => {
       // writeSSE 를 여러 콜백에서 await 없이 부르면 프레임이 섞인다.
@@ -108,8 +115,15 @@ export const chatRoute = new Hono<AppEnv>()
         );
 
         // 세션 id 는 result 가 권위다. DB 에 둬야 재시작 후에도 맥락이 이어진다(R10).
-        if (result.sessionId && result.sessionId !== resumeSessionId) {
-          await conversation.setSessionId(userId, req.conversationId, result.sessionId);
+        // 같은 세션을 이어 썼으면 턴 수를 올리고, 새 세션이면 1 부터 센다(specs/003 R8).
+        if (result.sessionId) {
+          const continued = result.sessionId === resumeSessionId;
+          await conversation.setSessionId(
+            userId,
+            req.conversationId,
+            result.sessionId,
+            continued ? sessionTurns + 1 : 1,
+          );
         }
 
         // 답변은 턴이 완료된 시점에 기록한다(FR-048). 중단되면 기록되지 않는다.
@@ -148,7 +162,7 @@ export const chatRoute = new Hono<AppEnv>()
         }
       } finally {
         inFlight.delete(req.turnId);
-        activeConversations.delete(req.conversationId);
+        turns.end(req.conversationId);
         await queue;
       }
     });

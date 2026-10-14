@@ -33,8 +33,8 @@ description: "먼저 말 거는 나비스 — 약속 작업 목록"
   - **성능 절**: tick 은 모델을 부르지 않는다. 약속 턴은 직렬이고 같은 회원 대화에 양보한다. 목록 · 메시지는 jsonb 배열을 통째로 읽거나 쓰지 않는다. 긴 방은 세션을 교체한다.
   - **배포 절**: server 비밀값에 `NAVIS_TICK_TOKEN` 을 추가하고 Cloud Scheduler 작업 1개를 둔다.
   - `Version 2.1.0`, `Last Amended 2026-10-14` 로 바꾼다.
-- [ ] T002 [P] `packages/domain/package.json` 에 `cron-parser` 를 **정확한 버전으로**(캐럿 없이) 추가하고 `pnpm install` 한다(research R6). 설치한 버전이 `CronExpressionParser.parse(expr, { tz: "Asia/Seoul", currentDate })` 형태를 지원하는지 `node_modules/cron-parser` 의 타입으로 확인한다.
-- [ ] T003 [P] `apps/server/src/env.ts` 에 `tickToken: process.env.NAVIS_TICK_TOKEN || null` 을 추가한다. 값이 `API_TOKEN` 이나 `NAVIS_MCP_TOKEN` 과 같으면 부팅을 throw 로 막는다(`mcpToken` 검사와 같은 방식). `apps/server/.env.example` 에 설명과 함께 `NAVIS_TICK_TOKEN=` 을 추가한다("Cloud Scheduler 가 /internal/tick 을 부를 때 쓰는 토큰. 다른 토큰과 다른 값. 없으면 tick 이 닫힌다").
+- [X] T002 [P] `packages/domain/package.json` 에 `cron-parser` 를 **정확한 버전으로**(캐럿 없이) 추가하고 `pnpm install` 한다(research R6). 설치한 버전이 `CronExpressionParser.parse(expr, { tz: "Asia/Seoul", currentDate })` 형태를 지원하는지 `node_modules/cron-parser` 의 타입으로 확인한다.
+- [X] T003 [P] `apps/server/src/env.ts` 에 `tickToken: process.env.NAVIS_TICK_TOKEN || null` 을 추가한다. 값이 `API_TOKEN` 이나 `NAVIS_MCP_TOKEN` 과 같으면 부팅을 throw 로 막는다(`mcpToken` 검사와 같은 방식). `apps/server/.env.example` 에 설명과 함께 `NAVIS_TICK_TOKEN=` 을 추가한다("Cloud Scheduler 가 /internal/tick 을 부를 때 쓰는 토큰. 다른 토큰과 다른 값. 없으면 tick 이 닫힌다").
 
 ---
 
@@ -44,30 +44,30 @@ description: "먼저 말 거는 나비스 — 약속 작업 목록"
 
 ### 스키마 · 계약
 
-- [ ] T004 `packages/db/src/schema.ts` 에 data-model.md 그대로 추가한다.
+- [X] T004 `packages/db/src/schema.ts` 에 data-model.md 그대로 추가한다.
   - **`messages`**: `id uuid PK`, `seq bigint generated always as identity`, `conversation_id text not null → conversations.id ON DELETE CASCADE`, `user_id uuid not null`, `role text not null`(`user` | `assistant`), `text text not null`, `meta jsonb not null default '{}'`, `created_at timestamptz not null`. 인덱스 `messages_conversation_seq_idx (conversation_id, seq desc)`.
   - **`promises`**: 모든 열은 data-model.md 표 그대로다. `CHECK`: `schedule_kind = 'once'` ⇔ `run_at not null and cron is null`. 인덱스 `promises_due_idx (next_run_at) WHERE enabled`, `promises_user_idx (user_id, next_run_at)`.
   - **`promise_runs`**: `promise_id → promises.id ON DELETE CASCADE`, `status` ∈ `running|spoke|silent|failed`. 인덱스 `(promise_id, started_at desc)`.
   - **`conversations`** 에 `is_main boolean not null default false` 와 `session_turns int not null default 0` 을 추가하고, 부분 유일 인덱스 `conversations_user_main_idx (user_id) WHERE is_main` 을 만든다.
   - 이 단계에서는 `conversations.messages` 를 **지우지 않는다**(T013).
-- [ ] T005 `pnpm db:generate` 로 `packages/db/migrations/0011_*.sql` 을 만들고, 생성된 SQL 끝에 **백필**을 손으로 덧붙인다.
+- [X] T005 `pnpm db:generate` 로 `packages/db/migrations/0011_*.sql` 을 만들고, 생성된 SQL 끝에 **백필**을 손으로 덧붙인다.
   - `INSERT INTO messages (id, conversation_id, user_id, role, text, meta, created_at) SELECT … FROM conversations c, jsonb_array_elements(c.messages) WITH ORDINALITY AS e(m, ord) ORDER BY c.id, ord`
   - `id` 는 `(m->>'id')::uuid` 를 쓰고, uuid 가 아닌 옛 id 는 `gen_random_uuid()` 로 바꾼다.
   - `meta` 는 `toolsUsed` · `saved` 만 담는다. `images` 는 버린다.
   - `created_at` 은 `(m->>'createdAt')::timestamptz` 다.
   - 로컬 DB 에 `pnpm db:migrate` 로 적용하고 방별 개수가 같은지 SQL 로 대조한다.
-- [ ] T006 [P] `packages/validation/src/conversation.ts` 를 바꾼다.
+- [X] T006 [P] `packages/validation/src/conversation.ts` 를 바꾼다.
   - `messageSchema` 에 `origin: z.object({ kind: z.enum(["promise","promise-disabled"]), promiseId: z.string(), label: z.string() }).optional()` 를 추가한다.
   - `conversationSchema` 에 `isMain: z.boolean()` 과 `hasMore: z.boolean()` 을 추가한다. `messages` 는 "최근 50개, 오래된 → 최근 순" 주석으로 바꾼다.
   - `conversationSummarySchema` 에서 `messageCount` 를 빼고 `isMain` 을 더한다.
   - `messagePageSchema = z.object({ messages: z.array(messageSchema), hasMore: z.boolean() })` 를 export 한다.
-- [ ] T007 [P] `packages/validation/src/promise.ts` 를 새로 만들고 `index.ts` 에서 export 한다. contracts/http.md 의 `Promise` 와이어 형태와 contracts/promise-tools.md 의 도구 입력을 그대로 옮긴다.
+- [X] T007 [P] `packages/validation/src/promise.ts` 를 새로 만들고 `index.ts` 에서 export 한다. contracts/http.md 의 `Promise` 와이어 형태와 contracts/promise-tools.md 의 도구 입력을 그대로 옮긴다.
   - 도구 입력 제약: `instruction` 1..1000, `label` 1..40, `schedule` 은 `{ at: ISO 오프셋 필수 }` | `{ cron: string }`, `notify.text` 1..4000, `set_memo.memo` 0..2000, `finish.reason` 1..200.
   - `promisePatchSchema = z.object({ enabled: z.boolean() })`.
 
 ### 대화방 도메인 — messages 표로 재작성
 
-- [ ] T008 `packages/domain/src/conversation/index.ts` 를 messages 표 기준으로 다시 쓴다(contracts/http.md "대화방 — 변경").
+- [X] T008 `packages/domain/src/conversation/index.ts` 를 messages 표 기준으로 다시 쓴다(contracts/http.md "대화방 — 변경").
   - `list`: `ensureMain` 후, 마지막 메시지는 `(conversation_id, seq desc)` 로 한 행만 읽는 lateral 또는 서브쿼리로 가져온다. 정렬은 `is_main desc, updated_at desc` 이고 `messageCount` 는 뺀다.
   - `get(userId, id)`: 최근 50개를 오래된 → 최근 순으로 담고 `hasMore` · `isMain` 을 붙인다.
   - `page(userId, id, beforeMessageId, limit≤100)`: 없는 `before` 는 NotFoundError 다.
@@ -76,46 +76,46 @@ description: "먼저 말 거는 나비스 — 약속 작업 목록"
   - `removeMessage`: 행 DELETE.
   - `meta` ↔ `toolsUsed` · `saved` · `origin` 매핑은 순수 함수 `toMessage` · `toMeta` 로 분리한다.
   - `ensure` 는 그대로 둔다(messages 열은 빈 배열 기본값 유지).
-- [ ] T009 `packages/domain/src/conversation/index.ts` 에 메인 방을 추가한다(research R9).
+- [X] T009 `packages/domain/src/conversation/index.ts` 에 메인 방을 추가한다(research R9).
   - `ensureMain(userId): Promise<{ id: string }>`: `INSERT … (id=randomUUID(), title="나비스", is_main=true) ON CONFLICT DO NOTHING` 한 뒤 SELECT 한다. 부분 유일 인덱스가 회원당 하나를 보장한다.
   - `remove` 는 메인 방이면 `MainRoomUndeletableError` 를 던진다. 이 에러는 `packages/domain/src/errors.ts` 에 타입 있는 에러로 추가한다.
-- [ ] T010 [P] `packages/domain/test/conversation/index.test.ts` 를 새 구현에 맞게 고치고 늘린다(실 DB).
+- [X] T010 [P] `packages/domain/test/conversation/index.test.ts` 를 새 구현에 맞게 고치고 늘린다(실 DB).
   - append 한 순서대로 페이지가 나온다.
   - 120개를 넣고 get 하면 50개와 `hasMore=true`, `page(before)` 로 이어 받으면 중복 · 누락이 없다.
   - list 의 `lastMessage` 가 맞다.
   - `ensureMain` 은 두 번 불러도 하나다.
   - 메인 방 remove 는 `MainRoomUndeletableError` 다.
   - USER_B 는 USER_A 의 방을 page · append 할 수 없다(NotFoundError).
-- [ ] T011 `packages/api/src/client.ts` 에 `conversations.page(id, before, limit)` 를 추가하고 `conversations.list` · `get` 반환 타입을 새 스키마로 맞춘다. `apps/server/src/routes/conversations.ts` 를 바꾼다.
+- [X] T011 `packages/api/src/client.ts` 에 `conversations.page(id, before, limit)` 를 추가하고 `conversations.list` · `get` 반환 타입을 새 스키마로 맞춘다. `apps/server/src/routes/conversations.ts` 를 바꾼다.
   - `GET /:id/messages?before=&limit=` 를 추가한다(limit 기본 50, 최대 100, 잘못된 값은 400).
   - `DELETE /:id` 에서 `MainRoomUndeletableError` 를 **409** `{ error: "나비스 방은 지울 수 없어요." }` 로 바꾼다.
-- [ ] T012 [P] `apps/server/test/routes/conversations.test.ts` 에 계약을 추가한다(domain mock): 페이지 라우트 200 · 400(limit=0, 101) · 404, 메인 방 삭제 409, 목록 응답에 `messageCount` 없음 · `isMain` 있음.
-- [ ] T013 `packages/db/migrations/0012_*.sql` 로 `conversations.messages` 열을 제거한다. **파일만 만들고 운영 적용은 quickstart S0 확인 뒤**다. `schema.ts` 에서 열 정의를 지우고, `ensure` 의 `messages: []` 를 뺀다. `packages/db/migrations/meta` 의 생성 순서를 지킨다.
+- [X] T012 [P] `apps/server/test/routes/conversations.test.ts` 에 계약을 추가한다(domain mock): 페이지 라우트 200 · 400(limit=0, 101) · 404, 메인 방 삭제 409, 목록 응답에 `messageCount` 없음 · `isMain` 있음.
+- [ ] T013 **(운영 S0 대조 뒤로 미룸 — T052 6단계 다음)** `packages/db/migrations/0012_*.sql` 로 `conversations.messages` 열을 제거한다. 미리 만들어 두면 운영 `db:migrate` 한 번에 0011 과 열 삭제가 함께 적용돼 대조할 틈이 없고, 배포 전 옛 코드가 쓰기에 실패한다. 그래서 S0 확인 뒤에 만들고 바로 적용한다. `schema.ts` 에서 열 정의를 지우고, `ensure` 의 `messages: []` 를 뺀다. `packages/db/migrations/meta` 의 생성 순서를 지킨다.
 
 ### 대화 턴 — 기록 · 세션 · 레지스트리
 
-- [ ] T014 `apps/server/src/turns.ts` 를 새로 만든다(research R4). `routes/chat.ts` 의 `activeConversations: Set` 을 이 모듈로 옮겨 회원을 함께 기록한다.
+- [X] T014 `apps/server/src/turns.ts` 를 새로 만든다(research R4). `routes/chat.ts` 의 `activeConversations: Set` 을 이 모듈로 옮겨 회원을 함께 기록한다.
   - `begin(conversationId, userId)`: 같은 방이 진행 중이면 false.
   - `end(conversationId)`
   - `isUserBusy(userId)`
   - `waitUntilIdle(userId, timeoutMs)`: 진행 중 턴이 끝나면 풀리는 프라미스, 타임아웃이면 그냥 풀린다.
   - 상태는 Map 하나에 둔다. `let` 을 추가하지 않는다.
-- [ ] T015 `apps/server/src/routes/chat.ts` 를 바꾼다.
+- [X] T015 `apps/server/src/routes/chat.ts` 를 바꾼다.
   - `turns` 레지스트리를 쓴다.
   - `history` 는 `conversation.recentForHistory(userId, id, 20)` 으로 읽는다(방 전체를 싣지 않는다).
   - 세션 교체(R8): `room.sessionTurns >= 30` 이면 `resumeSessionId` 를 넘기지 않는다. 턴이 끝나면 이어 썼으면 `session_turns + 1`, 새 세션이면 1 로 `conversation.setSessionId(userId, id, sessionId, turns)` 를 부른다. 시그니처를 확장한다.
   - 판정은 순수 함수 `shouldStartFreshSession(room)` 으로 `packages/domain/src/conversation/index.ts` 에 둔다.
-- [ ] T016 `packages/domain/src/chat/index.ts` · `history.ts`: 기록 이어 붙이기 조건을 `!resume && resumeSessionId && history.length` 에서 `!resume && history.length > 0` 으로 바꾼다(R8). 세션이 비워진 방(약속 메시지 이후)도 맥락을 잇기 위해서다. `packages/domain/test/chat/history.test.ts` 에 해당 경우를 추가한다.
-- [ ] T017 [P] `packages/domain/test/conversation/session.test.ts`: `shouldStartFreshSession` 을 검증한다. 29턴 이어 씀, 30턴 교체, `sessionId` null 교체.
+- [X] T016 `packages/domain/src/chat/index.ts` · `history.ts`: 기록 이어 붙이기 조건을 `!resume && resumeSessionId && history.length` 에서 `!resume && history.length > 0` 으로 바꾼다(R8). 세션이 비워진 방(약속 메시지 이후)도 맥락을 잇기 위해서다. `packages/domain/test/chat/history.test.ts` 에 해당 경우를 추가한다.
+- [X] T017 [P] `packages/domain/test/conversation/session.test.ts`: `shouldStartFreshSession` 을 검증한다. 29턴 이어 씀, 30턴 교체, `sessionId` null 교체.
 
 ### web — 페이지네이션 · 메인 방 기본 선택
 
-- [ ] T018 `apps/web/src/app/api/conversations/[id]/messages/route.ts`(GET BFF, `proxyToServer`)를 만든다. `apps/web/src/hooks/apis/conversation/use-conversation-message-list.ts` 를 `useInfiniteQuery` 로 바꾼다.
+- [X] T018 `apps/web/src/app/api/conversations/[id]/messages/route.ts`(GET BFF, `proxyToServer`)를 만든다. *(구현 메모: infinite query 대신 캐시 형태 `Message[]` 를 유지하고 `use-load-older-messages.ts` 가 앞에 붙인다 — 보내기 · 지우기 쪽 캐시 코드를 건드리지 않으려고.)* `apps/web/src/hooks/apis/conversation/use-conversation-message-list.ts` 를 `useInfiniteQuery` 로 바꾼다.
   - 첫 페이지는 `GET /api/conversations/:id`, 이전 페이지는 `before=<가장 오래된 id>` 로 받는다.
   - `staleTime 0` 과 `refetchOnWindowFocus false` 는 유지한다.
   - `use-chat.ts` 가 캐시에 직접 쓰는 부분을 infinite 데이터 형태(`pages[last].messages` 에 추가)로 맞춘다.
-- [ ] T019 `apps/web/src/features/chat/message-list.tsx` 를 바꾼다. 맨 위에 닿으면 훅의 `fetchPreviousPage` 를 부르고, 불러온 뒤 스크롤 위치를 유지한다. 판단은 훅(`use-stick-to-bottom` 옆 새 훅 `use-load-older.ts`)이 하고 컴포넌트는 렌더만 한다(원칙 III).
-- [ ] T020 `apps/web/src/hooks/pages/conversation/use-conversation-workspace.ts` 를 바꾼다. `?c=` 가 없으면 첫 화면을 새 초안 대신 목록의 `isMain` 방으로 연다(목록이 오기 전에는 초안). "새 대화"는 지금처럼 초안을 만든다. `apps/web/src/components/layout/sidebar.tsx` 에서는 메인 방에 삭제 버튼을 보이지 않고, 고정 표시(핀 아이콘)를 붙인다.
+- [X] T019 `apps/web/src/features/chat/message-list.tsx` 를 바꾼다. 맨 위에 닿으면 훅의 `fetchPreviousPage` 를 부르고, 불러온 뒤 스크롤 위치를 유지한다. 판단은 훅(`use-stick-to-bottom` 옆 새 훅 `use-load-older.ts`)이 하고 컴포넌트는 렌더만 한다(원칙 III).
+- [X] T020 `apps/web/src/hooks/pages/conversation/use-conversation-workspace.ts` 를 바꾼다. `?c=` 가 없으면 첫 화면을 새 초안 대신 목록의 `isMain` 방으로 연다(목록이 오기 전에는 초안). "새 대화"는 지금처럼 초안을 만든다. `apps/web/src/components/layout/sidebar.tsx` 에서는 메인 방에 삭제 버튼을 보이지 않고, 고정 표시(핀 아이콘)를 붙인다.
 
 **Checkpoint**: 약속 없이도 배포할 수 있다. quickstart S0(이전 대조) · S7(메인 방) · S8(긴 방) 일부를 확인할 수 있다.
 

@@ -10,9 +10,12 @@ const PUSH_HOSTS = [
   /^updates\.push\.services\.mozilla\.com$/, // 파이어폭스
   /^.+\.notify\.windows\.com$/, // 엣지
 ];
+// URL 객체를 쓰지 않는다 — 이 패키지는 DOM · Node 타입 없이 컴파일된다(RN 번들 공용). z.url() 이 이미
+// 형식을 확인했으므로 호스트만 뽑는다. 사용자 정보(user@host)가 끼면 거절한다 — 호스트를 속이는 흔한 수법이다.
+const HTTPS_HOST = /^https:\/\/([^/:?#@]+)(?::\d+)?(?:[/?#]|$)/i;
 const isPushService = (raw: string) => {
-  const { protocol, hostname } = new URL(raw);
-  return protocol === "https:" && PUSH_HOSTS.some((h) => h.test(hostname));
+  const host = HTTPS_HOST.exec(raw)?.[1]?.toLowerCase();
+  return !!host && PUSH_HOSTS.some((h) => h.test(host));
 };
 
 export const pushSubscriptionInputSchema = z.object({
