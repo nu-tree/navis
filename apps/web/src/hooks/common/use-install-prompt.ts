@@ -26,9 +26,26 @@ if (typeof window !== "undefined") {
   });
 }
 
+/** 설치한 앱 창 안인가. 아이폰은 표준 대신 navigator.standalone 을 쓴다. */
+const readStandalone = () =>
+  window.matchMedia("(display-mode: standalone)").matches ||
+  (navigator as Navigator & { standalone?: boolean }).standalone === true;
+
+/** 설치한 앱 창 안이면 true — 설치 버튼을 숨긴다. 서버 렌더에서는 true 로 봐서 깜빡이지 않게 한다. */
+export const useStandalone = () =>
+  useSyncExternalStore(
+    (l) => {
+      const mq = window.matchMedia("(display-mode: standalone)");
+      mq.addEventListener("change", l);
+      return () => mq.removeEventListener("change", l);
+    },
+    readStandalone,
+    () => true,
+  );
+
 /**
- * 앱 설치(PWA). 설치할 수 있을 때만 `install` 이 있다 — 이미 설치했거나, 앱 창 안이거나,
- * 이벤트를 주지 않는 브라우저(사파리 · 파이어폭스)면 null 이다.
+ * 브라우저의 설치 창(크롬 · 엣지). 띄울 수 있을 때만 함수가 있다 — 이미 설치했거나, 이벤트를
+ * 주지 않는 브라우저(사파리 · 파이어폭스)면 null 이다. 그때는 설치 방법 안내를 보여준다.
  */
 export const useInstallPrompt = () => {
   const available = useSyncExternalStore(

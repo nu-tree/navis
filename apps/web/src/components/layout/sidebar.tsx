@@ -1,11 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { Brain, CircleHelp, Download, LogOut, MessageSquare, Plus, Settings, Trash2 } from "lucide-react";
 import type { ConversationSummary } from "@navis/validation";
 import { Button } from "@/components/ui/button";
 import { useSignOut } from "@/hooks/apis/auth/use-sign-out";
-import { useInstallPrompt } from "@/hooks/common/use-install-prompt";
+import { InstallGuideDialog } from "@/features/install/install-guide-dialog";
+import { useInstallPrompt, useStandalone } from "@/hooks/common/use-install-prompt";
 import { supabaseEnv } from "@/lib/supabase";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import {
@@ -41,6 +43,8 @@ export function NavisSidebar({
   const openOnboarding = useOnboardingStore((s) => s.setOpen);
   const configured = supabaseEnv() !== null;
   const install = useInstallPrompt();
+  const standalone = useStandalone();
+  const [guideOpen, setGuideOpen] = useState(false);
 
   return (
     <Sidebar collapsible="offcanvas">
@@ -108,15 +112,20 @@ export function NavisSidebar({
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
-          {/* 설치할 수 있는 브라우저(크롬 · 엣지)에서, 아직 설치하지 않았을 때만 보인다. */}
-          {install ? (
+          {/* 설치한 앱 창 안이 아니면 늘 보인다. 크롬 · 엣지는 바로 설치 창을 띄우고, 설치 창을 못 띄우는
+              브라우저(사파리 · 파이어폭스 등)는 그 기기에 맞는 설치 방법을 보여준다. */}
+          {standalone ? null : (
             <SidebarMenuItem>
-              <SidebarMenuButton tooltip="앱으로 설치" onClick={() => void install()}>
+              <SidebarMenuButton
+                tooltip="앱으로 설치"
+                onClick={() => (install ? void install() : setGuideOpen(true))}
+              >
                 <Download />
                 <span>앱으로 설치</span>
               </SidebarMenuButton>
+              <InstallGuideDialog open={guideOpen} onOpenChange={setGuideOpen} />
             </SidebarMenuItem>
-          ) : null}
+          )}
           <SidebarMenuItem>
             <SidebarMenuButton tooltip="사용법" data-tour="help" onClick={() => openOnboarding(true)}>
               <CircleHelp />
