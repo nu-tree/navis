@@ -151,8 +151,8 @@ description: "Task list — 관리자가 나비스를 통해 회원에게 말 �
 
 ## Phase 6: Polish & Cross-Cutting
 
-- [ ] T031 [P] `apps/server/.env.example` · `deploy/README.md` 에 "전하기는 새 환경변수가 없다. 운영 DB 에서 server 역할이 `auth.users` 를 읽을 수 있어야 한다(quickstart S0)"를 적는다.
-- [ ] T032 [P] `README.md` 의 기능 · 라우트 목록에 전하기(`/relays*`, `relay` · `relay_run` 도구)를 더한다.
+- [X] T031 [P] `apps/server/.env.example` · `deploy/README.md` 에 "전하기는 새 환경변수가 없다. 운영 DB 에서 server 역할이 `auth.users` 를 읽을 수 있어야 한다(quickstart S0)"를 적는다.
+- [X] T032 [P] `README.md` 의 기능 · 라우트 목록에 전하기(`/relays*`, `relay` · `relay_run` 도구)를 더한다.
 - [ ] T033 운영 배포 전 quickstart S0(운영 `auth.users` 권한) 확인 → `pnpm db:migrate`(운영) → 배포 → quickstart M1–M12 를 운영에서 한 번 돈다. S0 가 실패하면 배포하지 않고 research R4-b 로 바꾼다.
 
 ---

@@ -90,7 +90,7 @@ description: "먼저 말 거는 나비스 — 약속 작업 목록"
   - `GET /:id/messages?before=&limit=` 를 추가한다(limit 기본 50, 최대 100, 잘못된 값은 400).
   - `DELETE /:id` 에서 `MainRoomUndeletableError` 를 **409** `{ error: "나비스 방은 지울 수 없어요." }` 로 바꾼다.
 - [X] T012 [P] `apps/server/test/routes/conversations.test.ts` 에 계약을 추가한다(domain mock): 페이지 라우트 200 · 400(limit=0, 101) · 404, 메인 방 삭제 409, 목록 응답에 `messageCount` 없음 · `isMain` 있음.
-- [ ] T013 **(운영 S0 대조 뒤로 미룸 — T052 6단계 다음)** `packages/db/migrations/0012_*.sql` 로 `conversations.messages` 열을 제거한다. 미리 만들어 두면 운영 `db:migrate` 한 번에 0011 과 열 삭제가 함께 적용돼 대조할 틈이 없고, 배포 전 옛 코드가 쓰기에 실패한다. 그래서 S0 확인 뒤에 만들고 바로 적용한다. `schema.ts` 에서 열 정의를 지우고, `ensure` 의 `messages: []` 를 뺀다. `packages/db/migrations/meta` 의 생성 순서를 지킨다.
+- [ ] T013 **(운영 S0 대조 뒤로 미룸 — T052 6단계 다음)** `packages/db/migrations/0013_*.sql` 로 `conversations.messages` 열을 제거한다(0012 는 specs/004 의 `relays` 가 먼저 썼다). 미리 만들어 두면 운영 `db:migrate` 한 번에 0011 과 열 삭제가 함께 적용돼 대조할 틈이 없고, 배포 전 옛 코드가 쓰기에 실패한다. 그래서 S0 확인 뒤에 만들고 바로 적용한다. `schema.ts` 에서 열 정의를 지우고, `ensure` 의 `messages: []` 를 뺀다. `packages/db/migrations/meta` 의 생성 순서를 지킨다.
 
 ### 대화 턴 — 기록 · 세션 · 레지스트리
 

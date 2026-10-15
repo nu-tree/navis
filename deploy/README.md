@@ -192,8 +192,25 @@ gcloud scheduler jobs create http navis-tick \
 - **끄기**: `gcloud scheduler jobs pause navis-tick --location=$REGION` — 대화는 그대로 되고 약속만 멈춘다.
 - **토큰을 바꾸면** 비밀값 새 버전을 만들고 재배포한 뒤, Scheduler 작업의 헤더도 같은 명령(`update http …
   --update-headers=…`)으로 바꾼다.
-- 대조가 끝나면 `conversations.messages` 열을 지우는 0012 를 만들어 적용한다(tasks T013). 그 전에 만들면
+- 대조가 끝나면 `conversations.messages` 열을 지우는 0013 을 만들어 적용한다(tasks T013 — 0012 는 전하기의
+  `relays` 표가 먼저 썼다). 그 전에 만들면
   `db:migrate` 한 번에 0011 과 열 삭제가 함께 적용돼 대조할 틈이 없다.
+
+## 전하기 켜기 — 관리자가 회원에게 말 걸기 (한 번, specs/004)
+
+새 비밀값 · 환경변수 · Scheduler 작업은 없다. 약속과 같은 tick 이 전하기도 집는다. 배포 전에 두 가지만 한다.
+
+```bash
+# 1) server 의 DB 역할이 회원 목록(auth.users)을 읽을 수 있는지 — 받는 사람 고르기에 쓴다
+psql '<Supabase 풀러 URL>' -c 'select count(*) from auth.users;'
+
+# 2) relays 표(0012)
+DATABASE_URL='<Supabase 풀러 URL>' pnpm db:migrate
+```
+
+- 1) 이 권한 오류면 **배포하지 않는다**. 회원 목록을 다른 길로 얻어야 한다(specs/004 research R4-b).
+- 전하기 턴은 **관리자(`NAVIS_OWNER_ID`)의 Claude 토큰**으로 돈다. 관리자가 설정에서 토큰을 등록해 두어야 보낼 수 있다.
+- 확인: 관리자로 ⋯ → 말 걸기 → 테스트 회원에게 보내기 → 1–2분 안에 그 회원 "나비스" 방에 도착(specs/004 quickstart M1–M12).
 
 ## 메일 템플릿 — 초대 · 비밀번호 재설정 (Supabase 대시보드, 한 번)
 
