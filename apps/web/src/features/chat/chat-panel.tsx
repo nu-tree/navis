@@ -86,10 +86,11 @@ export const ChatPanel = ({ conversationId, onTurnEnd, onOpen }: Readonly<Props>
           ) : null}
 
           {/* 첫 토큰 전 — 빈 말풍선 대신 진행 표시를 보여준다. */}
-          {busy && !streaming ? <TypingIndicator label={tool ?? undefined} /> : null}
+          {/* 나비스 말풍선 줄(프로필 자리 다음)에 맞춘다. */}
+          {busy && !streaming ? <TypingIndicator label={tool ?? undefined} className="mt-4 pl-10" /> : null}
 
           {error ? (
-            <p className="text-sm text-destructive">
+            <p className="mt-4 text-sm text-destructive">
               ⚠️ {error}
               {/* 토큰 문제면 고칠 곳으로 바로 보낸다(FR-056). */}
               {errorCode ? (
