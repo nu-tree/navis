@@ -1,6 +1,7 @@
 import { Hono, type Context } from "hono";
 import type { AppEnv } from "../types";
-import { settings } from "@navis/domain";
+import { chat, settings } from "@navis/domain";
+import { isClaudeTokenError } from "@navis/domain/errors";
 import { claudeTokenInputSchema } from "@navis/validation";
 
 // Claude 구독 토큰(US5). 인증은 app.ts 의 기본 잠금이 걸어뒀다.
@@ -20,6 +21,18 @@ export const settingsRoute = new Hono<AppEnv>()
     const parsed = claudeTokenInputSchema.safeParse(body);
     // 검증 오류의 detail 에 받은 값이 실릴 수 있다 — 싣지 않는다.
     if (!parsed.success) return c.json({ error: "토큰이 비어 있습니다." }, 400);
+
+    // 저장 전에 실제로 받아들여지는지 한 마디로 확인한다 — 예전엔 틀린 토큰도 대화를 해 봐야 알았다.
+    // 거절되면 저장하지 않는다(422). 그 밖의 실패(네트워크 · 시간 초과)는 토큰 탓인지 모르니 저장은 한다.
+    try {
+      await chat.verifyClaudeToken(parsed.data.token.trim());
+    } catch (err) {
+      if (isClaudeTokenError(err) && err.kind === "claude_token_rejected") {
+        return c.json({ error: err.message, code: err.kind }, 422);
+      }
+      console.error(`[settings] 토큰 확인 실패(저장은 진행): ${err instanceof Error ? err.name : "Error"}`);
+    }
+
     try {
       return c.json(await settings.claudeToken.set(c.get("userId"), parsed.data.token));
     } catch (err) {

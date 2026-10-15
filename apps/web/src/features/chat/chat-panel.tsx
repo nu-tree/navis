@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { ChatInput } from "./chat-input";
+import { ClaudeConnectCard } from "./claude-connect-card";
 import { MessageBubble } from "./message-bubble";
 import { MessageList } from "./message-list";
 import { TypingIndicator } from "./typing-indicator";
@@ -103,6 +104,9 @@ export const ChatPanel = ({ conversationId, onTurnEnd, onOpen }: Readonly<Props>
         </MessageList>
       )}
 
+      <div className="px-4">
+        <ClaudeConnectCard errorCode={errorCode} />
+      </div>
       <ChatInput
         busy={busy}
         onSend={(input) => {

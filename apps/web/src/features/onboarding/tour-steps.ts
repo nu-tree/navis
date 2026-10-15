@@ -89,10 +89,11 @@ export const tourSteps = ({ tokenRegistered }: { tokenRegistered: boolean }): Dr
           align: "end",
         }
       : {
-          title: "마지막으로, 여기서 토큰 등록",
+          title: "마지막으로, 여기서 Claude 연결",
           description:
-            "나비스는 <b>내 Claude 구독</b>으로 답해요. 설정에서 Claude 토큰을 한 번 등록하면 바로 대화할 수 있어요 " +
-            "(터미널에서 <code>claude setup-token</code> 으로 발급). 토큰은 암호화해 보관하고 다시 보여주지 않아요.",
+            "나비스는 <b>내 Claude 구독</b>(Pro · Max)으로 답해요. 설정을 열면 Mac · Windows 별로 순서가 나와요 — " +
+            "명령을 <b>복사 버튼</b>으로 터미널에 붙여 넣고, 나온 토큰을 붙여 넣으면 끝이에요. 2–3분이면 돼요.<br/><br/>" +
+            "붙여 넣으면 나비스가 바로 연결을 확인해요. 토큰은 암호화해 보관하고 다시 보여주지 않아요.",
           side: "bottom",
           align: "end",
         },

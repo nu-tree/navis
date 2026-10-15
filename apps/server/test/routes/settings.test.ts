@@ -22,6 +22,10 @@ const status = (userId: string) => {
 };
 
 class SecretError extends Error {}
+class FakeRejected extends Error {
+  readonly kind = "claude_token_rejected" as const;
+}
+const verify = vi.fn(async (_t: string) => undefined);
 vi.mock("@navis/domain", () => ({
   settings: {
     SecretError,
@@ -33,7 +37,12 @@ vi.mock("@navis/domain", () => ({
   },
   memory: {},
   conversation: {},
-  chat: { runTurn: vi.fn() },
+  chat: { runTurn: vi.fn(), verifyClaudeToken: (t: string) => verify(t) },
+}));
+vi.mock("@navis/domain/errors", () => ({
+  isClaudeTokenError: (e: unknown) => e instanceof FakeRejected,
+  isNotFound: () => false,
+  isEmbeddingError: () => false,
 }));
 
 const { app } = await import("../../src/app");
@@ -98,5 +107,23 @@ describe("/settings/claude-token", () => {
     await req("PUT", { token: SECRET });
     const res = await req("DELETE");
     expect(await res.json()).toEqual({ registered: false, last4: null, updatedAt: null });
+  });
+
+  // 저장 전에 실제로 받아들여지는지 확인한다 — 틀린 토큰을 대화해 보고서야 알지 않게.
+  it("Claude 가 거절하면 422 claude_token_rejected 이고 저장하지 않는다", async () => {
+    verify.mockRejectedValueOnce(new FakeRejected("거부"));
+    const res = await req("PUT", { token: SECRET });
+    expect(res.status).toBe(422);
+    const body = await res.text();
+    expect(JSON.parse(body)).toMatchObject({ code: "claude_token_rejected" });
+    expect(body).not.toContain(SECRET);
+    expect(stored.has(MEMBER)).toBe(false);
+  });
+
+  it("확인이 네트워크 등으로 실패하면 토큰 탓인지 모르니 저장은 한다", async () => {
+    verify.mockRejectedValueOnce(new Error("timeout"));
+    const res = await req("PUT", { token: SECRET });
+    expect(res.status).toBe(200);
+    expect(stored.get(MEMBER)).toBe(SECRET);
   });
 });

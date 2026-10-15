@@ -106,7 +106,7 @@ export const ClaudeTokenForm = () => {
         ) : null}
         <div className="flex justify-end">
           <Button type="submit" disabled={saving || !token.trim()}>
-            {saving ? "저장 중…" : status?.registered ? "교체" : "등록"}
+            {saving ? "연결 확인 중…" : status?.registered ? "교체" : "등록"}
           </Button>
         </div>
       </form>

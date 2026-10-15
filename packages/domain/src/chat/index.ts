@@ -456,4 +456,45 @@ export async function runTurn(
   };
 }
 
+/** 토큰 확인이 이보다 오래 걸리면 포기한다 — 저장 버튼이 영영 돌지 않게. */
+const VERIFY_TIMEOUT_MS = 30_000;
+/** 확인에 쓰는 가장 가벼운 모델. 한 마디만 받는다. */
+const VERIFY_MODEL = "claude-haiku-4-5-20251001";
+
+/**
+ * 토큰이 실제로 Claude 에 받아들여지는지 한 마디로 확인한다(설정 저장 전).
+ *
+ * 도구 · 기억 · 세션 저장 없이 가장 가벼운 모델로 짧게 묻는다. 거절되면 ClaudeTokenRejectedError 를 던진다.
+ * 그 밖의 실패(네트워크 · 시간 초과)는 일반 Error — 토큰 탓인지 알 수 없으니 저장을 막을지는 호출자가 정한다.
+ */
+export async function verifyClaudeToken(token: string): Promise<void> {
+  const abortController = new AbortController();
+  const timer = setTimeout(() => abortController.abort(), VERIFY_TIMEOUT_MS);
+  try {
+    for await (const message of query({
+      prompt: "ok 라고만 답해.",
+      options: {
+        model: VERIFY_MODEL,
+        tools: [],
+        settingSources: [],
+        persistSession: false,
+        maxTurns: 1,
+        env: { ...process.env, CLAUDE_CODE_OAUTH_TOKEN: token },
+        abortController,
+      },
+    })) {
+      if (message.type === "assistant" && message.error && TOKEN_ERRORS.has(message.error)) {
+        throw new ClaudeTokenRejectedError(message.error);
+      }
+      if (message.type === "result") {
+        if (message.subtype !== "success") throw new Error(`Claude 응답 실패: ${message.subtype}`);
+        return;
+      }
+    }
+    throw new Error("Claude 가 답하지 않았습니다.");
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export { MAX_IMAGES, toImageBlocks } from "./images";
