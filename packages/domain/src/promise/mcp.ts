@@ -173,7 +173,7 @@ export const createPromiseRunMcpServer = ({ userId, promiseId, label, state }: P
         notifyInputSchema.shape,
         async ({ text }) => {
           if (state.messageId) return refuse("이번 실행에서는 이미 말했어요.");
-          const message = await deliver(userId, { kind: "promise", promiseId, label }, text);
+          const message = await deliver(userId, { origin: { kind: "promise", promiseId, label } }, text);
           state.messageId = message.id;
           return reply("전했다.");
         },

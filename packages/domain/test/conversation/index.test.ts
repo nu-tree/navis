@@ -6,7 +6,7 @@
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { TEST_USERS, USER_A, USER_B } from "../test-users";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { db, conversations } from "@navis/db";
+import { db, conversations, messages } from "@navis/db";
 import { MainRoomUndeletableError, NotFoundError } from "../../src/errors";
 import {
   appendMessage,
@@ -271,6 +271,22 @@ describeDb("대화방 (실제 DB)", () => {
     });
     const [m] = (await get(USER_A, id("s"))).messages;
     expect(m).toMatchObject({ toolsUsed: ["WebSearch"], saved: true, origin });
+  });
+
+  // specs/004 research R8 — 전하기 출처는 저장만 하고 받는 회원의 응답에는 흔적이 없어야 한다.
+  it("relayId 는 meta 에 남지만 와이어 Message 에는 실리지 않는다", async () => {
+    await ensure(USER_A, id("r"), "x");
+    const relayId = "11111111-1111-4111-8111-111111111111";
+    const sent = await appendMessage(USER_A, id("r"), { role: "assistant", text: "회의가 11시로 바뀌었어요.", relayId });
+
+    const [row] = await db.select({ meta: messages.meta }).from(messages).where(eq(messages.id, sent.id));
+    expect(row?.meta).toEqual({ relayId });
+
+    const wire = [sent, ...(await get(USER_A, id("r"))).messages, ...(await recentForHistory(USER_A, id("r"), 10))];
+    for (const m of wire) {
+      expect(m).not.toHaveProperty("relayId");
+      expect(m).not.toHaveProperty("origin");
+    }
   });
 
   it("detachSession 은 세션과 턴 수를 비운다", async () => {

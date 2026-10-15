@@ -10,3 +10,4 @@ export * from "./conversation";
 export * from "./settings";
 export * from "./push";
 export * from "./promise";
+export * from "./relay";

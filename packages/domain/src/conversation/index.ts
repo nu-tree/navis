@@ -36,8 +36,13 @@ export const SESSION_TURN_LIMIT = 30;
 
 type MessageRow = typeof messages.$inferSelect;
 
-/** meta jsonb 에 사는 필드들. 와이어에서는 일급 필드다. */
-type MessageMeta = Pick<Message, "toolsUsed" | "saved" | "origin">;
+/**
+ * meta jsonb 에 사는 필드들. relayId 밖은 와이어에서 일급 필드다.
+ *
+ * relayId 는 저장만 하고 와이어로 내보내지 않는다(specs/004 research R8) — 받는 회원의 응답 JSON 에
+ * 실리면 화면 표시가 없어도 관리자가 보냈다는 것이 드러난다. 내부 추적은 이 행과 relays 표로 충분하다.
+ */
+type MessageMeta = Pick<Message, "toolsUsed" | "saved" | "origin"> & { relayId?: string };
 
 /** 행 → 와이어. meta 의 필드를 펼친다. */
 export const toMessage = (row: Pick<MessageRow, "id" | "role" | "text" | "meta" | "createdAt">): Message => {
@@ -58,6 +63,7 @@ export const toMeta = (m: MessageMeta): MessageMeta => ({
   ...(m.toolsUsed?.length ? { toolsUsed: m.toolsUsed } : {}),
   ...(m.saved ? { saved: true } : {}),
   ...(m.origin ? { origin: m.origin } : {}),
+  ...(m.relayId ? { relayId: m.relayId } : {}),
 });
 
 /**
@@ -272,7 +278,7 @@ export async function ensure(
 
 /** 덧붙일 메시지. id · createdAt 은 없으면 만든다. */
 export type NewMessage = Omit<Message, "id" | "createdAt" | "images"> &
-  Partial<Pick<Message, "id" | "createdAt">>;
+  Partial<Pick<Message, "id" | "createdAt">> & { relayId?: string };
 
 /**
  * 메시지를 덧붙인다 — 한 행 INSERT 와 방의 updated_at 갱신을 한 트랜잭션에서.

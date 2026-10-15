@@ -147,6 +147,11 @@ export type TurnInput = {
    * 이 턴을 보낸 회원(specs/002). 기억 도구와 Claude 토큰이 이 회원의 것만 쓴다.
    */
   userId: string;
+  /**
+   * Claude 토큰의 주인. 없으면 userId. 전하기 턴만 보낸 관리자로 채운다(specs/004 FR-022) —
+   * 대화 턴 · 약속 턴에서는 넘기지 않는다.
+   */
+  tokenUserId?: string;
   prompt: string;
   /**
    * 첨부 이미지 (base64 data URL, 최대 8장).
@@ -207,7 +212,9 @@ export async function runTurn(
 ): Promise<TurnResult> {
   // 토큰이 없으면 Claude 를 부르지 않는다 — 부르면 SDK 가 알아보기 힘든 인증 오류를 낸다.
   // 그 회원의 토큰만 쓴다 — 다른 회원의 토큰으로 대신 답하지 않는다(specs/002 FR-111).
-  const token = await claudeToken.resolve(input.userId);
+  // 예외: 전하기 턴은 보낸 관리자의 토큰이다(specs/004 FR-022 — 관리자가 시킨 일의 비용을 받는
+  // 회원에게 지우지 않는다). 기억 도구 · 기록은 여전히 userId 의 것이다.
+  const token = await claudeToken.resolve(input.tokenUserId ?? input.userId);
   if (!token) throw new ClaudeTokenMissingError();
 
   // 디스크에 세션이 있을 때만 잇는다. 없으면 새 세션 + 기록 복원.

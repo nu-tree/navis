@@ -73,7 +73,7 @@ export async function executeRun(run: ClaimedRun, now: Date = new Date()): Promi
       // 연속 실패로 꺼졌다 — 조용히 꺼지면 사용자는 약속이 왜 안 오는지 모른다(R11). 한 번 알린다.
       await deliver(
         promise.userId,
-        { kind: "promise-disabled", promiseId: promise.id, label: promise.label },
+        { origin: { kind: "promise-disabled", promiseId: promise.id, label: promise.label } },
         `'${promise.label}' 약속이 세 번 연속 실패해서 껐어요. 이유: ${outcome.error ?? "알 수 없음"}\n약속 화면에서 다시 켤 수 있어요.`,
       );
     }

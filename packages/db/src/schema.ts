@@ -206,3 +206,38 @@ export const pushSubscriptions = pgTable(
   },
   (t) => [index("push_subscriptions_user_idx").on(t.userId)],
 );
+
+// 전하기 — 관리자가 한 회원의 나비스에게 맡긴 지시 하나(specs/004). 한 번 실행되고 끝난다.
+//
+// 약속 행을 쓰지 않는 이유(research R1): 약속은 받는 회원의 것이라 약속 화면에 지시 원문이 보이고,
+// 약속 턴은 그 회원의 토큰으로 돌며, 약속에는 "조용함"이 정상이다. 전하기는 셋 다 아니다.
+//
+// 외래 키를 걸지 않는다 — 회원은 다른 스키마의 테이블이고, 받는 회원이 방을 지워도 기록은 남아야 한다.
+export const relays = pgTable(
+  "relays",
+  {
+    id: uuid("id").primaryKey(),
+    // 보낸 관리자. 전하기 턴의 토큰 주인이다(FR-022). 목록 · 보존은 이 열로 좁힌다.
+    senderId: uuid("sender_id").notNull(),
+    // 받는 회원. 기억 · 대화방 · 전달이 이 회원의 것이다.
+    recipientId: uuid("recipient_id").notNull(),
+    // 보낼 때의 표시(이메일 등). 기록 화면이 매번 auth.users 를 다시 읽지 않게 남긴다.
+    recipientLabel: text("recipient_label").notNull(),
+    instruction: text("instruction").notNull(),
+    // pending | running | delivered | failed
+    status: text("status").notNull(),
+    // failed 일 때 사람이 읽는 이유. 모델 출력이 아니다 — 받는 회원의 기억이 섞일 수 있다(research R9).
+    error: text("error"),
+    // 도착한 메시지. 내부 추적용 — 와이어로 나가지 않는다(FR-019).
+    messageId: uuid("message_id"),
+    // 실행 임대. 만료된 running 은 다시 집지 않고 실패로 닫는다(data-model "상태 전이").
+    leaseUntil: timestamp("lease_until", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  (t) => [
+    // tick 조회. 끝나지 않은 것만 본다.
+    index("relays_pending_idx").on(t.createdAt).where(sql`${t.status} in ('pending', 'running')`),
+    index("relays_sender_created_idx").on(t.senderId, t.createdAt.desc()),
+  ],
+);
