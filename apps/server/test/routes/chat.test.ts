@@ -48,13 +48,13 @@ vi.mock("@navis/domain", () => ({
 
 const { app } = await import("../../src/app");
 
-const send = async () => {
+const send = async (user: string = MEMBER) => {
   const res = await app.fetch(
     new Request("http://localhost/chat", {
       method: "POST",
       headers: {
         authorization: `Bearer ${API_TOKEN}`,
-        "x-navis-user": MEMBER,
+        "x-navis-user": user,
         "content-type": "application/json",
       },
       body: JSON.stringify({ conversationId: "room-1", text: "안녕", turnId: crypto.randomUUID() }),
@@ -97,6 +97,19 @@ describe("POST /chat — 회원 분리 (specs/002)", () => {
     await send();
     expect(ensure).toHaveBeenLastCalledWith(MEMBER, "room-1", "안녕");
     expect(runTurn).toHaveBeenLastCalledWith(expect.objectContaining({ userId: MEMBER }), expect.anything());
+  });
+
+  // specs/004 T025 — 전하기 도구는 관리자 턴에만 열린다. 판정은 server 가 한다.
+  it("관리자가 아니면 runTurn 에 canRelay: false", async () => {
+    runTurn.mockResolvedValueOnce({ text: "답", sessionId: null, toolsUsed: [], savedCount: 0 });
+    await send();
+    expect(runTurn).toHaveBeenLastCalledWith(expect.objectContaining({ canRelay: false }), expect.anything());
+  });
+
+  it("관리자면 runTurn 에 canRelay: true", async () => {
+    runTurn.mockResolvedValueOnce({ text: "답", sessionId: null, toolsUsed: [], savedCount: 0 });
+    await send("00000000-0000-4000-8000-000000000001");
+    expect(runTurn).toHaveBeenLastCalledWith(expect.objectContaining({ canRelay: true }), expect.anything());
   });
 
   it("남의 방이면 스트림을 열기 전에 404 — 질문을 기록하지 않는다", async () => {

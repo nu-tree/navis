@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { AppEnv } from "../types";
 import * as turns from "../turns";
+import { isOwner } from "../owner";
 import { streamSSE } from "hono/streaming";
 import { chat, conversation, push } from "@navis/domain";
 import { isClaudeTokenError, isNotFound } from "@navis/domain/errors";
@@ -107,6 +108,8 @@ export const chatRoute = new Hono<AppEnv>()
             model: req.model,
             abortController,
             ...(req.images?.length ? { images: req.images } : {}),
+            // 전하기 도구는 관리자의 대화 턴에만 연다(specs/004 research R6). domain 은 관리자가 누구인지 모른다.
+            canRelay: isOwner(userId),
           },
           {
             onDelta: (text) => void send({ type: "delta", text }),

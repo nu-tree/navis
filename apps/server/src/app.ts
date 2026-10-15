@@ -1,6 +1,7 @@
 import { Hono, type MiddlewareHandler } from "hono";
 import { bearerAuth } from "hono/bearer-auth";
 import { env } from "./env";
+import { isOwner } from "./owner";
 import type { AppEnv } from "./types";
 import { chatRoute } from "./routes/chat";
 import { health } from "./routes/health";
@@ -86,8 +87,6 @@ app.use("*", async (c, next) => {
   return next();
 });
 
-/** 관리자인가. resolveUser 가 소문자로 맞추므로 env 값도 소문자로 비교한다. */
-const isOwner = (userId: string) => userId === env.ownerId.toLowerCase();
 
 app.get("/me", (c) => c.json({ admin: isOwner(c.get("userId")) }));
 

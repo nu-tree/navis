@@ -126,11 +126,11 @@ description: "Task list — 관리자가 나비스를 통해 회원에게 말 �
 
 **Independent Test**: quickstart M7–M9.
 
-- [ ] T024 [P] [US2] `packages/domain/test/chat/turn-tools.test.ts` 에 추가: `canRelay: true` 인 대화 턴에만 `relay` 서버 · 도구가 있고, `canRelay` 가 참이어도 `promiseRun` · `relayRun` 턴에는 없다.
-- [ ] T025 [P] [US2] `apps/server/test/routes/chat.test.ts` 에 추가(domain mock): 관리자의 대화 요청은 `runTurn` 에 `canRelay: true`, 다른 회원은 `false` 로 넘긴다.
-- [ ] T026 [US2] `packages/domain/src/relay/mcp.ts` 에 `createRelayMcpServer({ senderId })` 를 만든다(contracts/relay-tools.md `relay`). 이름 `RELAY_SERVER_NAME = "relay"`, 도구 `relay({ to, instruction })` — `member.list()` → `matchMember` → 하나면 `relay.create(senderId, member, instruction)` 후 "{label} 님께 전하기를 맡겼어요. 1–2분 안에 도착해요.", none · ambiguous 면 `isError` 로 후보 이메일 목록. 입력 스키마에 회원 uuid 가 없다는 것과 그 이유(원칙 II)를 주석으로. 도구 설명에 FR-021("관리자의 기억에서 꺼낸 내용을 덧붙이지 않는다")을 넣는다. `ALLOWED_RELAY_TOOLS` export.
-- [ ] T027 [US2] `packages/domain/src/chat/index.ts` — `TurnInput.canRelay?: boolean`. `buildTurnOptions` 가 대화 턴(약속 · 전하기 턴 아님)이고 `canRelay` 일 때만 `relay` 서버 · 도구를 열고, 시스템 프롬프트에 짧은 절(받는 사람을 정할 수 없으면 되묻는다, 무엇을 전할지 없으면 묻는다)을 붙인다. 회원 턴에는 아무것도 바뀌지 않는다(성능 절).
-- [ ] T028 [US2] `apps/server/src/routes/chat.ts` 가 `runTurn` 에 `canRelay: isOwner(userId)` 를 넘긴다. `isOwner` 를 `app.ts` 에서 공유 가능한 곳(예: `apps/server/src/owner.ts`)으로 옮기고 `app.ts` · `chat.ts` 가 함께 쓴다. `/mcp`(외부 MCP)는 건드리지 않는다.
+- [X] T024 [P] [US2] `packages/domain/test/chat/turn-tools.test.ts` 에 추가: `canRelay: true` 인 대화 턴에만 `relay` 서버 · 도구가 있고, `canRelay` 가 참이어도 `promiseRun` · `relayRun` 턴에는 없다.
+- [X] T025 [P] [US2] `apps/server/test/routes/chat.test.ts` 에 추가(domain mock) — 받는 사람 매칭은 `packages/domain/test/relay/tool.test.ts`(`handleRelayTool`)가 덮는다: 관리자의 대화 요청은 `runTurn` 에 `canRelay: true`, 다른 회원은 `false` 로 넘긴다.
+- [X] T026 [US2] `packages/domain/src/relay/mcp.ts` 에 `createRelayMcpServer({ senderId })` 를 만든다(contracts/relay-tools.md `relay`). 이름 `RELAY_SERVER_NAME = "relay"`, 도구 `relay({ to, instruction })` — `member.list()` → `matchMember` → 하나면 `relay.create(senderId, member, instruction)` 후 "{label} 님께 전하기를 맡겼어요. 1–2분 안에 도착해요.", none · ambiguous 면 `isError` 로 후보 이메일 목록. 입력 스키마에 회원 uuid 가 없다는 것과 그 이유(원칙 II)를 주석으로. 도구 설명에 FR-021("관리자의 기억에서 꺼낸 내용을 덧붙이지 않는다")을 넣는다. `ALLOWED_RELAY_TOOLS` export.
+- [X] T027 [US2] `packages/domain/src/chat/index.ts` — `TurnInput.canRelay?: boolean`. `buildTurnOptions` 가 대화 턴(약속 · 전하기 턴 아님)이고 `canRelay` 일 때만 `relay` 서버 · 도구를 열고, 시스템 프롬프트에 짧은 절(받는 사람을 정할 수 없으면 되묻는다, 무엇을 전할지 없으면 묻는다)을 붙인다. 회원 턴에는 아무것도 바뀌지 않는다(성능 절).
+- [X] T028 [US2] `apps/server/src/routes/chat.ts` 가 `runTurn` 에 `canRelay: isOwner(userId)` 를 넘긴다. `isOwner` 를 `app.ts` 에서 공유 가능한 곳(예: `apps/server/src/owner.ts`)으로 옮기고 `app.ts` · `chat.ts` 가 함께 쓴다. `/mcp`(외부 MCP)는 건드리지 않는다.
 
 **Checkpoint**: 테스트 통과, quickstart M7–M9. **멈추고 확인받는다.**
 
@@ -142,8 +142,8 @@ description: "Task list — 관리자가 나비스를 통해 회원에게 말 �
 
 **Independent Test**: 두 건을 보내 하나는 실패시키고(M12), 목록 순서 · 상태 · 이유 · 다시 보내기를 확인한다.
 
-- [ ] T029 [US3] `apps/web/src/features/relay/relay-list.tsx` 와 `use-relay-form.ts` — 실패 항목에 "다시 보내기" 버튼: 같은 받는 회원 · 지시로 `use-create-relay` 를 부른다(새 행). 판단은 훅, 컴포넌트는 렌더만. 지은 문장 · `messageId` 를 보여줄 자리가 없음을 확인한다(FR-019).
-- [ ] T030 [P] [US3] 기록 목록의 빈 상태("아직 보낸 말이 없어요")와 상태 배지 문구(대기 · 전하는 중 · 전함 · 실패)를 정리한다 — `apps/web/src/features/relay/relay-list.tsx`.
+- [X] T029 [US3] **(US1 의 T023 에서 함께 구현 — `use-relay-composer.ts` 의 `resend`)** `apps/web/src/features/relay/relay-list.tsx` 와 `use-relay-form.ts` — 실패 항목에 "다시 보내기" 버튼: 같은 받는 회원 · 지시로 `use-create-relay` 를 부른다(새 행). 판단은 훅, 컴포넌트는 렌더만. 지은 문장 · `messageId` 를 보여줄 자리가 없음을 확인한다(FR-019).
+- [X] T030 [P] [US3] **(US1 의 T023 에서 함께 구현)** 기록 목록의 빈 상태("아직 보낸 말이 없어요")와 상태 배지 문구(대기 · 전하는 중 · 전함 · 실패)를 정리한다 — `apps/web/src/features/relay/relay-list.tsx`.
 
 **Checkpoint**: 웹 빌드 통과, US3 Independent Test.
 

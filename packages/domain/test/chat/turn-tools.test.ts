@@ -36,6 +36,32 @@ describe("buildTurnTools()", () => {
     expect(t.systemPrompt).not.toContain("## 약속 실행");
   });
 
+  // specs/004 T024 — 전하기 도구는 관리자의 대화 턴에만(FR-002, research R6).
+  it("관리자 대화 턴(canRelay) — 기억 + 약속 관리 + 전하기", () => {
+    const t = buildTurnTools({ userId: USER, conversationId: "c", canRelay: true }, tally);
+    expect(servers(t)).toEqual(["memory", "promise", "relay"]);
+    expect(t.allowedTools).toContain("mcp__relay__relay");
+    expect(t.systemPrompt).toContain("## 전하기");
+  });
+
+  it("canRelay 가 참이어도 약속 · 전하기 턴에는 전하기 도구가 없다 — 전하기가 전하기를 낳지 않게", () => {
+    const promiseTurn = buildTurnTools(
+      { userId: USER, canRelay: true, promiseRun: { promiseId: "p", label: "l", state: {} } },
+      tally,
+    );
+    const relayTurn = buildTurnTools({ userId: USER, canRelay: true, relayRun: { relayId: "r", state: {} } }, tally);
+    for (const t of [promiseTurn, relayTurn]) {
+      expect(servers(t)).not.toContain("relay");
+      expect(t.allowedTools).not.toContain("mcp__relay__relay");
+    }
+  });
+
+  it("회원 대화 턴에는 전하기 도구 · 프롬프트 절이 없다", () => {
+    const t = buildTurnTools({ userId: USER, conversationId: "c", canRelay: false }, tally);
+    expect(servers(t)).not.toContain("relay");
+    expect(t.systemPrompt).not.toContain("relay 의 relay");
+  });
+
   it("어느 턴이든 웹 검색 자동 승인은 그대로다", () => {
     for (const input of [
       { userId: USER },
