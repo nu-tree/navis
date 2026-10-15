@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Brain, CircleHelp, Download, Ellipsis, LogOut, Settings } from "lucide-react";
+import { Brain, CircleHelp, Download, Ellipsis, LogOut, MessageCircleMore, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { InstallGuideDialog } from "@/features/install/install-guide-dialog";
 import { useSignOut } from "@/hooks/apis/auth/use-sign-out";
+import { useIsAdmin } from "@/hooks/apis/me/use-me";
 import { useInstallPrompt, useStandalone } from "@/hooks/common/use-install-prompt";
 import { supabaseEnv } from "@/lib/supabase";
 import { useOnboardingStore } from "@/store/onboarding-store";
@@ -29,6 +30,7 @@ export function NavisTopBar() {
   const configured = supabaseEnv() !== null;
   const install = useInstallPrompt();
   const standalone = useStandalone();
+  const admin = useIsAdmin();
   // 설치 안내 창은 메뉴 밖에 둔다 — 메뉴 안에 두면 메뉴가 닫히면서 창도 함께 사라진다.
   const [guideOpen, setGuideOpen] = useState(false);
 
@@ -59,8 +61,8 @@ export function NavisTopBar() {
       </Button>
 
       {/* 설치한 앱 창 안이면 설치가 필요 없고, 로그인을 켜지 않은 로컬 개발이면 로그아웃이 없다 —
-          둘 다 없으면 메뉴 자체를 두지 않는다(누를 게 없는 버튼은 고장으로 보인다). */}
-      {standalone && !configured ? null : (
+          관리자 메뉴까지 셋 다 없으면 메뉴 자체를 두지 않는다(누를 게 없는 버튼은 고장으로 보인다). */}
+      {standalone && !configured && !admin ? null : (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" aria-label="더 보기">
@@ -68,6 +70,15 @@ export function NavisTopBar() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            {/* 관리자만 — 회원의 나비스에게 전할 말을 맡긴다(specs/004). 회원에게는 있는지도 보이지 않는다(FR-002). */}
+            {admin ? (
+              <DropdownMenuItem asChild>
+                <Link href="/relay">
+                  <MessageCircleMore />
+                  말 걸기
+                </Link>
+              </DropdownMenuItem>
+            ) : null}
             {/* 크롬 · 엣지는 바로 설치 창을 띄우고, 못 띄우는 브라우저(사파리 · 파이어폭스 등)는 설치 방법을 보여준다. */}
             {standalone ? null : (
               <DropdownMenuItem

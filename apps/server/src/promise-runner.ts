@@ -6,8 +6,10 @@
 //   위험하다. 최악의 동시 실행을 "대화 턴 N + 약속 턴 1"로 묶는다.
 // ★ 대화가 먼저: 실행 직전에 그 회원의 대화 턴이 끝나길 기다린다. 약속은 조금 늦어도 된다(사용자 결정).
 //   반대로 대화 턴은 약속을 기다리지 않는다.
+// ★ 전하기(specs/004)도 같은 줄에 선다. 턴 하나씩 · 대화 우선이라는 이유가 그대로다 — 기다리는 대화는
+//   받는 회원의 것이다(FR-016).
 
-import { promise } from "@navis/domain";
+import { promise, relay } from "@navis/domain";
 import * as turns from "./turns";
 
 /** 대화가 아주 길어져도 약속이 영영 밀리지 않게, 이만큼 기다린 뒤엔 그냥 실행한다. */
@@ -19,15 +21,23 @@ const queue: { tail: Promise<unknown>; accepting: boolean } = {
   accepting: true,
 };
 
-/** 선점한 회차를 줄 끝에 세운다. 결과는 실행이 끝나면 풀린다. 던지지 않는다. */
-export const enqueue = (run: promise.ClaimedRun): Promise<promise.RunResult> => {
-  const job = queue.tail.then(async () => {
-    await turns.waitUntilIdle(run.promise.userId, YIELD_TIMEOUT_MS);
-    return promise.executeRun(run);
+/** 일을 줄 끝에 세운다. 실행 직전에 그 회원의 대화 턴이 끝나길 기다린다. job 은 던지지 않아야 한다. */
+const serial = <R>(userId: string, job: () => Promise<R>): Promise<R> => {
+  const next = queue.tail.then(async () => {
+    await turns.waitUntilIdle(userId, YIELD_TIMEOUT_MS);
+    return job();
   });
-  queue.tail = job.catch(() => undefined);
-  return job;
+  queue.tail = next.catch(() => undefined);
+  return next;
 };
+
+/** 선점한 약속 회차를 줄 끝에 세운다. 결과는 실행이 끝나면 풀린다. 던지지 않는다. */
+export const enqueue = (run: promise.ClaimedRun): Promise<promise.RunResult> =>
+  serial(run.promise.userId, () => promise.executeRun(run));
+
+/** 선점한 전하기를 줄 끝에 세운다. 받는 회원의 대화를 기다린다. 던지지 않는다. */
+export const enqueueRelay = (run: relay.ClaimedRelay): Promise<relay.RelayResult> =>
+  serial(run.recipientId, () => relay.executeRelay(run));
 
 export const isAccepting = () => queue.accepting;
 

@@ -13,7 +13,14 @@ const executeRun = vi.fn(async (run: { promise: { id: string } }) => ({
   status: "silent",
 }));
 
+const claimPending = vi.fn(async (): Promise<unknown[]> => []);
+const executeRelay = vi.fn(async (run: { id: string }) => ({ relayId: run.id, status: "delivered" }));
+
 vi.mock("@navis/domain", () => ({
+  relay: {
+    claimPending: (...a: unknown[]) => claimPending(...(a as [])),
+    executeRelay: (...a: unknown[]) => executeRelay(...(a as [{ id: string }])),
+  },
   promise: {
     claimDue: (...a: unknown[]) => claimDue(...(a as [])),
     executeRun: (...a: unknown[]) => executeRun(...(a as [{ promise: { id: string } }])),
@@ -85,6 +92,27 @@ describe("POST /internal/tick — 토큰이 있는 서버", () => {
       ],
     });
     expect(executeRun).toHaveBeenCalledTimes(2);
+  });
+
+  // specs/004 T013 — 전하기를 먼저 집고, 약속은 남은 몫만 집는다.
+  it("전하기를 먼저 집고 약속은 남은 몫만, 결과에 둘 다 섞인다", async () => {
+    const app = await loadApp(TICK_TOKEN);
+    claimPending.mockResolvedValueOnce([
+      { id: "x1", senderId: MEMBER, recipientId: MEMBER, instruction: "a" },
+      { id: "x2", senderId: MEMBER, recipientId: MEMBER, instruction: "b" },
+    ]);
+    claimDue.mockResolvedValueOnce([{ runId: "r1", promise: { id: "p1", userId: MEMBER } }]);
+    const res = await tick(app, TICK_TOKEN);
+    expect(claimPending).toHaveBeenCalledWith(5);
+    expect(claimDue).toHaveBeenCalledWith(3);
+    expect(JSON.parse((await res.text()).trim())).toEqual({
+      claimed: 3,
+      results: [
+        { relayId: "x1", status: "delivered" },
+        { relayId: "x2", status: "delivered" },
+        { promiseId: "p1", status: "silent" },
+      ],
+    });
   });
 
   // 이 토큰으로 다른 경로가 열리면 Scheduler 설정에 남은 값으로 대화 API 까지 열린다.

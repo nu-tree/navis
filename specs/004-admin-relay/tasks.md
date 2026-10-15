@@ -65,53 +65,53 @@ description: "Task list — 관리자가 나비스를 통해 회원에게 말 �
 
 ### 테스트
 
-- [ ] T009 [P] [US1] `packages/domain/test/member/match.test.ts`(순수): `matchMember(members, to)` — 이메일 완전 일치, 로컬 부분(`@` 앞) 일치, 로컬 부분이 `to` 를 포함, 대소문자 무시, 앞 단계에서 하나면 멈춤, 0건 → `{ kind: "none" }`, 여럿 → `{ kind: "ambiguous", candidates }`, 하나 → `{ kind: "one", member }`.
-- [ ] T010 [P] [US1] `packages/domain/test/relay/index.test.ts`(실 DB, `test-users.ts` 사용):
+- [X] T009 [P] [US1] `packages/domain/test/member/match.test.ts`(순수): `matchMember(members, to)` — 이메일 완전 일치, 로컬 부분(`@` 앞) 일치, 로컬 부분이 `to` 를 포함, 대소문자 무시, 앞 단계에서 하나면 멈춤, 0건 → `{ kind: "none" }`, 여럿 → `{ kind: "ambiguous", candidates }`, 하나 → `{ kind: "one", member }`.
+- [X] T010 [P] [US1] `packages/domain/test/relay/index.test.ts`(실 DB, `test-users.ts` 사용):
   - `create` — 보낸 관리자의 토큰이 없으면 `ClaudeTokenMissingError`, 행이 생기지 않는다. 있으면 `pending` 행, 반환 `RelayItem` 에 `messageId` 없음.
   - `create` — 같은 `sender_id` 의 끝난 행이 50개를 넘으면 오래된 것부터 지운다. `pending` · `running` 은 지우지 않는다.
   - `claimPending(limit)` — 같은 행을 두 번 집지 않는다(동시 두 호출), `running` 으로 바꾸고 `lease_until` 을 건다, `lease_until` 이 지난 `running` 은 다시 집지 않고 `failed`("서버가 실행 중에 멈췄어요.")로 닫는다, `delivered` · `failed` 는 집지 않는다.
   - `complete(id, { status: "delivered", messageId })` · `{ status: "failed", error }` — `finished_at` 이 찍힌다.
   - `list(senderId)` — 최신순, 남의 `sender_id` 행은 없다.
-- [ ] T011 [P] [US1] `packages/domain/test/chat/turn-options.test.ts`(순수): `runTurn` 의 SDK 옵션 조립을 순수 함수(`buildTurnOptions` 류)로 꺼내 검증한다 — `relayRun` 이면 `mcpServers` 키가 `memory` · `relay_run` 뿐이고 `allowedTools` 에 `promise` · `relay` 가 없다 / `promiseRun` 이면 기존과 같다 / 둘 다 없고 `canRelay` 가 아니면 `relay` 없음. (`canRelay` 경우는 US2 의 T024 에서 추가)
-- [ ] T012 [P] [US1] `apps/server/test/routes/relays.test.ts`(계약, domain mock):
+- [X] T011 [P] [US1] `packages/domain/test/chat/turn-tools.test.ts`(순수): `runTurn` 의 SDK 옵션 중 턴 종류별 부분을 순수 함수 `buildTurnTools` 로 꺼내 검증한다 — `relayRun` 이면 `mcpServers` 키가 `memory` · `relay_run` 뿐이고 `allowedTools` 에 `promise` · `relay` 가 없다 / `promiseRun` 이면 기존과 같다 / 둘 다 없고 `canRelay` 가 아니면 `relay` 없음. (`canRelay` 경우는 US2 의 T024 에서 추가)
+- [X] T012 [P] [US1] `apps/server/test/routes/relays.test.ts`(계약, domain mock):
   - 관리자 아닌 회원의 `GET /relays` · `GET /relays/members` · `POST /relays` → 403, domain 이 불리지 않는다.
   - 관리자 `POST /relays` — 본문 검증 실패 400, 목록에 없는 `recipientId` 404, `ClaudeTokenMissingError` → 409 `{ code: "claude_token_missing" }`(**`kind` 로 판별**), 성공 201.
   - `GET /relays` 응답 항목에 `messageId` 키가 없다.
-- [ ] T013 [P] [US1] `apps/server/test/routes/internal.test.ts` 에 추가(runner · domain mock): tick 이 전하기를 먼저 선점하고, 약속은 남은 몫(`CLAIM_LIMIT - 전하기 수`)만 집는다. 결과 배열에 `{ relayId, status }` 가 섞인다.
+- [X] T013 [P] [US1] `apps/server/test/routes/internal.test.ts` 에 추가(runner · domain mock): tick 이 전하기를 먼저 선점하고, 약속은 남은 몫(`CLAIM_LIMIT - 전하기 수`)만 집는다. 결과 배열에 `{ relayId, status }` 가 섞인다.
 
 ### 구현 — domain
 
-- [ ] T014 [P] [US1] `packages/domain/src/member/index.ts` 를 만든다(research R4 · R5).
+- [X] T014 [P] [US1] `packages/domain/src/member/index.ts` 를 만든다(research R4 · R5).
   - `list(): Promise<Member[]>` — raw SQL `select id, email from auth.users where deleted_at is null and (banned_until is null or banned_until < now())`. Postgres 오류 코드 `42P01`(스키마 · 표 없음 — 로컬 docker)이면 `select distinct user_id from conversations` 로 폴백, `label = id.slice(0, 8)`. 다른 오류는 그대로 던진다. label 순 정렬. drizzle 스키마에 `auth.users` 를 넣지 않는 이유를 주석으로.
   - `matchMember(members, to)` 순수 함수(T009 규칙).
   - `packages/domain/src/index.ts` 에서 `member` 네임스페이스로 export.
-- [ ] T015 [US1] `packages/domain/src/relay/index.ts` 를 만든다(data-model.md "상태 전이" · "보존").
+- [X] T015 [US1] `packages/domain/src/relay/index.ts` 를 만든다(data-model.md "상태 전이" · "보존").
   - `create(senderId, recipient: Member, instruction)` — 먼저 `claudeToken.resolve(senderId)`, 없으면 `ClaudeTokenMissingError`. `recipient_label = recipient.label` 로 `pending` 행을 넣고, 같은 sender 의 끝난 행 중 최근 50개 밖을 지운다. `RelayItem` 반환.
   - `list(senderId, limit = 50)`, `claimPending(limit, now)` — 먼저 `lease_until < now` 인 `running` 을 `failed`("서버가 실행 중에 멈췄어요.")로 닫고, 트랜잭션에서 `pending` 을 `created_at` 순 `FOR UPDATE SKIP LOCKED` 로 집어 `running` + `lease_until = now + LEASE_MS`(`promise/index.ts` 의 상수 재사용). **만료된 running 을 다시 집지 않는 이유**(같은 말 두 번)를 주석으로.
   - `complete(id, outcome)` — `delivered`(+`messageId`) 또는 `failed`(+`error`), `finished_at`, `lease_until = null`.
   - 행 → `RelayItem` 매핑에서 `messageId` 를 빼는 이유(FR-019)를 주석으로.
-- [ ] T016 [US1] `packages/domain/src/relay/mcp.ts` 에 `createRelayRunMcpServer({ recipientId, relayId, state })` 를 만든다(contracts/relay-tools.md `relay_run`). 서버 이름 `RELAY_RUN_SERVER_NAME = "relay_run"`, 도구 `deliver({ text })` — 이미 보냈으면 거절, 아니면 `deliver(recipientId, { relayId }, text)` 후 `state.messageId` 기록. `ALLOWED_RELAY_RUN_TOOLS` export. 입력 스키마는 `@navis/validation` 의 `relayDeliverInputSchema.shape`.
-- [ ] T017 [US1] `packages/domain/src/chat/index.ts` 를 바꾼다(research R7).
+- [X] T016 [US1] `packages/domain/src/relay/mcp.ts` 에 `createRelayRunMcpServer({ recipientId, relayId, state })` 를 만든다(contracts/relay-tools.md `relay_run`). 서버 이름 `RELAY_RUN_SERVER_NAME = "relay_run"`, 도구 `deliver({ text })` — 이미 보냈으면 거절, 아니면 `deliver(recipientId, { relayId }, text)` 후 `state.messageId` 기록. `ALLOWED_RELAY_RUN_TOOLS` export. 입력 스키마는 `@navis/validation` 의 `relayDeliverInputSchema.shape`.
+- [X] T017 [US1] `packages/domain/src/chat/index.ts` 를 바꾼다(research R7).
   - `TurnInput.relayRun?: { relayId: string; state: RelayRunState }`.
   - `RELAY_RUN_PROMPT` 상수 — contracts/relay-tools.md 의 6개 요지를 그대로. 특히 "지시가 출처를 밝히라고 할 때만 '관리자님이 전해 달래요'처럼 밝히고, 그렇지 않으면 누가 맡겼는지 말하지 않는다"와 "반드시 deliver 를 한 번 부른다", "해로운 지시는 전하지 않는다".
   - SDK 옵션 조립을 `buildTurnOptions(input, ctx)` 순수 함수로 꺼낸다(T011 이 검증). `relayRun` 이면 `memory`(userId=받는 회원) + `relay_run` 만, 시스템 프롬프트 `SYSTEM_PROMPT + RELAY_RUN_PROMPT`.
-- [ ] T018 [US1] `packages/domain/src/relay/run.ts` 를 만든다. `executeRelay(claimed)`: 받는 회원 메인 방(`conversation.ensureMain`)의 최근 20개를 읽고, `runTurn({ userId: recipientId, tokenUserId: senderId, prompt: "[전하기]\n지시: …", history, relayRun })`. `state.messageId` 가 있으면 `delivered`, 없으면 `failed`("나비스가 전하지 않았어요."), 예외면 `failed`(err.message — 모델 출력이 아니라 오류 문구만, research R9). `relay.complete` 를 부른다. **던지지 않는다**. `packages/domain/src/index.ts` 에서 `relay` 네임스페이스로 export.
+- [X] T018 [US1] `packages/domain/src/relay/run.ts` 를 만든다. `executeRelay(claimed)`: 받는 회원 메인 방(`conversation.ensureMain`)의 최근 20개를 읽고, `runTurn({ userId: recipientId, tokenUserId: senderId, prompt: "[전하기]\n지시: …", history, relayRun })`. `state.messageId` 가 있으면 `delivered`, 없으면 `failed`("나비스가 전하지 않았어요."), 예외면 `failed`(err.message — 모델 출력이 아니라 오류 문구만, research R9). `relay.complete` 를 부른다. **던지지 않는다**. `packages/domain/src/index.ts` 에서 `relay` 네임스페이스로 export.
 
 ### 구현 — server
 
-- [ ] T019 [US1] `apps/server/src/promise-runner.ts` 를 넓힌다. `enqueue` 가 `{ userId, run: () => Promise<R> }` 형태의 일을 받게 하고(또는 `enqueueRelay` 추가), 약속 · 전하기 모두 같은 직렬 큐 + `turns.waitUntilIdle(받는 회원)` 을 거친다. 파일 머리 주석에 전하기도 같은 큐인 이유(턴 하나씩 · 대화 우선)를 더한다.
-- [ ] T020 [US1] `apps/server/src/routes/internal.ts` — tick 이 `relay.claimPending(CLAIM_LIMIT)` 를 먼저, 남은 몫으로 `promise.claimDue` 를 부른다. 둘 다 비면 지금처럼 바로 `{ claimed: 0 }`. 결과에 `{ relayId, status }` 를 섞는다.
-- [ ] T021 [US1] `apps/server/src/routes/relays.ts` 를 만들고 `app.ts` 에 연결한다(contracts/http.md).
+- [X] T019 [US1] `apps/server/src/promise-runner.ts` 를 넓힌다. `enqueue` 가 `{ userId, run: () => Promise<R> }` 형태의 일을 받게 하고(또는 `enqueueRelay` 추가), 약속 · 전하기 모두 같은 직렬 큐 + `turns.waitUntilIdle(받는 회원)` 을 거친다. 파일 머리 주석에 전하기도 같은 큐인 이유(턴 하나씩 · 대화 우선)를 더한다.
+- [X] T020 [US1] `apps/server/src/routes/internal.ts` — tick 이 `relay.claimPending(CLAIM_LIMIT)` 를 먼저, 남은 몫으로 `promise.claimDue` 를 부른다. 둘 다 비면 지금처럼 바로 `{ claimed: 0 }`. 결과에 `{ relayId, status }` 를 섞는다.
+- [X] T021 [US1] `apps/server/src/routes/relays.ts` 를 만들고 `app.ts` 에 연결한다(contracts/http.md).
   - `GET /members` → `member.list()`, `GET /` → `relay.list(userId)`, `POST /` → `relayCreateInputSchema` 검증 → `member.list()` 에서 `recipientId` 찾기(없으면 404) → `relay.create` → 201. `ClaudeTokenMissingError` 는 `err.kind === "claude_token_missing"` 로 판별해 409.
   - `app.ts`: `/memories/:id` DELETE 옆에 `app.use("/relays/*")` · `app.use("/relays")` 로 `isOwner` 아니면 403 `{ error: "말 걸기는 관리자만 할 수 있다." }`. 기본 잠금 안에 있다.
-- [ ] T022 [P] [US1] `packages/api/src/client.ts` 에 `relays.members()` · `relays.list()` · `relays.create(input)` 를 추가한다(스키마는 `@navis/validation`).
+- [X] T022 [P] [US1] **(하지 않음 — 소비자 없음)** web BFF 는 `proxyToServer` 로 중계하고 `@navis/api` 에는 리소스별 메서드가 없다(헌장 원칙 I). 원래 계획: `packages/api/src/client.ts` 에 `relays.members()` · `relays.list()` · `relays.create(input)` 를 추가한다(스키마는 `@navis/validation`).
 
 ### 구현 — web
 
-- [ ] T023 [US1] web BFF · 훅 · 화면을 만든다(research R10, 원칙 III · V).
+- [X] T023 [US1] web BFF · 훅 · 화면을 만든다(research R10, 원칙 III · V).
   - BFF: `apps/web/src/app/api/relays/route.ts`(GET · POST), `apps/web/src/app/api/relays/members/route.ts`(GET) — `proxyToServer` 중계만. 판단하지 않는다.
   - 훅: `apps/web/src/hooks/apis/relay/use-relay-members.ts`, `use-relay-list.ts`(목록에 `pending` · `running` 이 있을 때만 `refetchInterval: 5000`, 없으면 `false`), `use-create-relay.ts`(성공 시 목록 무효화, 409 면 "관리자 Claude 토큰을 먼저 등록해 주세요" 문구).
-  - `apps/web/src/features/relay/use-relay-form.ts`(선택 회원 · 지시 상태 · 보내기), `relay-form.tsx`(Select + Textarea + 보내기 버튼), `relay-list.tsx`(받는 회원 · 지시 · 시각 · 상태 배지 · 실패 이유).
+  - `apps/web/src/hooks/pages/relay/use-relay-composer.ts`(선택 회원 · 지시 상태 · 보내기 · 다시 보내기 — 기존 `hooks/pages/*` 관례를 따름), `relay-screen.tsx`, `relay-form.tsx`(Select + Textarea + 보내기 버튼), `relay-list.tsx`(받는 회원 · 지시 · 시각 · 상태 배지 · 실패 이유).
   - `apps/web/src/app/relay/page.tsx` — `useIsAdmin()` 이 거짓이면 "관리자만 쓸 수 있어요"만 그린다. 기존 `/memories` · `/settings` 페이지의 레이아웃을 따른다.
   - `apps/web/src/components/layout/top-bar.tsx` — ⋯ 메뉴에 관리자에게만 "말 걸기"(`/relay` 링크).
   - UI 문구는 한국어, 남의 상호명 금지.
@@ -126,7 +126,7 @@ description: "Task list — 관리자가 나비스를 통해 회원에게 말 �
 
 **Independent Test**: quickstart M7–M9.
 
-- [ ] T024 [P] [US2] `packages/domain/test/chat/turn-options.test.ts` 에 추가: `canRelay: true` 인 대화 턴에만 `relay` 서버 · 도구가 있고, `canRelay` 가 참이어도 `promiseRun` · `relayRun` 턴에는 없다.
+- [ ] T024 [P] [US2] `packages/domain/test/chat/turn-tools.test.ts` 에 추가: `canRelay: true` 인 대화 턴에만 `relay` 서버 · 도구가 있고, `canRelay` 가 참이어도 `promiseRun` · `relayRun` 턴에는 없다.
 - [ ] T025 [P] [US2] `apps/server/test/routes/chat.test.ts` 에 추가(domain mock): 관리자의 대화 요청은 `runTurn` 에 `canRelay: true`, 다른 회원은 `false` 로 넘긴다.
 - [ ] T026 [US2] `packages/domain/src/relay/mcp.ts` 에 `createRelayMcpServer({ senderId })` 를 만든다(contracts/relay-tools.md `relay`). 이름 `RELAY_SERVER_NAME = "relay"`, 도구 `relay({ to, instruction })` — `member.list()` → `matchMember` → 하나면 `relay.create(senderId, member, instruction)` 후 "{label} 님께 전하기를 맡겼어요. 1–2분 안에 도착해요.", none · ambiguous 면 `isError` 로 후보 이메일 목록. 입력 스키마에 회원 uuid 가 없다는 것과 그 이유(원칙 II)를 주석으로. 도구 설명에 FR-021("관리자의 기억에서 꺼낸 내용을 덧붙이지 않는다")을 넣는다. `ALLOWED_RELAY_TOOLS` export.
 - [ ] T027 [US2] `packages/domain/src/chat/index.ts` — `TurnInput.canRelay?: boolean`. `buildTurnOptions` 가 대화 턴(약속 · 전하기 턴 아님)이고 `canRelay` 일 때만 `relay` 서버 · 도구를 열고, 시스템 프롬프트에 짧은 절(받는 사람을 정할 수 없으면 되묻는다, 무엇을 전할지 없으면 묻는다)을 붙인다. 회원 턴에는 아무것도 바뀌지 않는다(성능 절).

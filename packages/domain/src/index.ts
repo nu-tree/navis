@@ -14,3 +14,5 @@ export * as conversation from "./conversation/index";
 export * as settings from "./settings/index";
 export * as push from "./push/index";
 export * as promise from "./promise/api";
+export * as relay from "./relay/api";
+export * as member from "./member/index";

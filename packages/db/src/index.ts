@@ -13,4 +13,5 @@ export {
   pushSubscriptions,
   promises,
   promiseRuns,
+  relays,
 } from "./schema";

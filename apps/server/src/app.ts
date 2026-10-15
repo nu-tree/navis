@@ -9,6 +9,7 @@ import { conversationsRoute } from "./routes/conversations";
 import { mcpRoute } from "./routes/mcp";
 import { memoriesRoute } from "./routes/memories";
 import { pushRoute } from "./routes/push";
+import { relaysRoute } from "./routes/relays";
 import { settingsRoute } from "./routes/settings";
 
 // Hono 앱 조립. index.ts 와 분리해 테스트에서 app.fetch 를 직접 부를 수 있게 한다.
@@ -98,6 +99,12 @@ app.delete("/memories/:id", async (c, next) => {
   return next();
 });
 
+// 전하기는 관리자만 한다(specs/004 FR-001). 목록 · 회원 목록까지 전부 — 다른 회원이 누구인지도 알려주지 않는다(FR-002).
+app.use("/relays/*", async (c, next) => {
+  if (!isOwner(c.get("userId"))) return c.json({ error: "말 걸기는 관리자만 할 수 있다." }, 403);
+  return next();
+});
+
 app.route("/health", health);
 app.route("/chat", chatRoute);
 app.route("/memories", memoriesRoute);
@@ -106,3 +113,4 @@ app.route("/mcp", mcpRoute);
 app.route("/settings", settingsRoute);
 app.route("/push", pushRoute);
 app.route("/internal", internalRoute);
+app.route("/relays", relaysRoute);
