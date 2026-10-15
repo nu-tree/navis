@@ -48,7 +48,7 @@ export const ChatPanel = ({ conversationId, onTurnEnd, onOpen }: Readonly<Props>
           <div className="space-y-1.5 text-center">
             <p className="text-lg font-medium">무엇을 도와드릴까요?</p>
             <p className="text-sm text-muted-foreground">
-              말한 것 중 기억할 만한 건 알아서 남겨둬요.
+              말한 건 알아서 기억하고, 때가 되면 먼저 말을 걸어요.
             </p>
           </div>
 
@@ -116,10 +116,11 @@ export const ChatPanel = ({ conversationId, onTurnEnd, onOpen }: Readonly<Props>
   );
 };
 
-// 첫 화면의 예시. 저장(첫째·둘째)과 불러오기(셋째)를 각각 한 번 보여줘서
-// 이 도구가 무엇을 하는지 한눈에 알게 한다.
+// 첫 화면의 예시. 나비스가 잘하는 셋을 한 번씩 보여준다 — 기억 남기기(1), 약속(2 · 3), 기억 꺼내기(4).
+// 1 은 날짜가 걸린 말이라 나비스가 "전날 짚어 드릴까요?" 하고 약속을 제안하는 것까지 이어진다.
 const EMPTY_HINTS = [
-  "이번 분기엔 나비스에 집중하기로 했어",
-  "장 볼 것: 세탁세제, 건조대",
-  "내가 배포 관련해서 뭐라고 했었지?",
+  "17일에 친구 결혼식 있어",
+  "16일 저녁에 축의금 챙기라고 알려줘",
+  "매일 아침 8시에 오늘 할 일 정리해줘",
+  "이사 관련해서 내가 저번에 뭐라고 했었지?",
 ];
