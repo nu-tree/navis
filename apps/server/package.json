@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch --env-file-if-exists=.env src/index.ts",
-    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --target=node22 --sourcemap --outfile=dist/index.js --external:@anthropic-ai/claude-agent-sdk \"--banner:js=import{createRequire}from'node:module';const require=createRequire(import.meta.url);\"",
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --target=node22 --sourcemap --outfile=dist/index.js --external:@anthropic-ai/claude-agent-sdk \"--banner:js=import{createRequire as __navisCreateRequire}from'node:module';const require=__navisCreateRequire(import.meta.url);\"",
     "start": "node --enable-source-maps dist/index.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
