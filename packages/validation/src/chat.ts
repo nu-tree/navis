@@ -14,11 +14,21 @@ export type Model = z.infer<typeof modelSchema>;
 // model 없이 온 요청에 서버가 쓰는 기본값. UI 선택기의 초기값도 여기를 본다.
 export const DEFAULT_MODEL: Model = "claude-opus-5";
 
+// 첨부 문서 하나. data 는 접두사(data:...;base64,) 없는 base64 원본이다. 형식은 이름의 확장자로
+// 판정한다 — 브라우저가 주는 MIME 은 .md · .hwpx 등에서 비어 온다.
+export const chatDocumentSchema = z.object({
+  name: z.string().min(1).max(255),
+  data: z.string().min(1),
+});
+export type ChatDocument = z.infer<typeof chatDocumentSchema>;
+
 export const chatRequestSchema = z.object({
   conversationId: z.string().min(1),
   text: z.string(),
   // 첨부 이미지 (data URL). 텍스트가 비어도 이미지만으로 보낼 수 있다.
   images: z.array(z.string()).max(8).optional(),
+  // 첨부 문서 (PDF · 텍스트 · Word · Excel · PowerPoint · 한글(hwpx)). 형식 판정과 변환은 서버가 한다.
+  documents: z.array(chatDocumentSchema).max(5).optional(),
   model: modelSchema.optional(),
   // 이 턴을 식별해 중지에 쓴다.
   turnId: z.string().min(1),

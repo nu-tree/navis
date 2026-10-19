@@ -17,6 +17,7 @@ import { query, type Options, type SDKUserMessage } from "@anthropic-ai/claude-a
 import { DEFAULT_MODEL, type Model } from "@navis/validation";
 import { withHistory, type HistoryMessage } from "./history";
 import { toImageBlocks } from "./images";
+import { toDocumentBlocks, type DocumentInput } from "./documents";
 import { canUseTool } from "./fetch-guard";
 import { ClaudeTokenMissingError, ClaudeTokenRejectedError } from "../errors";
 import { claudeToken } from "../settings";
@@ -194,6 +195,10 @@ export type TurnInput = {
    * AsyncIterable<SDKUserMessage> 로 넘긴다(images.ts 주석 참조).
    */
   images?: string[];
+  /**
+   * 첨부 문서 (이름 + base64, 최대 5개). 이미지와 같이 블록으로 실린다(documents.ts 참조).
+   */
+  documents?: DocumentInput[];
   /** 이어갈 에이전트 세션. 없으면 새 세션으로 시작한다. */
   resumeSessionId?: string | null;
   /**
@@ -344,16 +349,20 @@ export async function runTurn(
   // 이 턴 동안의 기억 도구 집계. 도구 핸들러가 클로저로 잡아 직접 올린다.
   const tally: MemoryToolTally = { saved: 0 };
 
-  // 이미지가 없으면 문자열 프롬프트를 그대로 쓴다 — 불필요하게 구조화하지 않는다.
-  // 있으면 텍스트 + 이미지 블록을 담은 사용자 메시지 하나를 흘려보낸다.
-  // 텍스트가 비어도 이미지만으로 보낼 수 있다(FR-006).
+  // 첨부가 없으면 문자열 프롬프트를 그대로 쓴다 — 불필요하게 구조화하지 않는다.
+  // 있으면 텍스트 + 문서 · 이미지 블록을 담은 사용자 메시지 하나를 흘려보낸다.
+  // 텍스트가 비어도 첨부만으로 보낼 수 있다(FR-006). 문서를 앞에 둔다 — 긴 자료 뒤에 질문이
+  // 와야 답이 낫다(Anthropic 권장).
   // ★ 검증은 제너레이터 **밖에서** 한다. 안에서 던지면 SDK 가 그것을 스트림 취소로
   //   바꿔 "Operation aborted" 로 덮어버리고, 사용자는 왜 실패했는지 알 수 없다
   //   (실측 확인). 여기서 던지면 라우트가 그대로 error 이벤트로 내보낸다.
-  const blocks = input.images?.length ? toImageBlocks(input.images) : null;
+  const blocks = [
+    ...(input.documents?.length ? toDocumentBlocks(input.documents) : []),
+    ...(input.images?.length ? toImageBlocks(input.images) : []),
+  ];
 
   const prompt =
-    blocks
+    blocks.length
       ? (async function* (): AsyncIterable<SDKUserMessage> {
           yield {
             type: "user",
@@ -498,3 +507,4 @@ export async function verifyClaudeToken(token: string): Promise<void> {
 }
 
 export { MAX_IMAGES, toImageBlocks } from "./images";
+export { MAX_DOCUMENTS, toDocumentBlocks } from "./documents";

@@ -19,6 +19,8 @@ export const messageSchema = z.object({
   toolsUsed: z.array(z.string()).optional(),
   // 첨부 이미지 (data URL). 저장 시엔 비우고 원본은 남기지 않는다.
   images: z.array(z.string()).optional(),
+  // 첨부 문서의 이름. 원본은 남기지 않고 이름만 남긴다 — 방을 다시 열어도 무엇을 붙였는지 보인다.
+  files: z.array(z.object({ name: z.string() })).optional(),
   // 이 턴에 기억이 저장됐는지. 화면의 저장 표시 조건이 이것뿐이다(FR-010).
   // done 이벤트의 saved 를 그대로 옮겨 담아, 방을 다시 열어도 표시가 유지된다.
   saved: z.boolean().optional(),

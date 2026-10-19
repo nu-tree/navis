@@ -42,9 +42,10 @@ export const tourSteps = ({ tokenRegistered }: { tokenRegistered: boolean }): Dr
   {
     element: at("attach"),
     popover: {
-      title: "사진도 보여줄 수 있어요",
+      title: "사진 · 문서도 보여줄 수 있어요",
       description:
-        "이 버튼으로 고르거나, 스크린샷을 <b>⌘V</b> 로 붙여넣거나, 입력창에 끌어다 놓으면 이미지를 보고 답해요. 큰 이미지는 알아서 줄여 보내요.",
+        "이 버튼으로 고르거나, 스크린샷을 <b>⌘V</b> 로 붙여넣거나, 입력창에 끌어다 놓으면 보고 답해요.<br/>" +
+        "PDF · Word · Excel · PowerPoint · 한글(hwpx) · 텍스트 파일도 읽어요. 큰 이미지는 알아서 줄여 보내요.",
       side: "top",
       align: "start",
     },

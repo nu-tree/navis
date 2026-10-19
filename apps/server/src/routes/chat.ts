@@ -72,7 +72,8 @@ export const chatRoute = new Hono<AppEnv>()
       await conversation.appendMessage(userId, req.conversationId, {
         role: "user",
         text: req.text,
-        // 첨부는 이 턴의 입력으로만 쓰고 원본을 남기지 않는다(스키마 주석).
+        // 첨부는 이 턴의 입력으로만 쓰고 원본을 남기지 않는다(스키마 주석). 문서는 이름만 남긴다.
+        ...(req.documents?.length ? { files: req.documents.map(({ name }) => ({ name })) } : {}),
       });
     } catch (err) {
       turns.end(req.conversationId);
@@ -108,6 +109,7 @@ export const chatRoute = new Hono<AppEnv>()
             model: req.model,
             abortController,
             ...(req.images?.length ? { images: req.images } : {}),
+            ...(req.documents?.length ? { documents: req.documents } : {}),
             // 전하기 도구는 관리자의 대화 턴에만 연다(specs/004 research R6). domain 은 관리자가 누구인지 모른다.
             canRelay: isOwner(userId),
           },

@@ -1,4 +1,4 @@
-import { Brain, Trash2 } from "lucide-react";
+import { Brain, FileText, Trash2 } from "lucide-react";
 import type { Message } from "@navis/validation";
 import { cn } from "cn";
 import { formatBubbleTime } from "@/utils/chat-timeline";
@@ -75,9 +75,24 @@ export const MessageBubble = ({ message, first = true, last = true, onRemove }: 
             </div>
           ) : null}
 
+          {message.files?.length ? (
+            <div className="mb-2 flex flex-wrap gap-1.5">
+              {message.files.map((file, i) => (
+                <span
+                  key={file.name + i}
+                  title={file.name}
+                  className="flex max-w-56 items-center gap-1.5 rounded-lg bg-primary-foreground/15 px-2.5 py-1.5 text-sm"
+                >
+                  <FileText className="size-4 shrink-0" />
+                  <span className="truncate">{file.name}</span>
+                </span>
+              ))}
+            </div>
+          ) : null}
+
           {/* 사용자 입력은 마크다운으로 해석하지 않는다 — 의도 없이 쓴 `*`·`#` 가
               서식으로 바뀌면 원문이 왜곡된다. 줄바꿈만 보존한다.
-              이미지만 보낸 턴은 텍스트가 비어 있으므로 그릴 것이 없다(FR-006). */}
+              첨부만 보낸 턴은 텍스트가 비어 있으므로 그릴 것이 없다(FR-006). */}
           {/* wrap-anywhere: 붙여넣은 로그·명령의 공백 없는 긴 토큰(--enable-features=…)도
               버블 안에서 끊는다. break-word 는 최소 너비 계산에 들어가지 않아, 내용에
               맞춰 줄어드는 이 버블을 그 토큰 길이만큼 밀어낸다. */}

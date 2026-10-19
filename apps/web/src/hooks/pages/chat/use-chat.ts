@@ -75,7 +75,7 @@ export function useChat({ conversationId, onTurnEnd, onOpen }: UseChatInput) {
     }
   };
 
-  const send = async ({ text, images, model }: SendInput) => {
+  const send = async ({ text, images, documents, model }: SendInput) => {
     // 이 방에서 턴이 도는 중엔 새 턴을 만들지 않는다. 다른 방은 상관없다.
     if (getChatTurn(conversationId).streaming !== null) return;
 
@@ -94,6 +94,8 @@ export function useChat({ conversationId, onTurnEnd, onOpen }: UseChatInput) {
       createdAt: new Date().toISOString(),
       // 화면에 첨부를 보여주기 위해서만 담는다 — 서버는 저장 시 비운다.
       ...(images?.length ? { images } : {}),
+      // 문서는 이름만 — 서버도 이름만 남긴다. 다시 열어도 같은 모양으로 보인다.
+      ...(documents?.length ? { files: documents.map(({ name }) => ({ name })) } : {}),
     });
 
     // 중지 뒤 도착한 델타가 다음 턴에 섞이지 않게, 이 턴의 로컬 버퍼를 따로 둔다.
@@ -116,6 +118,7 @@ export function useChat({ conversationId, onTurnEnd, onOpen }: UseChatInput) {
         text,
         turnId: id,
         ...(images?.length ? { images } : {}),
+        ...(documents?.length ? { documents } : {}),
         ...(model ? { model } : {}),
       };
       const res = await fetch("/api/chat", {

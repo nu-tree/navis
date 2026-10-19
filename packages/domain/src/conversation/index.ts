@@ -42,7 +42,7 @@ type MessageRow = typeof messages.$inferSelect;
  * relayId 는 저장만 하고 와이어로 내보내지 않는다(specs/004 research R8) — 받는 회원의 응답 JSON 에
  * 실리면 화면 표시가 없어도 관리자가 보냈다는 것이 드러난다. 내부 추적은 이 행과 relays 표로 충분하다.
  */
-type MessageMeta = Pick<Message, "toolsUsed" | "saved" | "origin"> & { relayId?: string };
+type MessageMeta = Pick<Message, "toolsUsed" | "saved" | "origin" | "files"> & { relayId?: string };
 
 /** 행 → 와이어. meta 의 필드를 펼친다. */
 export const toMessage = (row: Pick<MessageRow, "id" | "role" | "text" | "meta" | "createdAt">): Message => {
@@ -55,11 +55,16 @@ export const toMessage = (row: Pick<MessageRow, "id" | "role" | "text" | "meta" 
     ...(meta.toolsUsed?.length ? { toolsUsed: meta.toolsUsed } : {}),
     ...(meta.saved ? { saved: true } : {}),
     ...(meta.origin ? { origin: meta.origin } : {}),
+    ...(meta.files?.length ? { files: meta.files } : {}),
   };
 };
 
-/** 와이어 → meta. 없는 필드는 싣지 않는다. images 는 저장하지 않는다(턴의 입력으로만 쓴다). */
+/**
+ * 와이어 → meta. 없는 필드는 싣지 않는다. images 는 저장하지 않는다(턴의 입력으로만 쓴다).
+ * 첨부 문서도 원본은 남기지 않고 이름만 남긴다.
+ */
 export const toMeta = (m: MessageMeta): MessageMeta => ({
+  ...(m.files?.length ? { files: m.files.map(({ name }) => ({ name })) } : {}),
   ...(m.toolsUsed?.length ? { toolsUsed: m.toolsUsed } : {}),
   ...(m.saved ? { saved: true } : {}),
   ...(m.origin ? { origin: m.origin } : {}),

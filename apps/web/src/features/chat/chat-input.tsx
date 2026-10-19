@@ -1,17 +1,23 @@
 "use client";
 
 import { useEffect, useEffectEvent, useRef, useState } from "react";
-import { ArrowUp, ImagePlus, Square, X } from "lucide-react";
-import { DEFAULT_MODEL, type Model } from "@navis/validation";
+import { ArrowUp, FileText, Paperclip, Square, X } from "lucide-react";
+import { DEFAULT_MODEL, type ChatDocument, type Model } from "@navis/validation";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "cn";
 import { ModelPicker } from "./model-picker";
 import { ACCEPT_ATTR, useImageAttachments } from "@/hooks/pages/chat/use-image-attachments";
+import {
+  DOCUMENT_ACCEPT,
+  isDocumentFile,
+  useDocumentAttachments,
+} from "@/hooks/pages/chat/use-document-attachments";
 
 export type SendInput = {
   text: string;
   images?: string[];
+  documents?: ChatDocument[];
   model?: Model;
 };
 
@@ -33,24 +39,35 @@ export const ChatInput = ({
   const [draft, setDraft] = useState("");
   const [model, setModel] = useState<Model>(DEFAULT_MODEL);
   const attachments = useImageAttachments();
+  const docs = useDocumentAttachments();
   const fileInput = useRef<HTMLInputElement>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
   // 파일을 끌어 입력창 위에 올려둔 상태 — 놓을 수 있다는 표시를 켠다.
   const [dragging, setDragging] = useState(false);
 
   const trimmed = draft.trim();
-  // 텍스트 없이 이미지만으로도 보낼 수 있다(FR-006).
-  const canSend = (trimmed.length > 0 || attachments.images.length > 0) && !busy;
+  // 텍스트 없이 첨부만으로도 보낼 수 있다(FR-006).
+  const canSend =
+    (trimmed.length > 0 || attachments.images.length > 0 || docs.documents.length > 0) && !busy;
+
+  // 고르기 · 붙여넣기 · 끌어 놓기가 모두 여기로 온다. 문서는 문서 훅으로, 나머지는 이미지 훅으로 —
+  // 이미지도 문서도 아닌 파일은 이미지 훅이 "지원하지 않는 형식" 으로 알린다.
+  const addFiles = (files: readonly File[]) => {
+    void docs.add(files.filter(isDocumentFile));
+    void attachments.add(files.filter((f) => !isDocumentFile(f)));
+  };
 
   const send = () => {
     if (!canSend) return;
     onSend({
       text: trimmed,
       ...(attachments.images.length ? { images: attachments.images } : {}),
+      ...(docs.documents.length ? { documents: docs.documents } : {}),
       model,
     });
     setDraft("");
     attachments.clear();
+    docs.clear();
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -64,7 +81,7 @@ export const ChatInput = ({
   };
 
   const handleFiles = (event: React.ChangeEvent<HTMLInputElement>) => {
-    void attachments.add([...(event.target.files ?? [])]);
+    addFiles([...(event.target.files ?? [])]);
     // 같은 파일을 연달아 고를 수 있게 비운다 — 비우지 않으면 change 가 안 난다.
     event.target.value = "";
   };
@@ -93,7 +110,7 @@ export const ChatInput = ({
     // 웹 페이지를 복사하면 이미지와 글이 함께 실린다. 글이 있으면 평소대로 붙게 두고,
     // 이미지뿐일 때만 막는다 — 막지 않으면 파일 이름이 글자로 들어가는 브라우저가 있다.
     if (!data.getData("text/plain")) event.preventDefault();
-    void attachments.add(files);
+    addFiles(files);
     // 붙여넣고 바로 설명을 쓸 수 있게.
     textarea.current?.focus();
   });
@@ -124,7 +141,7 @@ export const ChatInput = ({
     if (!hasFiles(event)) return;
     event.preventDefault();
     setDragging(false);
-    void attachments.add([...event.dataTransfer.files]);
+    addFiles([...event.dataTransfer.files]);
   };
 
   return (
@@ -167,9 +184,33 @@ export const ChatInput = ({
           </div>
         ) : null}
 
+        {docs.documents.length > 0 ? (
+          <div className="flex flex-wrap gap-2 px-3 pt-3">
+            {docs.documents.map((doc, index) => (
+              <div
+                key={doc.name + index}
+                className="flex h-9 max-w-56 items-center gap-1.5 rounded-lg border border-border bg-background/60 pr-1 pl-2.5 text-sm"
+              >
+                <FileText className="size-4 shrink-0 text-muted-foreground" />
+                <span className="truncate" title={doc.name}>{doc.name}</span>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={`${doc.name} 제거`}
+                  onClick={() => docs.removeAt(index)}
+                  className="size-6 shrink-0 rounded-full"
+                >
+                  <X />
+                </Button>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
         {attachments.error ? (
           <p className="px-4 pt-2 text-xs text-destructive">{attachments.error}</p>
         ) : null}
+        {docs.error ? <p className="px-4 pt-2 text-xs text-destructive">{docs.error}</p> : null}
 
         <Textarea
           ref={textarea}
@@ -192,7 +233,7 @@ export const ChatInput = ({
           <input
             ref={fileInput}
             type="file"
-            accept={ACCEPT_ATTR}
+            accept={`${ACCEPT_ATTR},${DOCUMENT_ACCEPT}`}
             multiple
             hidden
             onChange={handleFiles}
@@ -200,12 +241,13 @@ export const ChatInput = ({
           <Button
             variant="ghost"
             size="icon-lg"
-            aria-label="이미지 첨부"
+            aria-label="파일 첨부"
             data-tour="attach"
-            disabled={attachments.isFull || busy}
+            // 이미지와 문서가 둘 다 찼을 때만 막는다 — 한쪽이 차도 다른 쪽은 더 붙일 수 있다.
+            disabled={(attachments.isFull && docs.isFull) || busy}
             onClick={() => fileInput.current?.click()}
           >
-            <ImagePlus className="size-4.5" />
+            <Paperclip className="size-4.5" />
           </Button>
 
           <ModelPicker value={model} onChange={setModel} disabled={busy} />
