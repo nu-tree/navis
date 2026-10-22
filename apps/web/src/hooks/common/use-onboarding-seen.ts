@@ -3,7 +3,7 @@
 import { useSyncExternalStore } from "react";
 
 /** 내용을 크게 바꾸면 버전을 올린다 — 이미 본 사람에게도 한 번 더 보여준다. */
-const KEY = "navis:onboarding:v2";
+const KEY = "navis:onboarding:v3";
 
 const listeners = new Set<() => void>();
 

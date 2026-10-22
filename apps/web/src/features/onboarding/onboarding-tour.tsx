@@ -6,6 +6,7 @@ import { driver, type DriveStep } from "driver.js";
 import { useClaudeTokenStatus } from "@/hooks/apis/settings/use-claude-token-status";
 import { useOnboardingSeen } from "@/hooks/common/use-onboarding-seen";
 import { useOnboardingStore } from "@/store/onboarding-store";
+import { TOUR_CONFIG } from "./tour-config";
 import { tourSteps } from "./tour-steps";
 
 /** 화면에 실제로 보이는 요소인가. 닫힌 사이드바(모바일 시트) 안의 버튼은 크기가 0 이다. */
@@ -37,6 +38,7 @@ const fitToScreen = (steps: DriveStep[]): DriveStep[] =>
 export const OnboardingTour = () => {
   const open = useOnboardingStore((s) => s.open);
   const setOpen = useOnboardingStore((s) => s.setOpen);
+  const setSettingsOpen = useOnboardingStore((s) => s.setSettingsOpen);
   const { seen, markSeen } = useOnboardingSeen();
   const { data: token, isPending } = useClaudeTokenStatus();
   const router = useRouter();
@@ -52,13 +54,15 @@ export const OnboardingTour = () => {
 
     const registered = token?.registered ?? false;
     const steps = fitToScreen(tourSteps({ tokenRegistered: registered }));
-    // 토큰이 없으면 마지막 버튼이 설정 화면으로 데려간다 — 닫기만 하면 다음에 뭘 할지 모른다.
+    // 마지막 버튼이 설정 화면을 열고 거기서 이어서 짚는다(SettingsTour) — 말풍선으로 버튼만 가리키면
+    // 설정 안에 무엇이 있는지(Claude 연결 · AI 앱 연결 · 알림) 모른 채 끝난다.
     const last = steps.at(-1);
-    if (!registered && last?.popover) {
+    if (last?.popover) {
       last.popover = {
         ...last.popover,
-        doneBtnText: "설정으로 가기",
+        doneBtnText: "설정 둘러보기",
         onNextClick: () => {
+          setSettingsOpen(true);
           tour.destroy();
           router.push("/settings");
         },
@@ -66,18 +70,8 @@ export const OnboardingTour = () => {
     }
 
     const tour = driver({
+      ...TOUR_CONFIG,
       steps,
-      showProgress: true,
-      progressText: "{{current}} / {{total}}",
-      nextBtnText: "다음",
-      prevBtnText: "이전",
-      doneBtnText: "시작하기",
-      popoverClass: "navis-tour",
-      stagePadding: 6,
-      stageRadius: 12,
-      overlayOpacity: 0.65,
-      // 짚은 버튼을 눌러 버리면 화면이 바뀌어 안내가 엉킨다 — 안내 중에는 막는다.
-      disableActiveInteraction: true,
       onDestroyed: () => {
         markSeen();
         setOpen(false);

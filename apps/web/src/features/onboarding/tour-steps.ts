@@ -72,15 +72,6 @@ export const tourSteps = ({ tokenRegistered }: { tokenRegistered: boolean }): Dr
     },
   },
   {
-    popover: {
-      title: "Claude 에서도 내 나비스를 꺼내 써요 🔌",
-      description:
-        "claude.ai · Claude 데스크톱 · 휴대폰 앱 · Claude Code 에 나비스를 연결하면, 거기서 일하다가도 " +
-        "<b>내 기억을 찾아보고 정한 것을 바로 남겨요</b>. 어디서 말하든 기억은 한곳에 쌓여요.<br/><br/>" +
-        "설정 → <b>AI 앱 연결</b>에서 주소 하나를 붙여 넣고 <b>허용</b>만 누르면 돼요. 터미널은 필요 없어요.",
-    },
-  },
-  {
     element: at("help"),
     popover: {
       title: "이 안내는 언제든 다시",
@@ -91,21 +82,70 @@ export const tourSteps = ({ tokenRegistered }: { tokenRegistered: boolean }): Dr
   },
   {
     element: at("settings"),
+    popover: {
+      title: "마지막으로 설정을 둘러볼게요",
+      description: tokenRegistered
+        ? "Claude 는 이미 연결돼 있어요. 설정에는 그 밖에도 <b>Claude 앱에서 내 나비스 쓰기</b>와 <b>답 도착 알림</b>이 있어요. 같이 열어 볼게요."
+        : "나비스가 답하려면 <b>Claude 연결</b>이 하나 필요해요. 설정에서 어디서 하는지, 그 밖에 뭐가 있는지 같이 열어 볼게요.",
+      side: "bottom",
+      align: "end",
+    },
+  },
+];
+
+/**
+ * 설정 화면 둘러보기 — 대화 화면 튜토리얼의 마지막 버튼이 이 화면을 열고 이어서 짚는다.
+ * 칸마다 무엇이고 왜 필요한지 말한다. 문구는 여기서만 고친다.
+ */
+export const settingsTourSteps = ({ tokenRegistered }: { tokenRegistered: boolean }): DriveStep[] => [
+  {
+    element: at("settings-claude"),
     popover: tokenRegistered
       ? {
-          title: "준비 끝났어요 🎉",
-          description: "Claude 토큰이 이미 등록돼 있어요. 이제 입력창에 아무 말이나 걸어 보세요. 내 기억은 나만 봐요.",
+          title: "① Claude 연결 ✓",
+          description:
+            "나비스는 <b>내 Claude 구독</b>으로 답해요. 이미 연결돼 있어요 — 토큰이 만료되면 여기서 새로 붙여 넣으면 돼요.",
           side: "bottom",
-          align: "end",
+          align: "start",
         }
       : {
-          title: "마지막으로, 여기서 Claude 연결",
+          title: "① 먼저 Claude 연결",
           description:
-            "나비스는 <b>내 Claude 구독</b>(Pro · Max)으로 답해요. 설정을 열면 Mac · Windows 별로 순서가 나와요 — " +
-            "명령을 <b>복사 버튼</b>으로 터미널에 붙여 넣고, 나온 토큰을 붙여 넣으면 끝이에요. 2–3분이면 돼요.<br/><br/>" +
+            "나비스는 <b>내 Claude 구독</b>(Pro · Max)으로 답해요. 여기 나온 순서대로 명령을 <b>복사 버튼</b>으로 터미널에 붙여 넣고, " +
+            "나온 토큰을 붙여 넣으면 끝이에요. 2–3분이면 돼요.<br/><br/>" +
             "붙여 넣으면 나비스가 바로 연결을 확인해요. 토큰은 암호화해 보관하고 다시 보여주지 않아요.",
           side: "bottom",
-          align: "end",
+          align: "start",
         },
+  },
+  {
+    element: at("settings-connect"),
+    popover: {
+      title: "② Claude 에서도 내 나비스를 🔌",
+      description:
+        "claude.ai · Claude 데스크톱 · 휴대폰 앱 · Claude Code 에 나비스를 붙이면, 거기서 일하다가도 " +
+        "<b>내 기억을 찾아보고 정한 것을 바로 남겨요</b>. 어디서 말하든 기억은 한곳에 쌓여요.<br/><br/>" +
+        "탭에서 쓰는 앱을 고르고 <b>주소 하나를 붙여 넣은 뒤 허용</b>만 누르면 돼요. 터미널은 필요 없어요. 연결한 앱은 여기 목록에 보이고 언제든 끊을 수 있어요.",
+      side: "top",
+      align: "start",
+    },
+  },
+  {
+    element: at("settings-notify"),
+    popover: {
+      title: "③ 답 도착 알림",
+      description:
+        "켜 두면 나비스 창을 닫아도 답이 오거나 <b>약속한 때가 되면</b> 알려 드려요. 기기마다 따로 켜요.",
+      side: "top",
+      align: "start",
+    },
+  },
+  {
+    popover: {
+      title: tokenRegistered ? "준비 끝났어요 🎉" : "이제 Claude 만 연결하면 돼요",
+      description: tokenRegistered
+        ? "이제 대화 화면에서 아무 말이나 걸어 보세요. 내 기억은 나만 봐요. 이 안내는 위쪽 <b>?</b> 버튼으로 언제든 다시 볼 수 있어요."
+        : "맨 위 <b>Claude 연결</b>부터 해 주세요. 끝나면 바로 대화할 수 있어요. 이 안내는 대화 화면 위쪽 <b>?</b> 버튼으로 언제든 다시 볼 수 있어요.",
+    },
   },
 ];

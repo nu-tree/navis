@@ -40,7 +40,7 @@ export const ClaudeTokenForm = () => {
   };
 
   return (
-    <section className="space-y-4 rounded-2xl border border-border bg-card/40 p-5">
+    <section data-tour="settings-claude" className="space-y-4 rounded-2xl border border-border bg-card/40 p-5">
       <div className="space-y-1">
         <h2 className="font-semibold">Claude 연결</h2>
         <p className="text-sm text-muted-foreground">

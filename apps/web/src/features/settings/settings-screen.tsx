@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AiConnectSection } from "@/features/connect/ai-connect-section";
+import { SettingsTour } from "@/features/onboarding/settings-tour";
 import { ClaudeTokenForm } from "./claude-token-form";
 import { NotificationSettings } from "./notification-settings";
 
@@ -28,6 +29,7 @@ export const SettingsScreen = () => {
           <NotificationSettings />
         </div>
       </div>
+      <SettingsTour />
     </div>
   );
 };
