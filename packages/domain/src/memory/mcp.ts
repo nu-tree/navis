@@ -346,11 +346,18 @@ export const createMemoryMcpServer = ({ userId, tally, owner = false }: MemoryMc
         "부를 때:",
         "- '나비스로 뭘 할 수 있어?', '이거 어떻게 써?', '○○ 기능 있어?'처럼 나비스의 기능 · 사용법 · 설정을 물을 때",
         "- 'MCP 연결', '알림', '약속', '첨부'처럼 기능 이름이 나올 때",
+        "- '설정에 뭐 있어?', '그 버튼 어디 있어?'처럼 화면 · 메뉴 위치를 물을 때",
         "",
         "나비스의 기능은 이 안내서에 있는 것만 말한다. 안내서에 없는 기능을 있다고 지어내지 않는다.",
         "답할 때는 안내서를 그대로 붙이지 말고, 물은 것에 맞게 어디서 · 어떻게를 짧게 알려 준다.",
       ].join("\n"),
-      { topic: z.string().max(50).optional().describe("궁금한 기능(예: mcp, 약속, 알림). 없으면 전체 안내") },
+      {
+        topic: z
+          .string()
+          .max(50)
+          .optional()
+          .describe("궁금한 기능 · 화면 이름 한 단어(예: mcp, 약속, 알림, 설정). 없으면 전체 안내"),
+      },
       async ({ topic }) => ({ content: [{ type: "text" as const, text: renderGuide({ owner, topic }) }] }),
     ),
   ],

@@ -20,6 +20,13 @@ describe("renderGuide", () => {
     expect(text).not.toContain("약속");
   });
 
+  it("화면 이름으로 물어도 찾는다 — 설정에 무엇이 있는지", () => {
+    const text = renderGuide({ owner: false, topic: "설정" });
+    expect(text).toContain("화면 지도");
+    expect(text).toContain("AI 앱 연결");
+    expect(text).toContain("알림");
+  });
+
   it("맞는 주제가 없으면 전체를 준다", () => {
     expect(renderGuide({ owner: false, topic: "없는기능" })).toBe(renderGuide({ owner: false }));
   });

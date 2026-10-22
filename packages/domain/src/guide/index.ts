@@ -21,6 +21,17 @@ export type Feature = {
 
 export const FEATURES: readonly Feature[] = [
   {
+    id: "screens",
+    title: "화면 지도 — 어디에 뭐가 있나",
+    body: [
+      "화면은 셋이다: 대화(첫 화면) · 기억 · 설정. 대화방은 '나비스' 하나이고, 대화는 계속 이어진다.",
+      "대화 화면 위쪽 오른쪽 버튼은 차례로 '기억'(기억 화면) · '?'(튜토리얼 다시 보기) · 톱니바퀴(설정) · '⋯'(앱으로 설치 · 로그아웃).",
+      "대화 화면 아래 입력창: 클립 버튼(사진 · 문서 첨부), 모델 고르기, 보내기.",
+      "설정 화면은 위에서부터 'Claude 연결'(나비스가 답하려면 필요한 내 Claude 토큰) → 'AI 앱 연결'(claude.ai · Claude Code 등에 내 나비스 붙이기, MCP) → '알림'(이 기기 답 도착 알림) 순서다.",
+      "기억 화면: 기억 목록 · 검색 · 분류와 프로젝트 거르기 · 고치기 · 할 일 체크 · 프로젝트 이름 정리 · 내보내기.",
+    ],
+  },
+  {
     id: "memory",
     title: "대화하면서 기억 쌓기",
     body: [
@@ -128,13 +139,16 @@ export const FEATURES: readonly Feature[] = [
 ];
 
 /**
- * 안내서 본문. topic 을 주면 그 기능만(이름 · 제목에 들어 있으면), 없거나 맞는 것이 없으면 전체.
+ * 안내서 본문. topic 을 주면 그 말이 나오는 기능만(이름 · 제목 · 본문), 없거나 맞는 것이 없으면 전체.
+ * 본문까지 보는 이유: "설정에 뭐 있어?"처럼 화면 · 메뉴 이름으로 물으면 제목에는 없고 본문에만 있다.
  * 관리자가 아니면 관리자 전용 기능은 빼고, 빠졌다는 것도 적지 않는다.
  */
 export function renderGuide({ owner, topic }: { owner: boolean; topic?: string }): string {
   const visible = FEATURES.filter((f) => owner || !f.ownerOnly);
   const q = topic?.trim().toLowerCase();
-  const matched = q ? visible.filter((f) => f.id.includes(q) || f.title.toLowerCase().includes(q)) : [];
+  const matched = q
+    ? visible.filter((f) => [f.id, f.title, ...f.body].some((text) => text.toLowerCase().includes(q)))
+    : [];
   const picked = matched.length > 0 ? matched : visible;
 
   return [
