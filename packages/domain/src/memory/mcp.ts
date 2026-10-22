@@ -23,6 +23,8 @@ import {
   updateInputSchema,
   type Memory,
 } from "@navis/validation";
+import { z } from "zod";
+import { renderGuide } from "../guide/index";
 import { formatByProject } from "./format";
 import { projects, renameProject, similarProjects } from "./projects";
 import { kstDate } from "./range";
@@ -52,6 +54,7 @@ export const MEMORY_SERVER_NAME = "memory";
  * - US2: recall
  * - recent(기간 전건) · projects · rename_project — 2026-10-08
  * - US4: todos, update, remove
+ * - guide(나비스 자기 기능 안내) — 2026-10-22
  *
  * `graphify` 는 등록하지 않는다 — 기억 그래프는 범위 밖이다.
  */
@@ -64,6 +67,7 @@ export const MEMORY_TOOL_NAMES = [
   "todos",
   "update",
   "remove",
+  "guide",
 ] as const satisfies readonly string[];
 
 /**
@@ -98,9 +102,11 @@ export type MemoryMcpContext = {
    */
   userId: string;
   tally: MemoryToolTally;
+  /** 관리자인가 — guide 가 관리자 전용 기능(전하기)을 보일지. 회원에게는 있는지도 말하지 않는다. */
+  owner?: boolean;
 };
 
-export const createMemoryMcpServer = ({ userId, tally }: MemoryMcpContext) =>
+export const createMemoryMcpServer = ({ userId, tally, owner = false }: MemoryMcpContext) =>
   createSdkMcpServer({
   name: MEMORY_SERVER_NAME,
   version: "0.1.0",
@@ -108,6 +114,7 @@ export const createMemoryMcpServer = ({ userId, tally }: MemoryMcpContext) =>
     "사용자의 기억을 다루는 도구다.",
     "기억할 가치가 있는 사실을 들으면 저장하고, 과거를 물으면 찾아본다.",
     "인사나 잡담에는 쓰지 않는다.",
+    "나비스 자체의 기능 · 사용법을 물으면 guide 를 읽는다.",
   ].join(" "),
   tools: [
     tool(
@@ -330,6 +337,21 @@ export const createMemoryMcpServer = ({ userId, tally }: MemoryMcpContext) =>
         await remove(userId, id);
         return { content: [{ type: "text" as const, text: `지웠다. id=${id}` }] };
       },
+    ),
+    tool(
+      "guide",
+      [
+        "나비스 자신의 기능 안내서를 읽는다. 사용자의 기억이 아니다.",
+        "",
+        "부를 때:",
+        "- '나비스로 뭘 할 수 있어?', '이거 어떻게 써?', '○○ 기능 있어?'처럼 나비스의 기능 · 사용법 · 설정을 물을 때",
+        "- 'MCP 연결', '알림', '약속', '첨부'처럼 기능 이름이 나올 때",
+        "",
+        "나비스의 기능은 이 안내서에 있는 것만 말한다. 안내서에 없는 기능을 있다고 지어내지 않는다.",
+        "답할 때는 안내서를 그대로 붙이지 말고, 물은 것에 맞게 어디서 · 어떻게를 짧게 알려 준다.",
+      ].join("\n"),
+      { topic: z.string().max(50).optional().describe("궁금한 기능(예: mcp, 약속, 알림). 없으면 전체 안내") },
+      async ({ topic }) => ({ content: [{ type: "text" as const, text: renderGuide({ owner, topic }) }] }),
     ),
   ],
   });

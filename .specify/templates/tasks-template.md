@@ -152,6 +152,7 @@ Examples of foundational tasks (adjust based on your project):
 **Purpose**: Improvements that affect multiple user stories
 
 - [ ] TXXX [P] Documentation updates in docs/
+- [ ] TXXX [P] 기능 안내서 갱신 — packages/domain/src/guide/index.ts 에 이 기능의 어디서 · 어떻게 · 한도를 적는다(헌장 "기능 안내")
 - [ ] TXXX Code cleanup and refactoring
 - [ ] TXXX Performance optimization across all stories
 - [ ] TXXX [P] Additional unit tests (if requested) in tests/unit/

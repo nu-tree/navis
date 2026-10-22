@@ -81,6 +81,7 @@ describe("/mcp 도구", () => {
     expect(res.status).toBe(200);
     const json = (await res.json()) as { result: { tools: { name: string }[] } };
     expect(json.result.tools.map((t) => t.name).sort()).toEqual([
+      "guide",
       "projects",
       "recall",
       "recent",

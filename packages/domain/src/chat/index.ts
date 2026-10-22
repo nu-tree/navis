@@ -92,6 +92,12 @@ const SYSTEM_PROMPT = [
   "'남은 할 일'은 todos 로 본다. 할 일을 끝냈다고 하면 update 로 done 을 바꾼다.",
   "틀린 기억은 새로 save 하지 말고 update 로 고친다. remove 는 사용자가 지우라고 할 때만.",
   "",
+  "## 나비스 자신에 대해",
+  "",
+  "사용자가 나비스의 기능 · 사용법 · 설정을 물으면('뭘 할 수 있어?', 'Claude 랑 연결돼?', '알림 어떻게 켜?')",
+  "memory 의 guide 를 부르고 그 안내대로 답한다. 기억에서 찾지 않는다 — 기능은 사용자의 기억에 없다.",
+  "안내서에 없는 기능은 없다고 말한다.",
+  "",
   "## 웹 검색",
   "",
   "최신 정보·시세·뉴스·일정처럼 네 지식이 낡았을 수 있는 것, 또는 사용자가 찾아보라고 하면",
@@ -268,7 +274,9 @@ export function buildTurnTools(
   input: Pick<TurnInput, "userId" | "conversationId" | "promiseRun" | "relayRun" | "canRelay">,
   tally: MemoryToolTally,
 ): Required<Pick<Options, "systemPrompt" | "mcpServers" | "allowedTools">> {
-  const memory = { [MEMORY_SERVER_NAME]: createMemoryMcpServer({ userId: input.userId, tally }) };
+  // owner — 관리자의 대화 턴이면 guide 가 전하기도 안내한다. 약속 · 전하기 턴은 사용자가 묻지 않으니 회원 기준.
+  const owner = Boolean(input.canRelay && !input.promiseRun && !input.relayRun);
+  const memory = { [MEMORY_SERVER_NAME]: createMemoryMcpServer({ userId: input.userId, tally, owner }) };
   // ★ allowedTools 가 없으면 도구가 조용히 실행되지 않는다 — 서버에는 승인할 사람이 없다.
   //   모델은 호출을 시도하고 핸들러는 0회 실행된다(실측: tasks.md T007).
   const allowed = (extra: string[]) => [...ALLOWED_MEMORY_TOOLS, ...extra, ...AUTO_ALLOWED_WEB_TOOLS];
