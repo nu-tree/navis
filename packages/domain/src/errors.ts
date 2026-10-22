@@ -60,6 +60,37 @@ export class ClaudeTokenRejectedError extends Error {
   }
 }
 
+/**
+ * Claude 요금제 한도를 다 썼다 → 언제 다시 쓸 수 있는지 알린다. 토큰 문제가 아니라 기다리면 풀린다.
+ * window · resetsAt 은 직전 rate_limit_event(status: rejected)에서 온다. 없으면 시각 없이 말한다.
+ */
+export class ClaudeRateLimitedError extends Error {
+  readonly kind = "claude_rate_limited" as const;
+
+  constructor(
+    /** 걸린 한도 — five_hour · seven_day · seven_day_opus … */
+    readonly window: string | null,
+    readonly resetsAt: Date | null,
+    /** 사람이 읽는 초기화 시각(한국 시간). 오류 모듈이 시간대를 몰라도 되게 밖에서 만들어 넘긴다. */
+    resetsAtLabel: string | null,
+  ) {
+    const name = window ? (RATE_LIMIT_WINDOW_NAMES[window] ?? "사용 한도") : "사용 한도";
+    super(
+      resetsAtLabel
+        ? `Claude ${name}를 다 썼어요. ${resetsAtLabel}부터 다시 쓸 수 있어요.`
+        : `Claude ${name}를 다 썼어요. 잠시 뒤 다시 시도해 주세요.`,
+    );
+    this.name = "ClaudeRateLimitedError";
+  }
+}
+
+const RATE_LIMIT_WINDOW_NAMES: Record<string, string> = {
+  five_hour: "5시간 한도",
+  seven_day: "주간 한도",
+  seven_day_opus: "주간 Opus 한도",
+  seven_day_sonnet: "주간 Sonnet 한도",
+};
+
 /** "나비스" 방은 지울 수 없다 → 409(specs/003 R9). */
 export class MainRoomUndeletableError extends Error {
   readonly kind = "main_room_undeletable" as const;
@@ -111,3 +142,6 @@ export const isClaudeTokenError = (
   e: unknown,
 ): e is ClaudeTokenMissingError | ClaudeTokenRejectedError =>
   e instanceof ClaudeTokenMissingError || e instanceof ClaudeTokenRejectedError;
+
+export const isClaudeRateLimited = (e: unknown): e is ClaudeRateLimitedError =>
+  e instanceof ClaudeRateLimitedError;

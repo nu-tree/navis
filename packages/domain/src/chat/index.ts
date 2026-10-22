@@ -21,7 +21,7 @@ import { toDocumentBlocks, type DocumentInput } from "./documents";
 import { canUseTool } from "./fetch-guard";
 import { ClaudeTokenMissingError, ClaudeTokenRejectedError } from "../errors";
 import { claudeToken } from "../settings";
-import { limitsFrom, recordLimits } from "../usage";
+import { limitsFrom, rateLimitedError, recordLimits, rejectionFrom, type Rejection } from "../usage";
 import {
   ALLOWED_MEMORY_TOOLS,
   MEMORY_SERVER_NAME,
@@ -357,6 +357,8 @@ export async function runTurn(
 
   // 이 턴 동안의 기억 도구 집계. 도구 핸들러가 클로저로 잡아 직접 올린다.
   const tally: MemoryToolTally = { saved: 0 };
+  // 이 턴에 한도에 막혔다는 rate_limit_event 가 왔는지 — 초과 오류에 풀리는 시각을 싣는다.
+  let rejection: Rejection | null = null;
 
   // 첨부가 없으면 문자열 프롬프트를 그대로 쓴다 — 불필요하게 구조화하지 않는다.
   // 있으면 텍스트 + 문서 · 이미지 블록을 담은 사용자 메시지 하나를 흘려보낸다.
@@ -444,6 +446,7 @@ export async function runTurn(
     // 요금제 한도 — 토큰 주인의 마지막 값으로 덮는다(usage/index.ts). 기다리지 않는다: 턴을 늦추거나
     // 실패시킬 일이 아니다.
     if (message.type === "rate_limit_event") {
+      rejection = rejectionFrom(message.rate_limit_info);
       const limits = limitsFrom(message.rate_limit_info);
       if (limits) {
         void recordLimits(input.tokenUserId ?? input.userId, limits).catch((err: unknown) =>
@@ -457,6 +460,10 @@ export async function runTurn(
     if (message.type === "assistant" && message.error && TOKEN_ERRORS.has(message.error)) {
       throw new ClaudeTokenRejectedError(message.error);
     }
+    // 요금제 한도 초과도 assistant 의 error 로 온다. 그냥 두면 result 가 영어 오류문을 답처럼 싣는다.
+    if (message.type === "assistant" && message.error === "rate_limit") {
+      throw rateLimitedError(rejection);
+    }
 
     // 완성된 assistant 메시지의 글. 델타를 이어 붙인 것보다 이쪽이 정확하다.
     if (message.type === "assistant") {
@@ -469,6 +476,8 @@ export async function runTurn(
     if (message.type === "result") {
       // 세션 id 는 result 가 권위다 — 새 세션이면 여기서 처음 알게 된다.
       sessionId = message.session_id;
+      // assistant 오류 없이 오류 result 로만 끝나도, 직전에 막혔다는 이벤트가 있었으면 한도 탓이다.
+      if (message.is_error && rejection) throw rateLimitedError(rejection);
       if (message.subtype !== "success") {
         throw new Error(`Claude 응답 실패: ${message.subtype}`);
       }

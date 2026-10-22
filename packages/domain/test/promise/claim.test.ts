@@ -139,6 +139,17 @@ describeDb("complete — 마무리 (실제 DB)", () => {
     expect(row).toMatchObject({ enabled: false, nextRunAt: null, consecutiveFailures: 3, endedAt: null });
   });
 
+  it("한도 초과(transient) 실패는 연속 실패로 세지 않는다 — 늘리지도 되돌리지도 않는다", async () => {
+    const p = await seed({ consecutiveFailures: 2 });
+    for (let i = 0; i < 3; i++) {
+      await db.update(promises).set({ nextRunAt: NOW }).where(eq(promises.id, p.id));
+      const r = await complete(await claimOne(p.id), { status: "failed", error: "한도", transient: true }, NOW);
+      expect(r.disabledByFailures).toBe(false);
+    }
+    const [row] = await db.select().from(promises).where(eq(promises.id, p.id));
+    expect(row).toMatchObject({ enabled: true, consecutiveFailures: 2 });
+  });
+
   it("실행 기록은 약속마다 최근 20개만 남는다", async () => {
     const p = await seed();
     for (let i = 0; i < 22; i++) {

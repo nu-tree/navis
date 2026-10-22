@@ -8,6 +8,7 @@
 
 import type { Message } from "@navis/validation";
 import { runTurn } from "../chat/index";
+import { isClaudeRateLimited } from "../errors";
 import * as conversation from "../conversation/index";
 import { deliver } from "./deliver";
 import { complete, formatKst, previousRun, type ClaimedRun, type RunOutcome } from "./index";
@@ -58,7 +59,13 @@ export async function executeRun(run: ClaimedRun, now: Date = new Date()): Promi
       const error = err instanceof Error ? err.message : String(err);
       console.error(`[promise] 실행 실패 promise=${promise.id}: ${error}`);
       // notify 를 이미 했다면 말한 것은 사실이다 — 기록은 실패로 두되 메시지 id 는 남긴다.
-      return { status: "failed", error, ...(state.messageId ? { messageId: state.messageId } : {}) };
+      return {
+        status: "failed",
+        error,
+        // 한도 초과는 기다리면 풀린다 — 연속 실패로 세어 약속을 끄지 않는다.
+        ...(isClaudeRateLimited(err) ? { transient: true } : {}),
+        ...(state.messageId ? { messageId: state.messageId } : {}),
+      };
     }
   })();
 

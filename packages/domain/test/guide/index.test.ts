@@ -27,6 +27,12 @@ describe("renderGuide", () => {
     expect(text).toContain("알림");
   });
 
+  it("사용량을 물으면 한도 · 어디서 보는지를 준다", () => {
+    const text = renderGuide({ owner: false, topic: "사용량" });
+    expect(text).toContain("5시간 한도");
+    expect(text).toContain("'Claude' 탭");
+  });
+
   it("맞는 주제가 없으면 전체를 준다", () => {
     expect(renderGuide({ owner: false, topic: "없는기능" })).toBe(renderGuide({ owner: false }));
   });

@@ -2,7 +2,8 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db, usageLimits } from "@navis/db";
-import { getLimits, limitsFrom, recordLimits } from "../../src/usage/index";
+import { getLimits, limitsFrom, rateLimitedError, recordLimits, rejectionFrom } from "../../src/usage/index";
+import { ClaudeRateLimitedError } from "../../src/errors";
 import { TEST_USERS, USER_A } from "../test-users";
 
 // 2026-10-22 실측 — claude.ai 화면이 5시간 32% · 주간 21% 일 때 온 값.
@@ -41,6 +42,30 @@ describe("limitsFrom", () => {
     expect(limitsFrom({ status: "allowed" })).toBeNull();
     expect(limitsFrom(undefined)).toBeNull();
     expect(limitsFrom({ unifiedWindows: { five_hour: { utilization: "0.3" } } })).toBeNull();
+  });
+});
+
+describe("rejectionFrom · rateLimitedError — 한도 초과 안내", () => {
+  it("allowed 면 막힌 게 아니다", () => {
+    expect(rejectionFrom(OBSERVED)).toBeNull();
+    expect(rejectionFrom(undefined)).toBeNull();
+  });
+
+  it("rejected 면 걸린 창과 풀리는 시각, 안내문은 한국 시간", () => {
+    const rejection = rejectionFrom({ ...OBSERVED, status: "rejected" });
+    expect(rejection).toEqual({ window: "five_hour", resetsAt: new Date(1792662600 * 1000) });
+    const err = rateLimitedError(rejection);
+    expect(err).toBeInstanceOf(ClaudeRateLimitedError);
+    expect(err.message).toBe("Claude 5시간 한도를 다 썼어요. 10월 22일(목) 18:50부터 다시 쓸 수 있어요.");
+  });
+
+  it("주간 한도면 주간이라고 말한다", () => {
+    const err = rateLimitedError(rejectionFrom({ status: "rejected", rateLimitType: "seven_day", resetsAt: 1793073600 }));
+    expect(err.message).toBe("Claude 주간 한도를 다 썼어요. 10월 27일(화) 13:00부터 다시 쓸 수 있어요.");
+  });
+
+  it("막혔다는 이벤트 없이 오류만 오면 시각 없이", () => {
+    expect(rateLimitedError(null).message).toBe("Claude 사용 한도를 다 썼어요. 잠시 뒤 다시 시도해 주세요.");
   });
 });
 

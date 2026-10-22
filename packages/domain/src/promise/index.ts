@@ -294,6 +294,11 @@ export type RunOutcome = {
   memo?: string;
   /** 실행 중 finish 로 약속을 끝냈는가. */
   finished?: boolean;
+  /**
+   * 기다리면 풀리는 실패(요금제 한도 초과)인가. 연속 실패로 세지 않는다 — 5시간 한도에 막힌 매시 약속이
+   * 세 번 만에 꺼지면 안 된다. 기록은 실패로 남는다.
+   */
+  transient?: boolean;
 };
 
 /**
@@ -302,6 +307,7 @@ export type RunOutcome = {
  * - 한 번짜리이거나 finish 를 불렀으면 끝난다. 실패한 한 번짜리도 끝난다 — 다시 돌릴 시각이 없다.
  * - 반복 약속은 지금 이후 첫 회차로 간다(놓친 회차를 몰아서 돌리지 않는다, FR-016).
  * - 반복 약속이 연속 MAX_CONSECUTIVE_FAILURES 회 실패하면 끈다(R11). 알리는 일은 호출부가 한다.
+ *   한도 초과(transient)는 세지 않는다 — 늘리지도, 0 으로 되돌리지도 않는다.
  *
  * @returns 연속 실패로 꺼졌는지
  */
@@ -311,7 +317,8 @@ export async function complete(
   now: Date = new Date(),
 ): Promise<{ disabledByFailures: boolean }> {
   const p = run.promise;
-  const failures = outcome.status === "failed" ? p.consecutiveFailures + 1 : 0;
+  const failures =
+    outcome.status !== "failed" ? 0 : outcome.transient ? p.consecutiveFailures : p.consecutiveFailures + 1;
   const schedule = scheduleOf(p);
   const ends = outcome.finished === true || schedule.kind === "once";
   const disabledByFailures = !ends && failures >= MAX_CONSECUTIVE_FAILURES;

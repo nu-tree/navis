@@ -12,6 +12,8 @@
 import { eq } from "drizzle-orm";
 import { db, usageLimits } from "@navis/db";
 import type { PlanUsageStatus } from "@navis/validation";
+import { ClaudeRateLimitedError } from "../errors";
+import { formatKst } from "../promise/schedule";
 
 export type PlanWindow = { utilization: number; resetsAt: Date };
 
@@ -36,6 +38,29 @@ export function limitsFrom(info: unknown): PlanLimits | null {
   if (!fiveHour && !sevenDay) return null;
   return { fiveHour, sevenDay, status: typeof i?.status === "string" ? i.status : "allowed" };
 }
+
+export type Rejection = { window: string | null; resetsAt: Date | null };
+
+/**
+ * 한도에 막혔는지 — rate_limit_info.status 가 rejected 면 걸린 창과 풀리는 시각. 아니면 null.
+ * 막힌 창은 unifiedWindows 가 아니라 맨 위 rateLimitType · resetsAt 이 말한다(SDK 타입의 필드).
+ */
+export function rejectionFrom(info: unknown): Rejection | null {
+  const i = info as { status?: unknown; rateLimitType?: unknown; resetsAt?: unknown } | null | undefined;
+  if (i?.status !== "rejected") return null;
+  return {
+    window: typeof i.rateLimitType === "string" ? i.rateLimitType : null,
+    resetsAt: typeof i.resetsAt === "number" ? new Date(i.resetsAt * 1000) : null,
+  };
+}
+
+/** 한도 초과 오류. 막힌 정보가 없으면(이벤트 없이 rate_limit 오류만 왔을 때) 시각 없이 말한다. */
+export const rateLimitedError = (rejection: Rejection | null) =>
+  new ClaudeRateLimitedError(
+    rejection?.window ?? null,
+    rejection?.resetsAt ?? null,
+    rejection?.resetsAt ? formatKst(rejection.resetsAt) : null,
+  );
 
 /** 마지막으로 본 한도로 덮는다. userId 는 토큰 주인이다 — 한도는 토큰의 계정 것이다. */
 export async function recordLimits(userId: string, limits: PlanLimits, at = new Date()): Promise<void> {

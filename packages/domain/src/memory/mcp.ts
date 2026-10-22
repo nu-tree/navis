@@ -356,7 +356,7 @@ export const createMemoryMcpServer = ({ userId, tally, owner = false }: MemoryMc
           .string()
           .max(50)
           .optional()
-          .describe("궁금한 기능 · 화면 이름 한 단어(예: mcp, 약속, 알림, 설정). 없으면 전체 안내"),
+          .describe("궁금한 기능 · 화면 이름 한 단어(예: mcp, 약속, 알림, 설정, 사용량). 없으면 전체 안내"),
       },
       async ({ topic }) => ({ content: [{ type: "text" as const, text: renderGuide({ owner, topic }) }] }),
     ),
