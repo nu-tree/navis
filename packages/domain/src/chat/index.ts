@@ -21,6 +21,7 @@ import { toDocumentBlocks, type DocumentInput } from "./documents";
 import { canUseTool } from "./fetch-guard";
 import { ClaudeTokenMissingError, ClaudeTokenRejectedError } from "../errors";
 import { claudeToken } from "../settings";
+import { limitsFrom, recordLimits } from "../usage";
 import {
   ALLOWED_MEMORY_TOOLS,
   MEMORY_SERVER_NAME,
@@ -436,6 +437,18 @@ export async function runTurn(
         const name = ev.content_block.name;
         cb.onStatus?.(name);
         if (!toolsUsed.includes(name)) toolsUsed.push(name);
+      }
+      continue;
+    }
+
+    // 요금제 한도 — 토큰 주인의 마지막 값으로 덮는다(usage/index.ts). 기다리지 않는다: 턴을 늦추거나
+    // 실패시킬 일이 아니다.
+    if (message.type === "rate_limit_event") {
+      const limits = limitsFrom(message.rate_limit_info);
+      if (limits) {
+        void recordLimits(input.tokenUserId ?? input.userId, limits).catch((err: unknown) =>
+          console.error(`[usage] 한도 기록 실패: ${err instanceof Error ? err.message : String(err)}`),
+        );
       }
       continue;
     }

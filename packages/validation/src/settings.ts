@@ -15,3 +15,21 @@ export const claudeTokenInputSchema = z.object({
   token: z.string().trim().min(1).max(4096),
 });
 export type ClaudeTokenInput = z.infer<typeof claudeTokenInputSchema>;
+
+// Claude 요금제 한도 — 나비스로 대화할 때 마지막으로 받은 값(usage_limits). 계산하지 않은 원래 값이다.
+const planWindowSchema = z.object({
+  /** 0~1 비율. 0.21 = 21%. */
+  utilization: z.number(),
+  resetsAt: z.string(), // ISO 8601
+});
+export const planUsageSchema = z.object({
+  fiveHour: planWindowSchema.nullable(),
+  sevenDay: planWindowSchema.nullable(),
+  /** allowed | allowed_warning | rejected */
+  status: z.string(),
+  /** 이 값을 받은 시각 — 대화가 없으면 낡는다. */
+  observedAt: z.string(), // ISO 8601
+});
+export type PlanUsage = z.infer<typeof planUsageSchema>;
+/** 아직 한 번도 받지 못했으면 null. */
+export type PlanUsageStatus = PlanUsage | null;

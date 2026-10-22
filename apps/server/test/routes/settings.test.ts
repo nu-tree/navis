@@ -21,6 +21,8 @@ const status = (userId: string) => {
     : { registered: false, last4: null, updatedAt: null };
 };
 
+const limits = new Map<string, unknown>();
+
 class SecretError extends Error {}
 class FakeRejected extends Error {
   readonly kind = "claude_token_rejected" as const;
@@ -38,6 +40,8 @@ vi.mock("@navis/domain", () => ({
   memory: {},
   conversation: {},
   chat: { runTurn: vi.fn(), verifyClaudeToken: (t: string) => verify(t) },
+  // 요금제 한도 — 회원마다 다른 값. 라우트가 요청 회원을 넘기는지가 곧 이 mock 의 동작이다.
+  usage: { getLimits: vi.fn(async (u: string) => limits.get(u) ?? null) },
 }));
 vi.mock("@navis/domain/errors", () => ({
   isClaudeTokenError: (e: unknown) => e instanceof FakeRejected,
@@ -125,5 +129,34 @@ describe("/settings/claude-token", () => {
     const res = await req("PUT", { token: SECRET });
     expect(res.status).toBe(200);
     expect(stored.get(MEMBER)).toBe(SECRET);
+  });
+});
+
+describe("/settings/usage", () => {
+  const get = (member: string = MEMBER, token: string | null = API_TOKEN) =>
+    app.fetch(
+      new Request("http://localhost/settings/usage", {
+        headers: token ? { authorization: `Bearer ${token}`, "x-navis-user": member } : {},
+      }),
+    );
+  const MINE = {
+    fiveHour: { utilization: 0.31, resetsAt: "2026-10-22T09:50:00.000Z" },
+    sevenDay: { utilization: 0.21, resetsAt: "2026-10-27T04:00:00.000Z" },
+    status: "allowed",
+    observedAt: "2026-10-22T08:00:00.000Z",
+  };
+
+  beforeEach(() => {
+    limits.clear();
+  });
+
+  it("요청 회원의 마지막 한도를 그대로 준다 — 다른 회원은 null", async () => {
+    limits.set(MEMBER, MINE);
+    expect(await (await get()).json()).toEqual(MINE);
+    expect(await (await get("00000000-0000-4000-8000-0000000000b2")).json()).toBeNull();
+  });
+
+  it("토큰 없이 401 (기본 잠금)", async () => {
+    expect((await get(MEMBER, null)).status).toBe(401);
   });
 });

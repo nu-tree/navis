@@ -17,3 +17,4 @@ export * as promise from "./promise/api";
 export * as relay from "./relay/api";
 export * as member from "./member/index";
 export * as mcpAccess from "./mcp-access/index";
+export * as usage from "./usage/index";

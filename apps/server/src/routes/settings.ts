@@ -1,6 +1,6 @@
 import { Hono, type Context } from "hono";
 import type { AppEnv } from "../types";
-import { chat, settings } from "@navis/domain";
+import { chat, settings, usage } from "@navis/domain";
 import { isClaudeTokenError } from "@navis/domain/errors";
 import { claudeTokenInputSchema } from "@navis/validation";
 
@@ -35,6 +35,14 @@ export const settingsRoute = new Hono<AppEnv>()
 
     try {
       return c.json(await settings.claudeToken.set(c.get("userId"), parsed.data.token));
+    } catch (err) {
+      return failure(c, err);
+    }
+  })
+  // 요금제 한도 — 마지막으로 받은 값 그대로(usage/index.ts). 받은 적 없으면 null.
+  .get("/usage", async (c) => {
+    try {
+      return c.json(await usage.getLimits(c.get("userId")));
     } catch (err) {
       return failure(c, err);
     }

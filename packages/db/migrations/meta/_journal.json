@@ -99,6 +99,13 @@
       "when": 1792651837719,
       "tag": "0013_mcp_connections",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1792658757505,
+      "tag": "0014_usage_limits",
+      "breakpoints": true
     }
   ]
 }

@@ -13,6 +13,7 @@ import {
   boolean,
   integer,
   check,
+  real,
 } from "drizzle-orm/pg-core";
 
 // ── 저장 레이아웃 ────────────────────────────────────────────────────────────
@@ -286,4 +287,21 @@ export const oauthCodes = pgTable("oauth_codes", {
   // PKCE(S256). 코드를 가로채도 verifier 가 없으면 못 바꾼다.
   codeChallenge: text("code_challenge").notNull(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+});
+
+// ── 사용량 ──────────────────────────────────────────────────────────────────────────
+// 회원이 자기 Claude 요금제 한도를 얼마나 썼는지 보게 한다. 값은 Claude 서버가 계산한 것을 그대로 둔다 —
+// claude.ai · Claude Code 에서 쓴 것까지 들어간다. 나비스가 쓴 토큰만 따로 세지는 않는다.
+
+// 요금제 한도 — 회원마다 마지막으로 본 값 하나. 나비스로 대화할 때만 새로 들어온다(rate_limit_event).
+// 사용률은 0~1 비율이다(0.31 = claude.ai 화면의 31%). 값이 오지 않은 창은 null.
+export const usageLimits = pgTable("usage_limits", {
+  userId: uuid("user_id").primaryKey(),
+  fiveHourUtilization: real("five_hour_utilization"),
+  fiveHourResetsAt: timestamp("five_hour_resets_at", { withTimezone: true }),
+  sevenDayUtilization: real("seven_day_utilization"),
+  sevenDayResetsAt: timestamp("seven_day_resets_at", { withTimezone: true }),
+  // allowed | allowed_warning | rejected — 한도 임박 경고(4단계)에 쓴다.
+  status: text("status").notNull(),
+  observedAt: timestamp("observed_at", { withTimezone: true }).notNull(),
 });

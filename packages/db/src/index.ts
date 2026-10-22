@@ -17,4 +17,5 @@ export {
   mcpTokens,
   oauthClients,
   oauthCodes,
+  usageLimits,
 } from "./schema";
