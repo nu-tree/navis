@@ -60,7 +60,11 @@ export async function proxy(request: NextRequest) {
     return res;
   };
 
-  if (!signedIn && !PUBLIC_PATHS.has(path)) return redirectTo(LOGIN_PATH);
+  // 로그인하고 나면 원래 가려던 화면으로 돌려보낸다 — Claude 연결 동의 화면(/oauth/authorize)이 이 길로 온다.
+  if (!signedIn && !PUBLIC_PATHS.has(path)) {
+    const back = path === "/" ? "" : `?next=${encodeURIComponent(path + request.nextUrl.search)}`;
+    return redirectTo(LOGIN_PATH + back);
+  }
   if (signedIn && onLoginPage) return redirectTo("/");
 
   return response;
@@ -74,7 +78,8 @@ export const config = {
   // 여기서 리다이렉트하면 fetch 호출자가 HTML 을 받아 파싱이 깨진다.
   //
   // 설치형 앱 파일(manifest · 아이콘 · 서비스 워커)도 제외한다 — 브라우저가 쿠키 없이 받는다(app/manifest.ts).
+  // `/.well-known/*`(MCP 인가 메타데이터)도 제외한다 — Claude 가 로그인 없이 읽는다.
   matcher: [
-    "/((?!api|_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|manifest.webmanifest|sw.js|icons/).*)",
+    "/((?!api|\\.well-known|_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|manifest.webmanifest|sw.js|icons/).*)",
   ],
 };

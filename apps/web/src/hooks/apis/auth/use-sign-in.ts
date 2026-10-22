@@ -6,6 +6,9 @@ import { browserClient, supabaseEnv } from "@/lib/supabase";
 
 type SignInInput = { email: string; password: string };
 
+/** 다른 사이트로 보내지 않는다 — next 는 이 앱 안의 경로만(열린 리다이렉트 방지, auth/confirm 과 같은 규칙). */
+const safeNext = (raw: string | undefined) => (raw && raw.startsWith("/") && !raw.startsWith("//") ? raw : "/");
+
 /**
  * 이메일·비밀번호 로그인.
  *
@@ -13,7 +16,7 @@ type SignInInput = { email: string; password: string };
  *   전부 /api/* (BFF)를 지난다 — 브라우저가 DB 를 직접 읽기 시작하면 apps/server 가
  *   무의미해지고 행 수준 보안을 새로 설계해야 한다(헌장 원칙 II).
  */
-export const useSignIn = () => {
+export const useSignIn = (next?: string) => {
   const router = useRouter();
 
   return useMutation({
@@ -35,7 +38,8 @@ export const useSignIn = () => {
     },
     onSuccess: () => {
       // replace 로 옮긴다 — 뒤로가기로 로그인 화면에 돌아오지 않게.
-      router.replace("/");
+      // 가려던 화면이 있으면 그리로(예: Claude 연결 동의 화면). typedRoutes 가 모르는 문자열이라 단언한다.
+      router.replace(safeNext(next) as "/");
       router.refresh();
     },
     // 실패 문구는 폼 안에 띄운다(토스트가 아니라) — 입력을 고치는 자리 바로 위에 있어야 한다.

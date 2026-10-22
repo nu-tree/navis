@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AiConnectSection } from "@/features/connect/ai-connect-section";
 import { ClaudeTokenForm } from "./claude-token-form";
 import { NotificationSettings } from "./notification-settings";
 
-/** 설정 화면 — Claude 연결 · 알림. 화면 상한은 채팅 · 기억 · 설정 셋이다(SC-010). */
+/** 설정 화면 — Claude 연결 · AI 앱 연결 · 알림. 화면 상한은 채팅 · 기억 · 설정 셋이다(SC-010). */
 export const SettingsScreen = () => {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -23,6 +24,7 @@ export const SettingsScreen = () => {
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-2xl space-y-4 px-4 py-6">
           <ClaudeTokenForm />
+          <AiConnectSection />
           <NotificationSettings />
         </div>
       </div>

@@ -16,5 +16,5 @@ export const connectionsRoute = new Hono<AppEnv>()
   })
   .delete("/:id", async (c) => {
     const removed = await mcpAccess.revoke(c.get("userId"), c.req.param("id")).catch(() => false);
-    return removed ? c.body(null, 204) : c.json({ error: "연결을 찾을 수 없습니다." }, 404);
+    return removed ? c.json({ id: c.req.param("id") }) : c.json({ error: "연결을 찾을 수 없습니다." }, 404);
   });

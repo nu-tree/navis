@@ -72,6 +72,15 @@ export const tourSteps = ({ tokenRegistered }: { tokenRegistered: boolean }): Dr
     },
   },
   {
+    popover: {
+      title: "Claude 에서도 내 나비스를 꺼내 써요 🔌",
+      description:
+        "claude.ai · Claude 데스크톱 · 휴대폰 앱 · Claude Code 에 나비스를 연결하면, 거기서 일하다가도 " +
+        "<b>내 기억을 찾아보고 정한 것을 바로 남겨요</b>. 어디서 말하든 기억은 한곳에 쌓여요.<br/><br/>" +
+        "설정 → <b>AI 앱 연결</b>에서 주소 하나를 붙여 넣고 <b>허용</b>만 누르면 돼요. 터미널은 필요 없어요.",
+    },
+  },
+  {
     element: at("help"),
     popover: {
       title: "이 안내는 언제든 다시",

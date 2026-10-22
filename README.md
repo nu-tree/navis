@@ -78,6 +78,19 @@ Claude 토큰은 환경변수가 아니다 — 웹의 설정 화면에서 회원
 건다. 관리자의 토큰으로 돌고, 관리자에게는 전함 · 실패만 돌아온다 — 받는 회원의 기억이나 대화는 보이지 않는다.
 라우트는 `/relays`(관리자만), 에이전트 도구는 `relay`(관리자 대화 턴) · `relay_run`(전하기 턴)이다.
 
+## AI 앱 연결 (외부 MCP)
+
+회원은 설정 → **AI 앱 연결**에서 자기 나비스를 claude.ai · Claude 데스크톱/휴대폰 · Claude Code 에 붙인다.
+주소는 모두 같고(`https://<도메인>/api/mcp`), 누구의 기억인지는 연결할 때의 로그인(OAuth 동의 화면 `/oauth/authorize`)이
+정한다. 로그인 창을 못 띄우는 앱은 같은 화면에서 토큰을 직접 발급해 헤더(`Authorization: Bearer navis_…`)로 넣는다.
+연결은 회원마다 목록으로 보이고 언제든 끊을 수 있다.
+
+- 탐색: `/.well-known/oauth-protected-resource` · `/.well-known/oauth-authorization-server` (web)
+- 등록 · 교환: `/api/oauth/register` · `/api/oauth/token` (web → server `/oauth/*`)
+- 토큰 · 코드는 해시만 저장한다(`mcp_tokens` · `oauth_codes`). 만료 없음 — 끊기로 끝난다
+- 바깥 주소는 요청의 Host 로 정한다. 도메인이 여럿이면 web 에 `NAVIS_PUBLIC_URL` 로 고정한다
+- `NAVIS_MCP_TOKEN`(선택)은 예전부터 쓰던 관리자 연결로 남는다
+
 ## 스키마 변경
 
 ```bash

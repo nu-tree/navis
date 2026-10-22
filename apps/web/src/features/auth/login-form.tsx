@@ -9,8 +9,9 @@ import { AuthField } from "./auth-field";
 import { PasswordInput } from "./password-input";
 import { useSignIn } from "@/hooks/apis/auth/use-sign-in";
 
-export const LoginForm = () => {
-  const { mutate: signIn, isPending: pending, error: signInError } = useSignIn();
+/** next — 로그인 뒤 돌아갈 화면. proxy.ts 가 붙인다. */
+export const LoginForm = ({ next }: Readonly<{ next?: string }>) => {
+  const { mutate: signIn, isPending: pending, error: signInError } = useSignIn(next);
   const error = signInError?.message ?? null;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

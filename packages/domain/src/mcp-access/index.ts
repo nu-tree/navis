@@ -153,7 +153,15 @@ const findClient = async (id: string) =>
 export async function clientInfo(id: string): Promise<OAuthClientInfo | null> {
   const client = await findClient(id);
   if (!client) return null;
-  const hosts = [...new Set(client.redirectUris.map((u) => new URL(u).host))];
+  // loopback 은 포트를 빼고 보인다 — Claude Code 는 연결할 때마다 포트가 달라 숫자가 뜻이 없다.
+  const hosts = [
+    ...new Set(
+      client.redirectUris.map((u) => {
+        const url = new URL(u);
+        return LOOPBACK.has(url.hostname) ? url.hostname : url.host;
+      }),
+    ),
+  ];
   return { id: client.id, name: client.name, redirectHosts: hosts };
 }
 

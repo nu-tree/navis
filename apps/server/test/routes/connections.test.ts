@@ -45,8 +45,8 @@ describe("/connections", () => {
     expect(issue).toHaveBeenCalledWith(MEMBER, "회사 PC");
   });
 
-  it("끊기 — 자기 것은 204, 아니면 404", async () => {
-    expect((await call(`/connections/${conn.id}`, { method: "DELETE" })).status).toBe(204);
+  it("끊기 — 자기 것은 200, 아니면 404", async () => {
+    expect((await call(`/connections/${conn.id}`, { method: "DELETE" })).status).toBe(200);
     expect((await call("/connections/00000000-0000-4000-8000-0000000000ff", { method: "DELETE" })).status).toBe(404);
   });
 });

@@ -1,6 +1,7 @@
 import { apiServer } from "@/lib/api-server";
+import { publicOrigin } from "@/lib/public-origin";
 
-// 외부 MCP 중계. Claude Code → (여기) → apps/server /mcp.
+// 외부 MCP 중계. Claude Code · claude.ai · Claude 데스크톱 → (여기) → apps/server /mcp.
 //
 // ★ 여기는 BFF 가 아니다. 로그인 세션을 보지 않고, web 이 쥔 NAVIS_API_TOKEN 도 붙이지
 //   않는다. 클라이언트가 보낸 Authorization(MCP 토큰)을 **그대로** 넘기고 검증은 server 가
@@ -37,6 +38,14 @@ async function relay(request: Request): Promise<Response> {
   for (const name of FORWARD_RESPONSE_HEADERS) {
     const value = upstream.headers.get(name);
     if (value) responseHeaders.set(name, value);
+  }
+  // 토큰이 없거나 끊긴 연결이면 어디서 로그인하는지 알려준다(RFC 9728). Claude 는 이걸 보고 OAuth 를 시작한다 —
+  // 회원은 주소만 붙여 넣으면 된다. server 는 바깥 주소를 모르므로 여기서 채운다.
+  if (upstream.status === 401) {
+    responseHeaders.set(
+      "www-authenticate",
+      `Bearer resource_metadata="${publicOrigin(request)}/.well-known/oauth-protected-resource/api/mcp"`,
+    );
   }
   return new Response(upstream.body, { status: upstream.status, headers: responseHeaders });
 }
