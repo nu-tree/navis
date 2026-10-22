@@ -38,7 +38,7 @@ export const NotificationSettings = () => {
   };
 
   return (
-    <section data-tour="settings-notify" className="space-y-4 rounded-2xl border border-border bg-card/40 p-5">
+    <section className="space-y-4 rounded-2xl border border-border bg-card/40 p-5">
       <div className="space-y-1">
         <h2 className="font-semibold">알림</h2>
         <p className="text-sm text-muted-foreground">

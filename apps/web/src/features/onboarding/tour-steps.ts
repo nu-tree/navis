@@ -104,7 +104,8 @@ export const settingsTourSteps = ({ tokenRegistered }: { tokenRegistered: boolea
       ? {
           title: "① Claude 연결 ✓",
           description:
-            "나비스는 <b>내 Claude 구독</b>으로 답해요. 이미 연결돼 있어요 — 토큰이 만료되면 여기서 새로 붙여 넣으면 돼요.",
+            "나비스는 <b>내 Claude 구독</b>으로 답해요. 이미 연결돼 있어요 — 토큰이 만료되면 여기서 새로 붙여 넣으면 돼요. " +
+            "바로 아래 <b>Claude 사용량</b>에서 요금제 한도를 얼마나 썼는지도 볼 수 있어요.",
           side: "bottom",
           align: "start",
         }
@@ -119,24 +120,24 @@ export const settingsTourSteps = ({ tokenRegistered }: { tokenRegistered: boolea
         },
   },
   {
-    element: at("settings-connect"),
+    element: at("settings-tab-connect"),
     popover: {
-      title: "② Claude 에서도 내 나비스를 🔌",
+      title: "② AI 앱 연결 — Claude 에서도 내 나비스를 🔌",
       description:
         "claude.ai · Claude 데스크톱 · 휴대폰 앱 · Claude Code 에 나비스를 붙이면, 거기서 일하다가도 " +
         "<b>내 기억을 찾아보고 정한 것을 바로 남겨요</b>. 어디서 말하든 기억은 한곳에 쌓여요.<br/><br/>" +
-        "탭에서 쓰는 앱을 고르고 <b>주소 하나를 붙여 넣은 뒤 허용</b>만 누르면 돼요. 터미널은 필요 없어요. 연결한 앱은 여기 목록에 보이고 언제든 끊을 수 있어요.",
-      side: "top",
+        "이 탭에서 쓰는 앱을 고르고 <b>주소 하나를 붙여 넣은 뒤 허용</b>만 누르면 돼요. 터미널은 필요 없어요. 연결한 앱은 거기 목록에 보이고 언제든 끊을 수 있어요.",
+      side: "bottom",
       align: "start",
     },
   },
   {
-    element: at("settings-notify"),
+    element: at("settings-tab-notify"),
     popover: {
-      title: "③ 답 도착 알림",
+      title: "③ 알림 — 답 도착 알림",
       description:
-        "켜 두면 나비스 창을 닫아도 답이 오거나 <b>약속한 때가 되면</b> 알려 드려요. 기기마다 따로 켜요.",
-      side: "top",
+        "이 탭에서 켜 두면 나비스 창을 닫아도 답이 오거나 <b>약속한 때가 되면</b> 알려 드려요. 기기마다 따로 켜요.",
+      side: "bottom",
       align: "start",
     },
   },

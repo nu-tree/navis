@@ -49,7 +49,7 @@ export const AiConnectSection = () => {
   const empty = !isLoading && !error && (connections?.length ?? 0) === 0;
 
   return (
-    <section id="connect" data-tour="settings-connect" className="scroll-mt-4 space-y-4 rounded-2xl border border-border bg-card/40 p-5">
+    <section id="connect" className="scroll-mt-4 space-y-4 rounded-2xl border border-border bg-card/40 p-5">
       <div className="space-y-1">
         <h2 className="font-semibold">AI 앱 연결</h2>
         <p className="text-sm text-muted-foreground">
