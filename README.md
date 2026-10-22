@@ -62,8 +62,8 @@ pnpm --filter @navis/server dev   # 서버만 → localhost:4000
 | `VOYAGE_API_KEY` | 기억 임베딩 |
 | `API_TOKEN` | web BFF → server 서버 토큰 |
 | `NAVIS_SETTINGS_KEY` | Claude 토큰 암호화 키(32바이트 base64). 바꾸면 저장된 토큰을 못 푼다 |
-| `NAVIS_OWNER_ID` | 관리자 회원 uuid. 외부 MCP 기억 · 전환 전 데이터의 주인 |
-| `NAVIS_MCP_TOKEN` | (선택) 외부 MCP(Claude Code) 토큰. 없으면 `/mcp` 가 닫힌다 |
+| `NAVIS_OWNER_ID` | 관리자 회원 uuid. `NAVIS_MCP_TOKEN` 기억 · 전환 전 데이터의 주인 |
+| `NAVIS_MCP_TOKEN` | (선택) 관리자의 외부 MCP 토큰. 회원은 설정 화면에서 자기 연결을 만든다 |
 
 Claude 토큰은 환경변수가 아니다 — 웹의 설정 화면에서 회원마다 등록한다.
 

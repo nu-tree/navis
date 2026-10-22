@@ -92,6 +92,13 @@
       "when": 1792030363154,
       "tag": "0012_chilly_ego",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1792651837719,
+      "tag": "0013_mcp_connections",
+      "breakpoints": true
     }
   ]
 }

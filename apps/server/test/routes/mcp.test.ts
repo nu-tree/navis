@@ -2,6 +2,7 @@
 //   1) /mcp 는 NAVIS_MCP_TOKEN 으로만 열린다 — API_TOKEN 으로는 401
 //   2) MCP 토큰으로 다른 라우트를 부를 수 없다 — 두 자격이 서로의 범위로 새지 않는다
 //   3) 노출하는 도구는 navis 대화와 같은 기억 도구다
+//   4) 회원이 발급받은 토큰으로도 열리고, 끊으면 바로 닫힌다(specs/002 FR-113 개정)
 //
 // domain 은 실물을 쓴다. tools/list 는 DB 를 건드리지 않는다(db 클라이언트는 첫 질의에서 연결).
 import { beforeAll, describe, expect, it, vi } from "vitest";
@@ -109,5 +110,29 @@ describe("/mcp GET · DELETE", () => {
   it("GET 도 MCP 토큰 없이는 401 — 405 가 인증보다 먼저 새지 않는다", async () => {
     const res = await app.fetch(new Request("http://localhost/mcp", { method: "GET" }));
     expect(res.status).toBe(401);
+  });
+});
+
+// 회원 토큰은 실제 DB 로 본다 — 해시 조회가 맞는지는 mock 으로 알 수 없다.
+const describeDb = process.env.DATABASE_URL ? describe : describe.skip;
+describeDb("/mcp 회원 토큰 (실제 DB)", () => {
+  const MEMBER = "00000000-0000-4000-8000-000000000002";
+
+  it("발급받은 토큰으로 열리고, 끊으면 401", async () => {
+    const { mcpAccess } = await import("@navis/domain");
+    const { token, connection } = await mcpAccess.issue(MEMBER, "test");
+    try {
+      expect((await rpc(listTools, token)).status).toBe(200);
+      await mcpAccess.revoke(MEMBER, connection.id);
+      expect((await rpc(listTools, token)).status).toBe(401);
+    } finally {
+      await mcpAccess.revoke(MEMBER, connection.id);
+    }
+  });
+
+  it("모르는 토큰은 401 + WWW-Authenticate — Claude 가 로그인을 시작하는 신호", async () => {
+    const res = await rpc(listTools, "navis_unknown");
+    expect(res.status).toBe(401);
+    expect(res.headers.get("www-authenticate")).toMatch(/^Bearer/);
   });
 });

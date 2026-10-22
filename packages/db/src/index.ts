@@ -14,4 +14,7 @@ export {
   promises,
   promiseRuns,
   relays,
+  mcpTokens,
+  oauthClients,
+  oauthCodes,
 } from "./schema";

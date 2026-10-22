@@ -241,3 +241,49 @@ export const relays = pgTable(
     index("relays_sender_created_idx").on(t.senderId, t.createdAt.desc()),
   ],
 );
+
+// ── 외부 MCP 연결(specs/002 FR-113 개정) ────────────────────────────────────────────────
+// 회원이 자기 나비스를 Claude Code · claude.ai · Claude 데스크톱에 붙이는 길.
+// 예전엔 환경변수 토큰 하나(NAVIS_MCP_TOKEN)가 관리자에게만 열려 있었다 — 그 토큰은 관리자 것으로 남고,
+// 회원은 아래 토큰으로 자기 기억에만 닿는다.
+
+// 연결 하나 = 토큰 하나. **원문은 저장하지 않는다** — sha256 해시만 둔다. DB 가 새도 연결을 빼앗기지 않고,
+// 원문은 발급 응답에서 한 번만 보인다. 끊기 = 행 삭제(즉시 무효).
+export const mcpTokens = pgTable(
+  "mcp_tokens",
+  {
+    id: uuid("id").primaryKey(),
+    userId: uuid("user_id").notNull(),
+    tokenHash: text("token_hash").notNull(),
+    // 화면에 보일 이름 — OAuth 는 클라이언트가 밝힌 이름("Claude"), 직접 발급은 회원이 붙인 이름.
+    label: text("label").notNull(),
+    // OAuth 로 받은 연결이면 그 클라이언트. 직접 발급(복사해 붙이는 토큰)은 null.
+    clientId: text("client_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("mcp_tokens_hash_idx").on(t.tokenHash),
+    index("mcp_tokens_user_idx").on(t.userId),
+  ],
+);
+
+// OAuth 클라이언트 — MCP 규격의 동적 등록(RFC 7591)으로 Claude 가 스스로 만든다. 회원의 것이 아니다.
+// 누구나 등록할 수 있으므로 등록만으로는 아무것도 열리지 않는다 — 회원이 동의 화면에서 허용해야 토큰이 나간다.
+export const oauthClients = pgTable("oauth_clients", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  redirectUris: text("redirect_uris").array().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// 인가 코드 — 동의 직후 발급, 10분 안에 한 번만 바꿀 수 있다(교환 때 지운다). 원문 대신 해시.
+export const oauthCodes = pgTable("oauth_codes", {
+  codeHash: text("code_hash").primaryKey(),
+  clientId: text("client_id").notNull(),
+  userId: uuid("user_id").notNull(),
+  redirectUri: text("redirect_uri").notNull(),
+  // PKCE(S256). 코드를 가로채도 verifier 가 없으면 못 바꾼다.
+  codeChallenge: text("code_challenge").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+});

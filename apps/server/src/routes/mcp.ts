@@ -3,7 +3,7 @@ import type { AppEnv } from "../types";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { memory } from "@navis/domain";
 
-// 외부 MCP — Claude Code 가 navis 의 기억을 읽고 쓰는 통로(헌장 보안 절).
+// 외부 MCP — Claude Code · claude.ai · Claude 데스크톱이 회원의 기억을 읽고 쓰는 통로(헌장 보안 절).
 //
 // navis 대화와 **같은 도구 정의**를 쓴다. createMemoryMcpServer 가 돌려주는 instance 가
 // MCP SDK 의 McpServer 라서 HTTP 전송에 그대로 붙일 수 있다 — 설명이 두 벌로 갈라지지 않는다.
@@ -22,7 +22,7 @@ export const mcpRoute = new Hono<AppEnv>()
   )
   .post("/", async (c) => {
     // 집계는 대화 턴의 done.saved 용이다. 여기서는 쓰지 않는다.
-    // 회원은 app.ts 가 관리자로 고정했다 — 외부 MCP 는 관리자 전용이다(specs/002 FR-113).
+    // 회원은 app.ts 가 MCP 토큰으로 정했다 — 토큰 주인의 기억에만 닿는다(specs/002 FR-113 개정).
     const { instance } = memory.createMemoryMcpServer({
       userId: c.get("userId"),
       tally: { saved: 0 },

@@ -24,8 +24,9 @@ export const env = {
    */
   voyageApiKey: required("VOYAGE_API_KEY"),
   /**
-   * 외부 MCP(`/mcp`, Claude Code)의 Bearer 토큰. API_TOKEN 과 다른 값이어야 한다.
-   * 없으면 `/mcp` 는 닫힌다(404) — MCP 를 쓰지 않는 환경을 막지 않는다.
+   * (선택) 관리자의 외부 MCP Bearer 토큰. API_TOKEN 과 다른 값이어야 한다.
+   * 회원은 설정 화면에서 자기 연결을 만든다(mcp_tokens) — 이 값은 그 전부터 쓰던 관리자 연결을 살려두는 용도다.
+   * 없어도 `/mcp` 는 열린다.
    */
   mcpToken: process.env.NAVIS_MCP_TOKEN || null,
   /**
@@ -41,7 +42,7 @@ export const env = {
   settingsKey: required("NAVIS_SETTINGS_KEY"),
   /**
    * 관리자(Owner) 회원 uuid — Supabase 대시보드 → Users 의 UID(specs/002 research R2).
-   * 외부 MCP(`/mcp`)로 들어오는 기억과 다중 사용자 전환 전의 기존 데이터가 이 회원의 것이다.
+   * NAVIS_MCP_TOKEN 으로 들어오는 기억과 다중 사용자 전환 전의 기존 데이터가 이 회원의 것이다.
    * 모르면 MCP 기억을 아무 계정에나 넣게 되므로 부팅을 막는다.
    */
   ownerId: required("NAVIS_OWNER_ID"),
