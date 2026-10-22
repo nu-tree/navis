@@ -10,9 +10,7 @@ import { SettingsTour } from "@/features/onboarding/settings-tour";
 import { ClaudeTokenForm } from "./claude-token-form";
 import { NotificationSettings } from "./notification-settings";
 import { PlanUsageCard } from "./plan-usage-card";
-
-export const SETTINGS_TABS = ["claude", "connect", "notify"] as const;
-export type SettingsTab = (typeof SETTINGS_TABS)[number];
+import type { SettingsTab } from "./settings-tabs";
 
 const TABS: { id: SettingsTab; label: string; icon: LucideIcon }[] = [
   { id: "claude", label: "Claude", icon: KeyRound },

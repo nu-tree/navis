@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { SETTINGS_TABS, SettingsScreen, type SettingsTab } from "@/features/settings/settings-screen";
+import { SettingsScreen } from "@/features/settings/settings-screen";
+import { SETTINGS_TABS, type SettingsTab } from "@/features/settings/settings-tabs";
 
 export const metadata: Metadata = { title: "설정 · 나비스" };
 
