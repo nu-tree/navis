@@ -1,7 +1,7 @@
 // specs/004 T011 — 턴 종류별로 열리는 MCP 서버 · 허용 도구(순수 조립).
 // 전하기 턴이 약속을 만들거나, 약속 턴이 전하기를 할 수 있으면 권한이 새는 것이다(헌장 보안 절).
 import { describe, expect, it } from "vitest";
-import { buildTurnTools } from "../../src/chat/index";
+import { buildTurnTools, turnBudget } from "../../src/chat/index";
 
 const tally = { saved: 0 };
 const USER = "00000000-0000-4000-8000-000000000001";
@@ -75,5 +75,18 @@ describe("buildTurnTools()", () => {
     ]) {
       expect(buildTurnTools(input, tally).allowedTools).toContain("WebSearch");
     }
+  });
+});
+
+// 약속 턴은 아무도 기다리지 않는다 — 찾아보는 약속(뉴스 정리 등)이 검색 몇 번에 바닥나지 않게 연다.
+describe("turnBudget()", () => {
+  it("대화 · 전하기 턴은 응답성 우선 — medium · 8", () => {
+    expect(turnBudget({})).toEqual({ effort: "medium", maxTurns: 8 });
+  });
+
+  it("약속 턴은 더 깊게 · 더 오래 — high · 24, 조사 지침이 붙는다", () => {
+    const promiseRun = { promiseId: "p", label: "l", state: {} };
+    expect(turnBudget({ promiseRun })).toEqual({ effort: "high", maxTurns: 24 });
+    expect(buildTurnTools({ userId: USER, promiseRun }, tally).systemPrompt).toContain("### 찾아보는 약속");
   });
 });
