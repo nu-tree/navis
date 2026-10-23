@@ -14,6 +14,7 @@ export {
   promises,
   promiseRuns,
   relays,
+  feedbacks,
   mcpTokens,
   oauthClients,
   oauthCodes,

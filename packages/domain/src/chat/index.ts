@@ -47,6 +47,7 @@ import {
   createRelayRunMcpServer,
   type RelayRunState,
 } from "../relay/mcp";
+import { ALLOWED_FEEDBACK_TOOLS, FEEDBACK_SERVER_NAME, createFeedbackMcpServer } from "../feedback/mcp";
 
 // 성격(시스템 프롬프트)은 코드의 기본값을 쓴다. 화면에서 바꾸지 않는다(FR-057).
 const SYSTEM_PROMPT = [
@@ -149,6 +150,19 @@ const RELAY_PROMPT = [
   "사용자가 다른 사람에게 무언가를 전해 달라고 하면('지민한테 회의 11시로 바뀌었다고 전해줘') relay 의 relay 를 부른다.",
   "받는 사람을 정할 수 없다는 답이 오면 후보를 보여 주고 누구인지 되묻는다. 무엇을 전할지 없으면 먼저 묻는다.",
   "맡긴 뒤에는 누구에게 무엇을 맡겼는지 한 줄로 확인한다. 받는 사람의 답은 너에게 돌아오지 않는다.",
+].join("\n");
+
+// 회원의 대화 턴에만 덧붙인다. 관리자 턴에는 없다 — 자기에게 보낼 일이 없다.
+const FEEDBACK_PROMPT = [
+  "",
+  "## 피드백",
+  "",
+  "사용자가 나비스 자체에 대한 개선점 · 불편 · 바라는 기능을 말하면('이거 불편해', '이런 기능 있으면 좋겠다',",
+  "'관리자한테 전해줘') 관리자에게 보낼 수 있다.",
+  "- 먼저 보낼 내용을 정리해 보여 주고('관리자에게 이렇게 전할게요: …') 동의를 받는다. **동의 없이 send 를 부르지 않는다.**",
+  "- 사용자가 명시적으로 전해 달라고 하지 않았으면 '관리자에게 전할까요?'라고 한 번만 묻는다. 거절하면 다시 묻지 않는다.",
+  "- 관리자는 피드백 화면에서 보낸 사람의 이메일과 함께 본다. 답이 바로 오지는 않는다.",
+  "- 나비스와 상관없는 불평(일 · 날씨 · 다른 사람)은 피드백이 아니다.",
 ].join("\n");
 
 // 전하기 턴에만 덧붙인다(specs/004 contracts/relay-tools.md).
@@ -265,7 +279,7 @@ const TOKEN_ERRORS = new Set(["authentication_failed", "oauth_org_not_allowed"])
 /**
  * 턴의 종류에 따라 붙는 시스템 프롬프트 · MCP 서버 · 허용 도구. 순수하게 조립만 한다(테스트가 이것을 본다).
  *
- * - 대화 턴: 기억 + 약속 관리. 관리자면(canRelay) 전하기 맡기기도.
+ * - 대화 턴: 기억 + 약속 관리. 관리자면(canRelay) 전하기 맡기기도, 회원이면 피드백 보내기도.
  * - 약속 턴: 기억 + 약속 실행(notify …). 약속 관리 도구는 열지 않는다 — 약속이 약속을 낳으면 끝나지 않는다.
  * - 전하기 턴: 기억(받는 회원) + deliver. 약속 도구는 열지 않는다(specs/004 research R7).
  *
@@ -302,21 +316,22 @@ export function buildTurnTools(
       allowedTools: allowed(ALLOWED_PROMISE_RUN_TOOLS),
     };
   }
-  // 대화 턴. 관리자면 전하기 도구가 하나 더 열린다 — 회원 턴에는 도구도 프롬프트 절도 없다(FR-002).
-  const relay: Options["mcpServers"] = input.canRelay
+  // 대화 턴. 관리자면 전하기 도구가, 회원이면 피드백 도구가 하나 더 열린다 — 회원 턴에는 전하기
+  // 도구도 프롬프트 절도 없다(FR-002).
+  const extra: Options["mcpServers"] = input.canRelay
     ? { [RELAY_SERVER_NAME]: createRelayMcpServer({ senderId: input.userId }) }
-    : {};
+    : { [FEEDBACK_SERVER_NAME]: createFeedbackMcpServer({ senderId: input.userId }) };
   return {
-    systemPrompt: input.canRelay ? SYSTEM_PROMPT + RELAY_PROMPT : SYSTEM_PROMPT,
+    systemPrompt: SYSTEM_PROMPT + (input.canRelay ? RELAY_PROMPT : FEEDBACK_PROMPT),
     mcpServers: {
       ...memory,
       [PROMISE_SERVER_NAME]: createPromiseMcpServer({
         userId: input.userId,
         conversationId: input.conversationId ?? null,
       }),
-      ...relay,
+      ...extra,
     },
-    allowedTools: allowed([...ALLOWED_PROMISE_TOOLS, ...(input.canRelay ? ALLOWED_RELAY_TOOLS : [])]),
+    allowedTools: allowed([...ALLOWED_PROMISE_TOOLS, ...(input.canRelay ? ALLOWED_RELAY_TOOLS : ALLOWED_FEEDBACK_TOOLS)]),
   };
 }
 

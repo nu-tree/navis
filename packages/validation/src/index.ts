@@ -11,4 +11,5 @@ export * from "./settings";
 export * from "./push";
 export * from "./promise";
 export * from "./relay";
+export * from "./feedback";
 export * from "./mcp";

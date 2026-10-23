@@ -14,6 +14,15 @@ describe("renderGuide", () => {
     expect(renderGuide({ owner: true })).toContain("전하기");
   });
 
+  it("피드백 — 회원에게는 보내기, 관리자에게는 보기만", () => {
+    const member = renderGuide({ owner: false });
+    expect(member).toContain("나비스 개선점을 관리자에게");
+    expect(member).not.toContain("피드백 보기");
+    const owner = renderGuide({ owner: true });
+    expect(owner).toContain("피드백 보기");
+    expect(owner).not.toContain("나비스 개선점을 관리자에게");
+  });
+
   it("주제로 좁힌다 — MCP 를 물으면 AI 앱 연결만", () => {
     const text = renderGuide({ owner: false, topic: "MCP" });
     expect(text).toContain("AI 앱 연결");

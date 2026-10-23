@@ -11,10 +11,12 @@ const prefixes = (t: ReturnType<typeof buildTurnTools>) =>
   [...new Set(t.allowedTools.filter((n) => n.startsWith("mcp__")).map((n) => n.split("__")[1]))].sort();
 
 describe("buildTurnTools()", () => {
-  it("대화 턴 — 기억 + 약속 관리", () => {
+  it("회원 대화 턴 — 기억 + 약속 관리 + 피드백", () => {
     const t = buildTurnTools({ userId: USER, conversationId: "c" }, tally);
-    expect(servers(t)).toEqual(["memory", "promise"]);
-    expect(prefixes(t)).toEqual(["memory", "promise"]);
+    expect(servers(t)).toEqual(["feedback", "memory", "promise"]);
+    expect(prefixes(t)).toEqual(["feedback", "memory", "promise"]);
+    expect(t.allowedTools).toContain("mcp__feedback__send");
+    expect(t.systemPrompt).toContain("## 피드백");
     expect(t.systemPrompt).not.toContain("## 전하기");
   });
 
@@ -25,6 +27,7 @@ describe("buildTurnTools()", () => {
     );
     expect(servers(t)).toEqual(["memory", "promise_run"]);
     expect(prefixes(t)).toEqual(["memory", "promise_run"]);
+    expect(t.allowedTools).not.toContain("mcp__feedback__send");
   });
 
   it("전하기 턴 — 기억 + deliver 뿐, 약속 도구 없음", () => {
@@ -41,6 +44,9 @@ describe("buildTurnTools()", () => {
     const t = buildTurnTools({ userId: USER, conversationId: "c", canRelay: true }, tally);
     expect(servers(t)).toEqual(["memory", "promise", "relay"]);
     expect(t.allowedTools).toContain("mcp__relay__relay");
+    // 관리자는 자기에게 피드백을 보낼 일이 없다.
+    expect(t.allowedTools).not.toContain("mcp__feedback__send");
+    expect(t.systemPrompt).not.toContain("## 피드백");
     expect(t.systemPrompt).toContain("## 전하기");
   });
 

@@ -15,6 +15,7 @@ import { oauthRoute } from "./routes/oauth";
 import { memoriesRoute } from "./routes/memories";
 import { pushRoute } from "./routes/push";
 import { relaysRoute } from "./routes/relays";
+import { feedbackRoute } from "./routes/feedback";
 import { settingsRoute } from "./routes/settings";
 
 // Hono 앱 조립. index.ts 와 분리해 테스트에서 app.fetch 를 직접 부를 수 있게 한다.
@@ -32,6 +33,7 @@ import { settingsRoute } from "./routes/settings";
 //   /connections     — 회원의 MCP 연결 목록 · 직접 발급 · 끊기
 //   /oauth           — MCP 인가(로그인으로 연결). web 의 .well-known · 동의 화면이 부른다
 //   /internal/tick   — 약속 실행 (Cloud Scheduler 전용, specs/003). web /api/internal/tick 을 거친다
+//   /feedback        — 회원 피드백 보기 · 처리 표시 (관리자만)
 export const app = new Hono<AppEnv>();
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -133,6 +135,12 @@ app.use("/relays/*", async (c, next) => {
   return next();
 });
 
+// 피드백 보기는 관리자만 한다. 회원은 대화에서 보내기만 하고, 다른 회원의 피드백은 보이지 않는다.
+app.use("/feedback/*", async (c, next) => {
+  if (!isOwner(c.get("userId"))) return c.json({ error: "피드백은 관리자만 볼 수 있다." }, 403);
+  return next();
+});
+
 app.route("/health", health);
 app.route("/chat", chatRoute);
 app.route("/memories", memoriesRoute);
@@ -144,3 +152,4 @@ app.route("/settings", settingsRoute);
 app.route("/push", pushRoute);
 app.route("/internal", internalRoute);
 app.route("/relays", relaysRoute);
+app.route("/feedback", feedbackRoute);

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Brain, CircleHelp, Download, Ellipsis, LogOut, MessageCircleMore, Settings } from "lucide-react";
+import { Brain, CircleHelp, Download, Ellipsis, Inbox, LogOut, MessageCircleMore, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -76,6 +76,15 @@ export function NavisTopBar() {
                 <Link href="/relay">
                   <MessageCircleMore />
                   말 걸기
+                </Link>
+              </DropdownMenuItem>
+            ) : null}
+            {/* 관리자만 — 회원이 나비스에게 말한 개선점을 모아 본다. */}
+            {admin ? (
+              <DropdownMenuItem asChild>
+                <Link href="/feedback">
+                  <Inbox />
+                  피드백
                 </Link>
               </DropdownMenuItem>
             ) : null}

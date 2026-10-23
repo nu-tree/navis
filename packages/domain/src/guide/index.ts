@@ -17,6 +17,8 @@ export type Feature = {
   body: string[];
   /** 관리자에게만 있는 기능. 회원에게는 있는지도 말하지 않는다(specs/004 FR-002). */
   ownerOnly?: true;
+  /** 회원에게만 있는 기능(예: 관리자에게 피드백 보내기). 관리자에게는 보이지 않는다. */
+  memberOnly?: true;
 };
 
 export const FEATURES: readonly Feature[] = [
@@ -138,6 +140,24 @@ export const FEATURES: readonly Feature[] = [
     ],
   },
   {
+    id: "feedback",
+    title: "피드백 — 나비스 개선점을 관리자에게",
+    memberOnly: true,
+    body: [
+      "대화에서 '이거 불편해', '이런 기능 있으면 좋겠어', '관리자한테 전해줘'처럼 말하면 나비스가 내용을 정리해 보여 주고, 동의하면 관리자에게 보낸다.",
+      "관리자는 피드백 화면에서 보낸 사람의 이메일과 함께 본다. 답이 바로 오지는 않는다.",
+    ],
+  },
+  {
+    id: "feedback-inbox",
+    title: "피드백 보기 — 관리자 전용",
+    ownerOnly: true,
+    body: [
+      "회원이 대화에서 나비스에게 말한 개선점이 ⋯ → '피드백'에 최신순으로 쌓인다(보낸 사람 이메일 · 시각 · 내용). 대화방이나 알림으로는 오지 않는다.",
+      "다 본 것은 '처리함'을 체크해 둔다. 위쪽에 처리 안 한 개수가 보인다.",
+    ],
+  },
+  {
     id: "relay",
     title: "말 걸기(전하기) — 관리자 전용",
     ownerOnly: true,
@@ -151,10 +171,10 @@ export const FEATURES: readonly Feature[] = [
 /**
  * 안내서 본문. topic 을 주면 그 말이 나오는 기능만(이름 · 제목 · 본문), 없거나 맞는 것이 없으면 전체.
  * 본문까지 보는 이유: "설정에 뭐 있어?"처럼 화면 · 메뉴 이름으로 물으면 제목에는 없고 본문에만 있다.
- * 관리자가 아니면 관리자 전용 기능은 빼고, 빠졌다는 것도 적지 않는다.
+ * 관리자가 아니면 관리자 전용 기능은 빼고, 빠졌다는 것도 적지 않는다. 관리자에게는 회원 전용 기능을 뺀다.
  */
 export function renderGuide({ owner, topic }: { owner: boolean; topic?: string }): string {
-  const visible = FEATURES.filter((f) => owner || !f.ownerOnly);
+  const visible = FEATURES.filter((f) => (owner ? !f.memberOnly : !f.ownerOnly));
   const q = topic?.trim().toLowerCase();
   const matched = q
     ? visible.filter((f) => [f.id, f.title, ...f.body].some((text) => text.toLowerCase().includes(q)))

@@ -243,6 +243,24 @@ export const relays = pgTable(
   ],
 );
 
+// 피드백 — 회원이 나비스에게 말한 개선점 하나. 관리자가 ⋯ → '피드백' 화면에서만 본다.
+// 관리자 대화방에 메시지로 넣거나 알림을 보내지 않는다(2026-10-23 사용자 결정).
+// 외래 키를 걸지 않는다 — 회원은 다른 스키마의 테이블이다.
+export const feedbacks = pgTable(
+  "feedbacks",
+  {
+    id: uuid("id").primaryKey(),
+    senderId: uuid("sender_id").notNull(),
+    // 보낼 때의 표시(이메일 등). 화면이 매번 auth.users 를 다시 읽지 않게 남긴다.
+    senderLabel: text("sender_label").notNull(),
+    text: text("text").notNull(),
+    // 관리자가 처리했다고 표시한 때. null = 아직.
+    doneAt: timestamp("done_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("feedbacks_created_idx").on(t.createdAt.desc())],
+);
+
 // ── 외부 MCP 연결(specs/002 FR-113 개정) ────────────────────────────────────────────────
 // 회원이 자기 나비스를 Claude Code · claude.ai · Claude 데스크톱에 붙이는 길.
 // 예전엔 환경변수 토큰 하나(NAVIS_MCP_TOKEN)가 관리자에게만 열려 있었다 — 그 토큰은 관리자 것으로 남고,
