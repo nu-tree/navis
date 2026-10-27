@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { BookOpen, Brain, ChevronDown, Coins } from "lucide-react";
+import { BookOpen, Brain, ChevronDown, Coins, Trash2 } from "lucide-react";
 import type { Message, MessageUsage } from "@navis/validation";
 import { cn } from "cn";
+import { CopyButton } from "@/components/common/copy-button";
 import { CATEGORY_LABELS } from "@/features/memory/category";
 
-type Props = { message: Message };
+type Props = { message: Message; onRemove: () => void };
 
 /** 1234 → "1.2k". 천 아래는 그대로. */
 const formatTokens = (n: number) =>
@@ -21,21 +22,21 @@ const freshTokens = (u: MessageUsage) => u.input + u.cacheWrite + u.output;
 type Open = "memories" | "usage" | null;
 
 /**
- * 나비스 답 아래 한 줄 — 기억 저장 · 참고한 기억 · 쓴 토큰. 누르면 그 아래 내역이 펼쳐진다.
- * 셋 다 메시지가 들고 온 값으로만 판단한다. 이 기능 전의 메시지에는 참고 기억 · 토큰이 없어 그리지 않는다.
+ * 나비스 말풍선 아래 한 줄 — 복사 · 기억 저장 · 참고한 기억 · 쓴 토큰 · 삭제. 누르면 그 아래 내역이 펼쳐진다.
+ * 복사는 마크다운 원문 그대로(붙여 넣는 곳에서 서식이 살게). 버튼은 hover 없이 늘 보인다 — 터치 기기에는 hover 가 없다.
+ * 나머지는 메시지가 들고 온 값으로만 판단한다. 이 기능 전의 메시지에는 참고 기억 · 토큰이 없어 그리지 않는다.
  */
-export const MessageFooter = ({ message }: Readonly<Props>) => {
+export const MessageFooter = ({ message, onRemove }: Readonly<Props>) => {
   const [open, setOpen] = useState<Open>(null);
   const { saved, usage, memoriesUsed } = message;
-  if (!saved && !usage && !memoriesUsed) return null;
-
   const toggle = (which: Exclude<Open, null>) => setOpen((cur) => (cur === which ? null : which));
   const chip =
     "flex items-center gap-1 rounded-md px-1 -mx-1 hover:text-foreground focus-visible:text-foreground";
 
   return (
-    <div className="mt-2 text-xs text-muted-foreground">
+    <div className="mt-1 max-w-[85%] text-xs text-muted-foreground">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <CopyButton text={message.text} className="-ml-1.5 size-7 text-muted-foreground [&_svg]:size-3.5" />
         {saved ? (
           <span className="flex items-center gap-1.5">
             <Brain className="size-3.5" />
@@ -58,6 +59,11 @@ export const MessageFooter = ({ message }: Readonly<Props>) => {
             <ChevronDown className={cn("size-3 transition-transform", open === "usage" && "rotate-180")} />
           </button>
         ) : null}
+
+        {/* 맨 끝에 둔다 — 복사를 누르려다 지우지 않게 멀리. */}
+        <button type="button" aria-label="메시지 삭제" onClick={onRemove} className="ml-auto rounded-md p-1.5 hover:text-destructive focus-visible:text-destructive">
+          <Trash2 className="size-3.5" />
+        </button>
       </div>
 
       {open === "memories" && memoriesUsed ? (
