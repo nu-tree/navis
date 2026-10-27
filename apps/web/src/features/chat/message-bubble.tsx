@@ -1,8 +1,9 @@
-import { Brain, FileText, Trash2 } from "lucide-react";
+import { FileText, Trash2 } from "lucide-react";
 import type { Message } from "@navis/validation";
 import { cn } from "cn";
 import { formatBubbleTime } from "@/utils/chat-timeline";
 import { MarkdownText } from "./markdown-text";
+import { MessageFooter } from "./message-footer";
 
 type Props = {
   message: Message;
@@ -127,13 +128,8 @@ export const MessageBubble = ({ message, first = true, last = true, onRemove }: 
               <MarkdownText text={message.text} />
             </div>
 
-            {/* 이 턴에 기억이 남았을 때만. 메시지가 들고 온 값으로 판단한다 — 부모가 저장 여부를 알 필요가 없다. */}
-            {message.saved ? (
-              <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Brain className="size-3.5" />
-                기억에 남겼어요
-              </p>
-            ) : null}
+            {/* 기억 저장 · 참고한 기억 · 쓴 토큰. 메시지가 들고 온 값으로 판단한다 — 부모가 알 필요가 없다. */}
+            <MessageFooter message={message} />
           </div>
           {timeLabel}
           {removeButton}

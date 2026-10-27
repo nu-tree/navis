@@ -42,7 +42,7 @@ type MessageRow = typeof messages.$inferSelect;
  * relayId 는 저장만 하고 와이어로 내보내지 않는다(specs/004 research R8) — 받는 회원의 응답 JSON 에
  * 실리면 화면 표시가 없어도 관리자가 보냈다는 것이 드러난다. 내부 추적은 이 행과 relays 표로 충분하다.
  */
-type MessageMeta = Pick<Message, "toolsUsed" | "saved" | "origin" | "files"> & { relayId?: string };
+type MessageMeta = Pick<Message, "toolsUsed" | "saved" | "origin" | "files" | "usage" | "memoriesUsed"> & { relayId?: string };
 
 /** 행 → 와이어. meta 의 필드를 펼친다. */
 export const toMessage = (row: Pick<MessageRow, "id" | "role" | "text" | "meta" | "createdAt">): Message => {
@@ -56,6 +56,8 @@ export const toMessage = (row: Pick<MessageRow, "id" | "role" | "text" | "meta" 
     ...(meta.saved ? { saved: true } : {}),
     ...(meta.origin ? { origin: meta.origin } : {}),
     ...(meta.files?.length ? { files: meta.files } : {}),
+    ...(meta.usage ? { usage: meta.usage } : {}),
+    ...(meta.memoriesUsed?.total ? { memoriesUsed: meta.memoriesUsed } : {}),
   };
 };
 
@@ -69,6 +71,8 @@ export const toMeta = (m: MessageMeta): MessageMeta => ({
   ...(m.saved ? { saved: true } : {}),
   ...(m.origin ? { origin: m.origin } : {}),
   ...(m.relayId ? { relayId: m.relayId } : {}),
+  ...(m.usage ? { usage: m.usage } : {}),
+  ...(m.memoriesUsed?.total ? { memoriesUsed: m.memoriesUsed } : {}),
 });
 
 /**

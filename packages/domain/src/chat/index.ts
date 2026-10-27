@@ -14,7 +14,7 @@
 // 왕복하지 않는다 — 그게 첫 토큰 지연의 가장 큰 원인이었다.
 
 import { query, type Options, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
-import { DEFAULT_MODEL, type Model } from "@navis/validation";
+import { DEFAULT_MODEL, type MemoriesUsed, type MessageUsage, type Model } from "@navis/validation";
 import { withHistory, type HistoryMessage } from "./history";
 import { toImageBlocks } from "./images";
 import { toDocumentBlocks, type DocumentInput } from "./documents";
@@ -279,7 +279,33 @@ export type TurnResult = {
    * 올린 값을 쓴다.
    */
   savedCount: number;
+  /** 이 턴에 쓴 토큰. 결과 메시지가 없이 끝나면(중지 · 오류) 여기까지 오지 않는다. */
+  usage: MessageUsage | null;
+  /** 조회 도구가 모델에게 넘긴 기억. 하나도 없으면 null. */
+  memoriesUsed: MemoriesUsed | null;
 };
+
+/** 메시지에 사본으로 남기는 참고 기억의 상한. 기간 조회는 수백 건이라 다 담으면 행이 커진다. */
+export const MEMORIES_USED_LIMIT = 50;
+
+/**
+ * 결과 메시지의 모델별 사용량 → 턴의 토큰. 순수 함수(테스트가 이것을 본다).
+ *
+ * `usage` 가 아니라 `modelUsage` 를 더한다 — usage 는 주 루프만 세고 보조 모델 호출을 뺀다(SDK 주석).
+ * 턴마다 새 query() 라 누계가 곧 이 턴의 값이다(이어 쓴 세션도 0 부터 센다).
+ */
+export function usageFrom(
+  modelUsage: Record<string, { inputTokens: number; outputTokens: number; cacheReadInputTokens: number; cacheCreationInputTokens: number }>,
+): MessageUsage {
+  const sum = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+  for (const m of Object.values(modelUsage)) {
+    sum.input += m.inputTokens;
+    sum.output += m.outputTokens;
+    sum.cacheRead += m.cacheReadInputTokens;
+    sum.cacheWrite += m.cacheCreationInputTokens;
+  }
+  return sum;
+}
 
 /**
  * 턴의 종류에 따른 생각 수준 · 도구 호출 한도. 순수 함수(테스트가 이것을 본다).
@@ -393,7 +419,8 @@ export async function runTurn(
   const toolsUsed: string[] = [];
 
   // 이 턴 동안의 기억 도구 집계. 도구 핸들러가 클로저로 잡아 직접 올린다.
-  const tally: MemoryToolTally = { saved: 0 };
+  const tally: MemoryToolTally = { saved: 0, recalled: new Map() };
+  let usage: MessageUsage | null = null;
   // 이 턴에 한도에 막혔다는 rate_limit_event 가 왔는지 — 초과 오류에 풀리는 시각을 싣는다.
   let rejection: Rejection | null = null;
 
@@ -518,6 +545,7 @@ export async function runTurn(
         throw new Error(`Claude 응답 실패: ${message.subtype}`);
       }
       liveSessions.add(message.session_id);
+      usage = usageFrom(message.modelUsage);
       // 모은 글이 없을 때만 result 로 대신한다(textParts 주석).
       if (textParts.length === 0 && message.result.trim()) textParts.push(message.result.trim());
     }
@@ -528,6 +556,15 @@ export async function runTurn(
     sessionId,
     toolsUsed,
     savedCount: tally.saved,
+    usage,
+    memoriesUsed: tally.recalled?.size
+      ? {
+          total: tally.recalled.size,
+          items: [...tally.recalled.values()]
+            .slice(0, MEMORIES_USED_LIMIT)
+            .map(({ id, content, category, project, createdAt }) => ({ id, content, category, project, createdAt })),
+        }
+      : null,
   };
 }
 

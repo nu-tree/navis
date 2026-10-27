@@ -139,6 +139,8 @@ export const chatRoute = new Hono<AppEnv>()
           ...(result.toolsUsed.length ? { toolsUsed: result.toolsUsed } : {}),
           // 메시지에도 담는다 — done 이벤트만 보면 방을 다시 열 때 표시가 사라진다.
           ...(result.savedCount > 0 ? { saved: true } : {}),
+          ...(result.usage ? { usage: result.usage } : {}),
+          ...(result.memoriesUsed ? { memoriesUsed: result.memoriesUsed } : {}),
         });
 
         await send({

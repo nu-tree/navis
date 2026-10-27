@@ -84,6 +84,16 @@ export const ALLOWED_MEMORY_TOOLS: string[] = MEMORY_TOOL_NAMES.map(
 export type MemoryToolTally = {
   /** **성공한** 저장 횟수. 실패한 저장은 세지 않는다. */
   saved: number;
+  /**
+   * 조회 도구(recall · recent · todos)가 모델에게 넘긴 기억, id 로 중복을 없앤다. 답 아래 "참고한 기억"의
+   * 근거다 — 모델이 썼다고 말한 것이 아니라 실제로 받은 것이라 지어낼 수 없다.
+   * 없으면 모으지 않는다(외부 MCP 는 보여줄 화면이 없다).
+   */
+  recalled?: Map<string, Memory>;
+};
+
+const noteRecalled = (tally: MemoryToolTally, list: readonly Memory[]) => {
+  for (const m of list) tally.recalled?.set(m.id, m);
 };
 
 /**
@@ -179,6 +189,7 @@ export const createMemoryMcpServer = ({ userId, tally, owner = false }: MemoryMc
       recallInputSchema.shape,
       async (args) => {
         const hits = await recall(userId, args);
+        noteRecalled(tally, hits.map((h) => h.memory));
         if (hits.length === 0) {
           return {
             content: [
@@ -218,6 +229,7 @@ export const createMemoryMcpServer = ({ userId, tally, owner = false }: MemoryMc
       async (args) => {
         const limit = args.limit ?? RECENT_DEFAULT_LIMIT;
         const items = await recent(userId, { ...args, limit });
+        noteRecalled(tally, items);
         const range = [
           args.since ? `${args.since}부터` : null,
           args.until ? `${args.until}까지` : null,
@@ -298,6 +310,7 @@ export const createMemoryMcpServer = ({ userId, tally, owner = false }: MemoryMc
       todosInputSchema.shape,
       async (args) => {
         const list = await todos(userId, args);
+        noteRecalled(tally, list);
         if (list.length === 0) {
           return { content: [{ type: "text" as const, text: "남은 할 일이 없다." }] };
         }
