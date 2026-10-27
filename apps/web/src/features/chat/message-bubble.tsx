@@ -2,6 +2,7 @@ import { FileText, Trash2 } from "lucide-react";
 import type { Message } from "@navis/validation";
 import { cn } from "cn";
 import { formatBubbleTime } from "@/utils/chat-timeline";
+import { CopyButton } from "@/components/common/copy-button";
 import { MarkdownText } from "./markdown-text";
 import { MessageFooter } from "./message-footer";
 
@@ -42,6 +43,16 @@ export const MessageBubble = ({ message, first = true, last = true, onRemove }: 
       <Trash2 className="size-3.5" />
     </button>
   ) : null;
+
+  // 나비스 답 복사 — 마크다운 원문 그대로(붙여 넣는 곳에서 서식이 살게). 삭제 버튼처럼 올렸을 때만 보인다.
+  // 서버에 확정된 답에만 단다(onRemove 와 같은 조건) — 스트리밍 중인 반쪽 답을 복사하게 두지 않는다.
+  const copyButton =
+    !isUser && onRemove ? (
+      <CopyButton
+        text={message.text}
+        className="size-7 shrink-0 self-center text-muted-foreground opacity-0 transition-opacity group-hover/msg:opacity-100 focus-visible:opacity-100 [&_svg]:size-3.5"
+      />
+    ) : null;
 
   const timeLabel = time ? (
     <time dateTime={message.createdAt} className="shrink-0 self-end pb-0.5 text-[11px] text-muted-foreground">
@@ -132,6 +143,7 @@ export const MessageBubble = ({ message, first = true, last = true, onRemove }: 
             <MessageFooter message={message} />
           </div>
           {timeLabel}
+          {copyButton}
           {removeButton}
         </div>
       </div>
