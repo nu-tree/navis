@@ -27,8 +27,12 @@ describe("formatByProject()", () => {
     expect(heads).toEqual(["## navis (2건)", "## soop-sns (1건)", "## (개인) (1건)"]);
   });
 
+  it("줄마다 id 가 있다 — 모델이 이어서 update · remove 를 부른다", () => {
+    for (const line of out.split("\n").filter((l) => l.startsWith("- "))) expect(line).toMatch(/\(id=[^)]+\)$/);
+  });
+
   it("묶음 안은 오래된 것 먼저, 시각은 KST", () => {
-    expect(out).toContain("- [10-07 10:00] A\n- [10-07 14:00] C");
+    expect(out).toContain("- [10-07 10:00] A (id=A)\n- [10-07 14:00] C (id=C)");
   });
 });
 

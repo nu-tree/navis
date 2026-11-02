@@ -36,7 +36,7 @@ export const formatByProject = (items: readonly Memory[]): string => {
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
         .map((m) => {
           const tag = [m.category, m.done === true ? "완료" : null].filter(Boolean).join("/");
-          return `- [${kstStamp(m.createdAt)}${tag ? ` ${tag}` : ""}] ${m.content}`;
+          return `- [${kstStamp(m.createdAt)}${tag ? ` ${tag}` : ""}] ${m.content} (id=${m.id})`;
         });
       return `## ${name} (${list.length}건)\n${lines.join("\n")}`;
     })

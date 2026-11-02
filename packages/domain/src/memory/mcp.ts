@@ -197,12 +197,8 @@ export const createMemoryMcpServer = ({ userId, tally, owner = false }: MemoryMc
             ],
           };
         }
-        const lines = hits.map((h) => {
-          const meta = [h.memory.category, h.memory.project]
-            .filter(Boolean)
-            .join("/");
-          return `- [${h.memory.createdAt.slice(0, 10)}${meta ? ` ${meta}` : ""}] ${h.memory.content}`;
-        });
+        // id 를 싣는다 — 없으면 모델이 찾은 기억을 고치거나 지울 수 없다(회원 피드백 2026-11).
+        const lines = hits.map((h) => memoryLine(h.memory));
         return {
           content: [
             { type: "text" as const, text: `기억 ${hits.length}건:\n${lines.join("\n")}` },
