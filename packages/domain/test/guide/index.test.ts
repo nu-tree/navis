@@ -29,6 +29,18 @@ describe("renderGuide", () => {
     expect(text).not.toContain("약속");
   });
 
+  it("MCP 방향을 분명히 한다 — 나비스가 서버, 다른 MCP 를 나비스에 붙일 수는 없다", () => {
+    const text = renderGuide({ owner: false, topic: "MCP" });
+    expect(text).toContain("나비스가 MCP 서버");
+    expect(text).toContain("반대 방향은 안 된다");
+  });
+
+  it("못 하는 것도 안내한다 — 추측하지 않게", () => {
+    const text = renderGuide({ owner: false, topic: "못 하는" });
+    expect(text).toContain("나비스가 못 하는 것");
+    expect(text).toContain("주제별로 방을 나누는 기능은 아직 없다");
+  });
+
   it("화면 이름으로 물어도 찾는다 — 설정에 무엇이 있는지", () => {
     const text = renderGuide({ owner: false, topic: "설정" });
     expect(text).toContain("화면 지도");
