@@ -12,5 +12,6 @@ export const invalidateMemoryViews = (queryClient: QueryClient) =>
       ["memory", "todo"],
       ["memory", "neighbor"],
       ["memory", "project"],
+      ["memory", "summary"],
     ].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
   );

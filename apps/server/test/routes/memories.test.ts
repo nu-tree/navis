@@ -21,6 +21,7 @@ const remove = vi.fn();
 const todos = vi.fn();
 const neighbors = vi.fn();
 const exportAll = vi.fn();
+const summary = vi.fn();
 
 vi.mock("@navis/domain", () => ({
   memory: {
@@ -34,6 +35,7 @@ vi.mock("@navis/domain", () => ({
     todos: (...a: unknown[]) => todos(...a),
     neighbors: (...a: unknown[]) => neighbors(...a),
     exportAll: (...a: unknown[]) => exportAll(...a),
+    summary: (...a: unknown[]) => summary(...a),
     serializeExport: (d: unknown) => `${JSON.stringify(d, null, 2)}\n`,
   },
   chat: { runTurn: vi.fn() },
@@ -333,10 +335,24 @@ describe("기억 직접 관리 (US4)", () => {
     expect(remove).toHaveBeenCalledWith(OWNER, "m1");
   });
 
-  it("DELETE 는 관리자가 아니면 403 — 지우지 않는다", async () => {
+  it("GET /summary 는 기본 7일, days 를 숫자로 넘긴다", async () => {
+    summary.mockResolvedValue({ days: 7, total: 3, byCategory: { todo: 3 } });
+    expect(await (await req("/memories/summary")).json()).toEqual({ days: 7, total: 3, byCategory: { todo: 3 } });
+    expect(summary).toHaveBeenCalledWith(MEMBER, 7);
+    await req("/memories/summary?days=30");
+    expect(summary).toHaveBeenLastCalledWith(MEMBER, 30);
+  });
+
+  it("GET /summary 의 days 범위 밖은 400", async () => {
+    expect((await req("/memories/summary?days=0")).status).toBe(400);
+    expect((await req("/memories/summary?days=366")).status).toBe(400);
+  });
+
+  it("DELETE 는 회원도 자기 기억을 지운다", async () => {
+    remove.mockResolvedValue({ ok: true });
     const res = await req("/memories/m1", { method: "DELETE" });
-    expect(res.status).toBe(403);
-    expect(remove).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
+    expect(remove).toHaveBeenCalledWith(MEMBER, "m1");
   });
 
   it("GET /me 는 관리자 여부를 알려준다", async () => {

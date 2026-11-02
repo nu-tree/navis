@@ -24,7 +24,7 @@ import { settingsRoute } from "./routes/settings";
 //   /health          — 헬스체크 (공개)
 //   /chat            — SSE 스트리밍 (web BFF, mobile)
 //   /chat/cancel     — 진행 중인 턴 중지
-//   /memories        — 기억 CRUD (지우기는 관리자만)
+//   /memories        — 기억 CRUD (지우기는 누구나 자기 기억만, 2026-11 — 예전엔 관리자만)
 //   /me              — 요청 회원이 관리자인지 (web 이 지우기 버튼을 보일지 정한다)
 //   /conversations   — 대화방
 //   /settings        — Claude 구독 토큰 (US5)
@@ -121,13 +121,6 @@ app.use("*", async (c, next) => {
 
 app.get("/me", (c) => c.json({ admin: isOwner(c.get("userId")) }));
 
-// 기억 지우기는 관리자만 한다. 초대한 회원이 "꼬일까봐" 기억을 전부 지운 일이 있었다(2026-10) —
-// 기억이 쌓여야 나비스가 쓸모 있으므로 회원은 보고 고치기만 한다. 대화 중 에이전트의 remove 도구는
-// domain 을 직접 부르므로 여기 걸리지 않는다 — 말로 콕 집어 지우는 길은 남겨 둔다.
-app.delete("/memories/:id", async (c, next) => {
-  if (!isOwner(c.get("userId"))) return c.json({ error: "기억 지우기는 관리자만 할 수 있다." }, 403);
-  return next();
-});
 
 // 전하기는 관리자만 한다(specs/004 FR-001). 목록 · 회원 목록까지 전부 — 다른 회원이 누구인지도 알려주지 않는다(FR-002).
 app.use("/relays/*", async (c, next) => {

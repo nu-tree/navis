@@ -167,3 +167,16 @@ export const memoryExportSchema = z.object({
   memories: z.array(memorySchema),
 });
 export type MemoryExport = z.infer<typeof memoryExportSchema>;
+
+// 기억 요약 — 기억 화면 맨 위 "최근 N일 · 분류별 개수". 목록은 50건씩 받으므로 화면이 센 값은 틀릴 수 있다.
+export const memorySummaryInputSchema = z.object({
+  days: z.number().int().min(1).max(365).default(7),
+});
+export type MemorySummaryInput = z.input<typeof memorySummaryInputSchema>;
+
+export type MemorySummary = {
+  days: number;
+  total: number;
+  /** 분류별 개수. 분류 없는 기억은 none. 0 인 분류는 싣지 않는다. */
+  byCategory: Partial<Record<Category | "none", number>>;
+};

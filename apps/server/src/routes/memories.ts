@@ -3,6 +3,7 @@ import type { AppEnv } from "../types";
 import { memory } from "@navis/domain";
 import { isEmbeddingError, isNotFound } from "@navis/domain/errors";
 import {
+  memorySummaryInputSchema,
   recallInputSchema,
   recentInputSchema,
   renameProjectInputSchema,
@@ -50,6 +51,18 @@ export const memoriesRoute = new Hono<AppEnv>()
     }
     try {
       return c.json(await memory.recall(c.get("userId"), parsed.data));
+    } catch (err) {
+      return failure(c, err);
+    }
+  })
+  // 최근 N일 분류별 개수 — 기억 화면 맨 위 요약.
+  .get("/summary", async (c) => {
+    const parsed = memorySummaryInputSchema.safeParse(numericQuery(c.req.query()));
+    if (!parsed.success) {
+      return c.json({ error: "잘못된 요청", detail: parsed.error.issues }, 400);
+    }
+    try {
+      return c.json(await memory.summary(c.get("userId"), parsed.data.days));
     } catch (err) {
       return failure(c, err);
     }

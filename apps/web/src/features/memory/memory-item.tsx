@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { useDeleteMemory } from "@/hooks/apis/memory/use-delete-memory";
 import { cn } from "cn";
 import { ConfirmDeleteButton } from "@/components/common/confirm-delete-button";
-import { useIsAdmin } from "@/hooks/apis/me/use-me";
 import { MemoryEditor } from "./memory-editor";
 import { MemoryMeta } from "./memory-meta";
 
@@ -26,8 +25,6 @@ export const MemoryItem = ({ memory, score, children }: Readonly<Props>) => {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const { mutate: deleteMemory, isPending } = useDeleteMemory();
-  // 지우기는 관리자만 — 회원은 보고 고치기만 한다(server 가 403 으로도 막는다).
-  const admin = useIsAdmin();
 
   return (
     <li className="rounded-xl border border-border bg-card/40 px-4 py-3">
@@ -44,7 +41,7 @@ export const MemoryItem = ({ memory, score, children }: Readonly<Props>) => {
           <Button variant="ghost" size="icon-sm" aria-label="고치기" onClick={() => setEditing(true)}>
             <Pencil />
           </Button>
-          {admin ? <ConfirmDeleteButton disabled={isPending} onConfirm={() => deleteMemory(memory.id)} /> : null}
+          <ConfirmDeleteButton disabled={isPending} onConfirm={() => deleteMemory(memory.id)} />
           <Button
             variant="ghost"
             size="icon-sm"

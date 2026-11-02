@@ -17,6 +17,7 @@ export { recall } from "./recall";
 export { update } from "./update";
 export { remove } from "./remove";
 export { todos } from "./todos";
+export { summary } from "./summary";
 export { neighbors } from "./neighbors";
 export { exportAll, serializeExport } from "./export";
 export { projects, renameProject, similarProjects } from "./projects";

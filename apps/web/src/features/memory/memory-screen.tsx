@@ -8,6 +8,7 @@ import { useMemoryBrowser } from "@/hooks/pages/memory/use-memory-browser";
 import { MemoryExportButton } from "./memory-export-button";
 import { MemoryFilters } from "./memory-filters";
 import { MemoryList } from "./memory-list";
+import { MemorySummary } from "./memory-summary";
 import { TodoList } from "./todo-list";
 
 /** 기억 화면 — 목록 · 검색 · 할 일 · 내보내기를 한 화면에 둔다(세 화면 상한, SC-010). */
@@ -42,12 +43,14 @@ export const MemoryScreen = () => {
             </TabsList>
 
             <TabsContent value="all" className="space-y-4">
+              <MemorySummary browser={browser} />
               <MemoryFilters browser={browser} />
               <MemoryList
                 items={browser.items}
                 isLoading={browser.isLoading}
                 error={browser.error}
                 emptyText={browser.searching ? "관련된 기억이 없어요." : "아직 기억이 없어요."}
+                byDay={!browser.searching}
                 hasMore={browser.hasMore}
                 loadingMore={browser.loadingMore}
                 onLoadMore={browser.loadMore}
