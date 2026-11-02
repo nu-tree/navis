@@ -26,6 +26,34 @@ describe("excerpt", () => {
   });
 });
 
+describe("보고 있는 회원", () => {
+  const T0 = 1_000_000;
+
+  it("보고 있으면 보내지 않고, 그 방을 다음 신호에 돌려준다", async () => {
+    sendNotification.mockReset();
+    push.heartbeat("watch-1", "dev", true);
+    await push.notify("watch-1", { ...payload, conversationId: "room-w" });
+    expect(sendNotification).not.toHaveBeenCalled();
+    expect(push.heartbeat("watch-1", "dev", true)).toEqual(["room-w"]);
+    expect(push.heartbeat("watch-1", "dev", true)).toEqual([]);
+    push.heartbeat("watch-1", "dev", false);
+  });
+
+  it("다른 기기가 안 본다고 해도 보고 있는 기기가 있으면 보고 있다", () => {
+    push.heartbeat("watch-2", "pc", true, T0);
+    push.heartbeat("watch-2", "phone", false, T0);
+    expect(push.isWatching("watch-2", T0)).toBe(true);
+    push.heartbeat("watch-2", "pc", false, T0);
+    expect(push.isWatching("watch-2", T0)).toBe(false);
+  });
+
+  it("신호가 WATCH_TTL_MS 동안 없으면 안 보는 것으로 친다", () => {
+    push.heartbeat("watch-3", "pc", true, T0);
+    expect(push.isWatching("watch-3", T0 + push.WATCH_TTL_MS - 1)).toBe(true);
+    expect(push.isWatching("watch-3", T0 + push.WATCH_TTL_MS)).toBe(false);
+  });
+});
+
 describeDb("push (실제 DB)", () => {
   const cleanup = () => db.delete(pushSubscriptions).where(inArray(pushSubscriptions.userId, [...TEST_USERS]));
   afterAll(cleanup);

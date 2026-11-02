@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { Conversation, Message } from "@navis/validation";
 import { getConversationMessageListQueryOptions } from "@/hooks/apis/conversation/use-conversation-message-list";
 import { getChatTurn } from "@/store/chat-turn-store";
 import { fetchGet } from "@/utils/fetch-client";
+import { useWatchingPresence } from "./use-watching-presence";
 
 /**
  * 화면에 없는 사이에 서버에서 생긴 메시지를 가져온다 — 나비스가 먼저 건 말(약속, specs/003).
@@ -14,6 +15,7 @@ import { fetchGet } from "@/utils/fetch-client";
  * 안 보였다. 두 신호에 맞춰 최근 페이지를 다시 받는다.
  * - 푸시가 왔다: 서비스 워커가 열린 창에 알린다(public/sw.js 의 new-message).
  * - 창으로 돌아왔다: 푸시가 꺼진 기기 대비.
+ * - 보고 있어서 서버가 푸시를 보내지 않았다: 다음 "보고 있다" 신호의 응답으로 받는다(use-watching-presence).
  *
  * 캐시 전체를 갈아끼우지 않는다. 받은 최근 페이지의 가장 오래된 메시지부터 끝까지만 바꾼다 — 위로 올려
  * 읽던 이전 메시지는 그대로 남는다. 그 메시지가 캐시에 없으면(오래 떠나 있었다) 통째로 바꾼다.
@@ -22,20 +24,28 @@ import { fetchGet } from "@/utils/fetch-client";
 export const useSyncLatestMessages = (conversationId: string) => {
   const queryClient = useQueryClient();
 
-  useEffect(() => {
+  const sync = useCallback(async () => {
+    if (getChatTurn(conversationId).streaming !== null) return;
+    const res = await fetchGet<Conversation>(`/api/conversations/${encodeURIComponent(conversationId)}`);
+    if (!res.ok || getChatTurn(conversationId).streaming !== null) return;
+    const latest = res.data.messages;
     const { queryKey } = getConversationMessageListQueryOptions(conversationId);
+    queryClient.setQueryData(queryKey, (old: Message[] = []) => {
+      const start = latest[0] ? old.findIndex((m) => m.id === latest[0]?.id) : -1;
+      return start === -1 ? latest : [...old.slice(0, start), ...latest];
+    });
+  }, [conversationId, queryClient]);
 
-    const sync = async () => {
-      if (getChatTurn(conversationId).streaming !== null) return;
-      const res = await fetchGet<Conversation>(`/api/conversations/${encodeURIComponent(conversationId)}`);
-      if (!res.ok || getChatTurn(conversationId).streaming !== null) return;
-      const latest = res.data.messages;
-      queryClient.setQueryData(queryKey, (old: Message[] = []) => {
-        const start = latest[0] ? old.findIndex((m) => m.id === latest[0]?.id) : -1;
-        return start === -1 ? latest : [...old.slice(0, start), ...latest];
-      });
-    };
+  // 보고 있어서 서버가 푸시를 보내지 않은 방 — 푸시 대신 여기서 다시 받는다.
+  const onMissed = useCallback(
+    (rooms: string[]) => {
+      if (rooms.includes(conversationId)) void sync();
+    },
+    [conversationId, sync],
+  );
+  useWatchingPresence(onMissed);
 
+  useEffect(() => {
     const onVisible = () => {
       if (!document.hidden) void sync();
     };
@@ -50,5 +60,5 @@ export const useSyncLatestMessages = (conversationId: string) => {
       document.removeEventListener("visibilitychange", onVisible);
       navigator.serviceWorker?.removeEventListener("message", onMessage);
     };
-  }, [conversationId, queryClient]);
+  }, [conversationId, sync]);
 };

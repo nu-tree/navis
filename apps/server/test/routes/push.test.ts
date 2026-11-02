@@ -10,12 +10,14 @@ vi.stubEnv("NAVIS_OWNER_ID", "00000000-0000-4000-8000-000000000001");
 const MEMBER = "00000000-0000-4000-8000-0000000000a1";
 const subscribe = vi.fn(async () => undefined);
 const unsubscribe = vi.fn(async () => undefined);
+const heartbeat = vi.fn((..._a: unknown[]) => ["room-1"]);
 
 vi.mock("@navis/domain", () => ({
   push: {
     publicKey: () => "test-public",
     subscribe: (...a: unknown[]) => subscribe(...(a as [])),
     unsubscribe: (...a: unknown[]) => unsubscribe(...(a as [])),
+    heartbeat: (...a: unknown[]) => heartbeat(...a),
   },
 }));
 
@@ -71,4 +73,20 @@ describe("/push", () => {
     await post("/push/unsubscribe", { endpoint: "https://fcm.googleapis.com/fcm/send/abc" });
     expect(unsubscribe).toHaveBeenCalledWith(MEMBER, "https://fcm.googleapis.com/fcm/send/abc");
   });
+
+  it("presence 는 회원 · 기기 · 보고 있는지를 넘기고 보내지 않은 방들을 돌려준다", async () => {
+    const res = await post("/push/presence", { deviceId: "dev-1", watching: true });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ missed: ["room-1"] });
+    expect(heartbeat).toHaveBeenCalledWith(MEMBER, "dev-1", true);
+  });
+
+  it.each([{}, { deviceId: "", watching: true }, { deviceId: "d", watching: "yes" }])(
+    "presence 의 잘못된 본문은 400 — %j",
+    async (body) => {
+      const res = await post("/push/presence", body);
+      expect(res.status).toBe(400);
+      expect(heartbeat).not.toHaveBeenCalled();
+    },
+  );
 });

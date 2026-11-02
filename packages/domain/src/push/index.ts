@@ -48,8 +48,53 @@ export const excerpt = (text: string) => {
   return plain.length > 120 ? `${plain.slice(0, 120)}…` : plain;
 };
 
-/** 회원의 모든 기기로 보낸다. 사라진 구독(404 · 410)은 지운다. */
+// ── 보고 있는 회원 ────────────────────────────────────────────────────────────────
+//
+// 나비스 창을 보고 있는 회원에게는 푸시를 보내지 않는다 — 답이 눈앞에 있는데 알림이 뜨면 소음이다.
+// 서비스 워커(public/sw.js)도 보고 있으면 알림을 거르지만, 사파리는 받은 푸시마다 알림을 띄워야 해서
+// 거기서는 거를 수 없다. 그래서 서버가 아예 보내지 않는다.
+//
+// ★ 메모리에 둔다. Cloud Run 은 인스턴스 하나다(deploy/service.yaml maxScale 1). 인스턴스가 바뀌어
+//   기록이 사라지면 "안 보고 있다"로 보고 보낸다 — 지금까지와 같은 동작이라 잃을 것이 없다.
+// ★ 화면은 보고 있는 동안 HEARTBEAT 마다 신호를 보내고, 창을 떠나면 바로 "안 본다"를 보낸다.
+//   그 신호가 유실돼도 WATCH_TTL_MS 가 지나면 안 보는 것으로 친다.
+
+/** 마지막 "보고 있다" 신호가 이보다 오래되면 안 보는 것으로 친다. 화면의 신호 간격(20초)의 두 배 남짓. */
+export const WATCH_TTL_MS = 45_000;
+
+/** userId → (deviceId → 마지막 "보고 있다" 시각 ms). */
+const watchers = new Map<string, Map<string, number>>();
+/** userId → 보고 있어서 푸시를 보내지 않은 방들. 다음 신호의 응답으로 화면에 건넨다. */
+const missed = new Map<string, Set<string>>();
+
+/** 회원이 지금 어느 기기에서든 나비스를 보고 있나. */
+export const isWatching = (userId: string, now = Date.now()): boolean =>
+  [...(watchers.get(userId)?.values() ?? [])].some((at) => now - at < WATCH_TTL_MS);
+
+/**
+ * 화면의 신호를 기록하고, 그동안 보내지 않은 방들을 돌려준다(돌려준 것은 지운다).
+ * 화면은 그 방들의 최근 메시지를 다시 받는다 — 푸시가 오면 하던 일(sw.js 의 new-message)을 대신한다.
+ */
+export function heartbeat(userId: string, deviceId: string, watching: boolean, now = Date.now()): string[] {
+  const devices = watchers.get(userId) ?? new Map<string, number>();
+  if (watching) devices.set(deviceId, now);
+  else devices.delete(deviceId);
+  for (const [id, at] of devices) if (now - at >= WATCH_TTL_MS) devices.delete(id);
+  if (devices.size > 0) watchers.set(userId, devices);
+  else watchers.delete(userId);
+
+  const rooms = [...(missed.get(userId) ?? [])];
+  missed.delete(userId);
+  return rooms;
+}
+
+/** 회원의 모든 기기로 보낸다. 지금 보고 있으면 보내지 않는다. 사라진 구독(404 · 410)은 지운다. */
 export async function notify(userId: string, payload: PushPayload): Promise<void> {
+  if (isWatching(userId)) {
+    missed.set(userId, (missed.get(userId) ?? new Set<string>()).add(payload.conversationId));
+    return;
+  }
+
   const keys = vapid();
   if (!keys) return;
 

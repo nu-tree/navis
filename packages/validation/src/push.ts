@@ -41,3 +41,17 @@ export type PushPayload = {
   body: string;
   conversationId: string;
 };
+
+/**
+ * 지금 나비스를 보고 있다는 신호(창이 보이고 포커스가 있다). 보고 있는 동안 서버는 푸시를 보내지 않는다.
+ * deviceId 는 화면이 열릴 때마다 새로 만든 임의 값이다 — 한 기기가 "안 본다"고 해도 다른 기기의 "본다"를
+ * 지우지 않게 기기를 구분할 뿐이다.
+ */
+export const pushPresenceInputSchema = z.object({
+  deviceId: z.string().min(1).max(64),
+  watching: z.boolean(),
+});
+export type PushPresenceInput = z.infer<typeof pushPresenceInputSchema>;
+
+/** 보고 있어서 푸시를 보내지 않은 방들. 화면이 이 방들의 최근 메시지를 다시 받는다. */
+export type PushPresenceResult = { missed: string[] };
