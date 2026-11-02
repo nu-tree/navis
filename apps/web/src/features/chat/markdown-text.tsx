@@ -98,7 +98,7 @@ type Props = {
 export const MarkdownText = ({ text }: Readonly<Props>) => {
   return (
     <div className="text-[15px] leading-relaxed wrap-break-word">
-      <Markdown remarkPlugins={[remarkGfm]} components={components}>
+      <Markdown remarkPlugins={[[remarkGfm, { singleTilde: false }]]} components={components}>
         {text}
       </Markdown>
     </div>
