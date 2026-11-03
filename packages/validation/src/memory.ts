@@ -179,4 +179,6 @@ export type MemorySummary = {
   total: number;
   /** 분류별 개수. 분류 없는 기억은 none. 0 인 분류는 싣지 않는다. */
   byCategory: Partial<Record<Category | "none", number>>;
+  /** 한국 날짜별 분류 개수 — 오래된 날부터 오늘까지 days 칸. 기억이 없는 날도 빈 칸으로 싣는다. */
+  byDay: { date: string; byCategory: Partial<Record<Category | "none", number>> }[];
 };

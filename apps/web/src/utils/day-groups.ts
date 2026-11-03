@@ -40,3 +40,15 @@ export const groupByDay = <T>(items: readonly T[], createdAt: (item: T) => strin
     else groups.push({ key, label: dayLabel(date, now), items: [item] });
     return groups;
   }, []);
+
+const timeFormat = new Intl.DateTimeFormat("ko-KR", { timeZone: TZ, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+const weekdayFormat = new Intl.DateTimeFormat("ko-KR", { timeZone: TZ, weekday: "short" });
+
+/** "14:20" — 한국 시각. */
+export const timeLabel = (date: Date): string => timeFormat.format(date);
+
+/** "오늘 14:20" · "어제 09:05" · "11월 1일 (토) 18:00". */
+export const whenLabel = (date: Date, now = new Date()): string => `${dayLabel(date, now)} ${timeLabel(date)}`;
+
+/** 한국 날짜 키 "YYYY-MM-DD" → 짧은 요일 "월". 키는 한국 날짜라 정오로 읽어 시간대에 흔들리지 않게 한다. */
+export const weekdayOfKey = (key: string): string => weekdayFormat.format(new Date(`${key}T12:00:00+09:00`));
