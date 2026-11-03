@@ -71,7 +71,7 @@ export const LoginForm = ({ next }: Readonly<{ next?: string }>) => {
       <Button
         type="submit"
         disabled={pending}
-        className="group h-11 w-full bg-linear-to-r cursor-pointer from-primary to-accent text-base font-semibold shadow-lg shadow-primary/25 hover:from-primary/90 hover:to-accent/90"
+        className="group h-11 w-full cursor-pointer text-base font-semibold shadow-lg shadow-primary/20 hover:bg-primary/90"
       >
         {pending ? (
           <>

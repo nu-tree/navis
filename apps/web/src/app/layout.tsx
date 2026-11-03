@@ -1,18 +1,19 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
-import { Geist, Geist_Mono } from "next/font/google";
+import { IBM_Plex_Sans_KR, JetBrains_Mono } from "next/font/google";
 import { QueryProvider } from "@/components/providers/query-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const plexKr = IBM_Plex_Sans_KR({
+  variable: "--font-plex-kr",
+  weight: ["400", "500", "600", "700"],
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const jetbrainsMono = JetBrains_Mono({
+  variable: "--font-jetbrains-mono",
   subsets: ["latin"],
 });
 
@@ -24,13 +25,13 @@ export const metadata: Metadata = {
 };
 
 // 설치한 앱의 제목 표시줄 · 모바일 상태 표시줄 색. manifest 의 theme_color 와 같다.
-export const viewport: Viewport = { themeColor: "#0d0e1a" };
+export const viewport: Viewport = { themeColor: "#0a0a0c" };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html
       lang="ko"
-      className={`dark ${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`dark ${plexKr.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
       <body className="flex h-dvh flex-col overflow-hidden">
         <QueryProvider>

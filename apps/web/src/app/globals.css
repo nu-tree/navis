@@ -7,7 +7,7 @@
 
 /* ── 디자인 토큰 ──────────────────────────────────────────────────────────────
    구조는 shadcn 규약을 그대로 따른다(`:root` = 라이트, `.dark` = 다크). 값만 navis
-   팔레트로 바꿨다 — 딥 스페이스 네이비 + 인디고. 규약을 지키면 앞으로 추가하는
+   팔레트로 바꿨다 — 거의 검정 + 라임 포인트(2026-11 개편, 전엔 네이비 + 인디고). 규약을 지키면 앞으로 추가하는
    shadcn 컴포넌트가 손대지 않고 그대로 맞는다.
 
    토큰은 채널 문자열("13 14 26")이 아니라 일반 CSS 색상이다. 옛 앱은 `rgb(var(--x) /
@@ -63,45 +63,47 @@
 }
 
 .dark {
-  /* 순검정(#000) 대신 딥 스페이스 네이비로 살짝 띄웠다 — 장시간 보기 편하게. */
-  --background: #0d0e1a;
-  --foreground: #fafafa;
-  --surface: #161827;
+  /* 기억 화면 시안(2026-11-02)에 맞춘 팔레트 — 거의 검정 + 라임 포인트 하나.
+     포인트 색은 하나만 쓴다: primary 가 라임이고, accent 는 shadcn 규약대로 hover 면(무채색)이다. */
+  --background: #0a0a0c;
+  --foreground: #ededef;
+  --surface: #111114;
 
-  --card: #181a28;
-  --card-foreground: #fafafa;
-  --popover: #181a28;
-  --popover-foreground: #fafafa;
+  --card: #111114;
+  --card-foreground: #ededef;
+  --popover: #16161a;
+  --popover-foreground: #ededef;
 
-  --primary: #6366f1;
-  --primary-foreground: #ffffff;
-  --secondary: #262a3b;
-  --secondary-foreground: #e5e5ea;
-  --muted: #1e2030;
-  --muted-foreground: #9b9cb2;
-  --accent: #8b5cf6;
-  --accent-foreground: #ffffff;
+  --primary: #b6dc62;
+  --primary-foreground: #0a0a0c;
+  --secondary: #1c1c21;
+  --secondary-foreground: #ededef;
+  --muted: #17171b;
+  --muted-foreground: #8e8e97;
+  --accent: #1c1c21;
+  --accent-foreground: #ededef;
   --destructive: #ef4444;
   --destructive-foreground: #ffffff;
 
-  --border: #2a2c3c;
-  --input: #1e2030;
-  --ring: #6366f1;
+  --border: #222228;
+  --input: #26262c;
+  --ring: #b6dc62;
 
-  --sidebar: #161827;
-  --sidebar-foreground: #fafafa;
-  --sidebar-primary: #6366f1;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #262a3b;
-  --sidebar-accent-foreground: #e5e5ea;
-  --sidebar-border: #2a2c3c;
-  --sidebar-ring: #6366f1;
+  --sidebar: #0d0d10;
+  --sidebar-foreground: #ededef;
+  --sidebar-primary: #b6dc62;
+  --sidebar-primary-foreground: #0a0a0c;
+  --sidebar-accent: #1c1c21;
+  --sidebar-accent-foreground: #ededef;
+  --sidebar-border: #1c1c21;
+  --sidebar-ring: #b6dc62;
 
-  --chart-1: #818cf8;
-  --chart-2: #a78bfa;
-  --chart-3: #67e8f9;
-  --chart-4: #fbbf24;
-  --chart-5: #fb7185;
+  /* 분류 색과 같은 계열 — 결정 앰버, 배움 블루, 감정 틸 … (기억 화면 2단계에서 매핑) */
+  --chart-1: #b6dc62;
+  --chart-2: #7c9cff;
+  --chart-3: #5fd0b0;
+  --chart-4: #f2b65a;
+  --chart-5: #ff8a80;
 }
 
 /* Tailwind v4 는 CSS 우선 설정이다 — tailwind.config.js 가 아니라 여기서 토큰을
@@ -146,13 +148,11 @@
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
 
-  /* Geist 는 subsets:["latin"] 이라 한글 글리프가 없다. 폰트 대체는 글자 단위로
-     일어나므로 라틴은 Geist, 한글은 뒤의 시스템 폰트가 받는다. 이 체인이 없으면
-     한글이 브라우저 기본 산세리프로 떨어져 라틴과 인상이 어긋난다.
-     (Pretendard 를 웹폰트로 올리면 한글까지 한 벌로 맞출 수 있다 — 눈으로 보고 결정.) */
-  --font-sans: var(--font-geist-sans), "Pretendard Variable", Pretendard,
-    "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), "SFMono-Regular", Menlo, Consolas, monospace;
+  /* IBM Plex Sans KR 은 한글 글리프까지 한 벌이라 라틴 · 한글 인상이 맞는다.
+     next/font 가 한글 unicode-range 조각까지 자체 호스팅하고, 미리 받는 건 latin 뿐이다. */
+  --font-sans: var(--font-plex-kr), "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR",
+    system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), "SFMono-Regular", Menlo, Consolas, monospace;
   --font-heading: var(--font-sans);
 
   /* "생각하는 중" 점 — 기본 animate-bounce 는 요소 높이의 25% 만 움직여 6px 점이 1.5px 밖에 안 뛴다. */

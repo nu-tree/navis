@@ -22,7 +22,7 @@ export const NeuralBackdrop = () => {
     <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
       {/* 로고 뒤로 모이는 빛. 카드가 떠 보이게 하는 것이 이 두 겹이다. */}
       <div className="absolute top-1/2 left-1/2 size-176 -translate-x-1/2 translate-y-[-60%] rounded-full bg-primary/20 blur-[120px]" />
-      <div className="absolute top-[20%] left-[62%] size-88 rounded-full bg-accent/15 blur-[100px]" />
+      <div className="absolute top-[20%] left-[62%] size-88 rounded-full bg-primary/10 blur-[100px]" />
 
       <svg
         className="absolute inset-0 size-full opacity-60 mask-[radial-gradient(ellipse_at_center,transparent_22%,black_75%)]"
