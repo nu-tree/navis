@@ -25,13 +25,13 @@ export const metadata: Metadata = {
 };
 
 // 설치한 앱의 제목 표시줄 · 모바일 상태 표시줄 색. manifest 의 theme_color 와 같다.
-export const viewport: Viewport = { themeColor: "#0a0a0c" };
+export const viewport: Viewport = { themeColor: "#141c31" };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html
       lang="ko"
-      className={`dark ${plexKr.variable} ${jetbrainsMono.variable} h-full antialiased`}
+      className={`dark ${plexKr.variable} ${jetbrainsMono.variable} h-full`}
     >
       <body className="flex h-dvh flex-col overflow-hidden">
         <QueryProvider>

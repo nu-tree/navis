@@ -23,6 +23,7 @@ const AVATAR = "size-8";
 
 /**
  * 말풍선 — 내 말은 오른쪽, 나비스 말은 왼쪽(2026-10-15 사용자 결정: 하나뿐인 방을 메신저처럼).
+ * 2026-11-13: 디자인 캔버스에 맞춰 내 말은 라임 대신 네이비 면 + 테두리, 나비스 답은 면 없는 글로 바꿨다.
  *
  * 예전엔 나비스 답을 전폭 평문으로 두었다 — 긴 마크다운이 좁은 버블에서 안 읽혀서. 지금은 말풍선이 넓고(85%)
  * 코드블록 · 표는 말풍선 안에서 가로로 스크롤한다.
@@ -44,7 +45,7 @@ export const MessageBubble = ({ message, first = true, last = true, onRemove }: 
           {timeLabel}
           <div
             className={cn(
-              "max-w-[80%] rounded-2xl bg-primary px-3.5 py-2 text-primary-foreground",
+              "max-w-[80%] rounded-[18px] border border-border bg-surface px-4 py-2.5 text-foreground",
               // 묶음 첫 말풍선만 꼬리 쪽 모서리를 좁힌다 — 이어지는 말풍선은 한 덩어리로 보인다.
               first && "rounded-tr-md",
             )}
@@ -70,7 +71,7 @@ export const MessageBubble = ({ message, first = true, last = true, onRemove }: 
                   <span
                     key={file.name + i}
                     title={file.name}
-                    className="flex max-w-56 items-center gap-1.5 rounded-lg bg-primary-foreground/15 px-2.5 py-1.5 text-sm"
+                    className="flex max-w-56 items-center gap-1.5 rounded-lg bg-secondary px-2.5 py-1.5 text-sm"
                   >
                     <FileText className="size-4 shrink-0" />
                     <span className="truncate">{file.name}</span>
@@ -107,7 +108,7 @@ export const MessageBubble = ({ message, first = true, last = true, onRemove }: 
   }
 
   return (
-    <div className={cn("flex items-start gap-2", first ? "mt-4" : "mt-1")}>
+    <div className={cn("flex items-start gap-3", first ? "mt-6" : "mt-1")}>
       {first ? (
         /* eslint-disable-next-line @next/next/no-img-element -- 정적 앱 아이콘, 최적화할 것이 없다. */
         <img src="/icons/icon-192.png" alt="" className={cn(AVATAR, "shrink-0 rounded-full")} />
@@ -116,12 +117,12 @@ export const MessageBubble = ({ message, first = true, last = true, onRemove }: 
       )}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        {first ? <span className="mb-1 text-xs font-medium text-muted-foreground">나비스</span> : null}
+        {first ? <span className="mb-1 flex h-8 items-center text-sm font-semibold">나비스</span> : null}
         <div className="flex items-end gap-1.5">
           <div
             className={cn(
-              "min-w-0 max-w-[85%] rounded-2xl bg-muted px-3.5 py-2 text-foreground",
-              first && "rounded-tl-md",
+              // 말풍선 면 없이 글로 펼친다 — 디자인 캔버스 시안(2026-11-13)처럼 면을 줄여 네이비가 살게.
+              "min-w-0 max-w-[92%] text-[15px] leading-[1.8] text-foreground",
             )}
           >
             {/* 표 · 코드블록이 말풍선 폭을 넘으면 말풍선 안에서 가로로 민다. */}

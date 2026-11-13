@@ -35,7 +35,7 @@ export function NavisTopBar() {
   const [guideOpen, setGuideOpen] = useState(false);
 
   return (
-    <header className="flex h-12 shrink-0 items-center gap-1 border-b border-border px-3">
+    <header className="flex h-14 shrink-0 items-center gap-1 border-b border-sidebar-border px-3 md:h-16 md:px-6">
       <span className="text-base font-extrabold">나비스</span>
       <div className="flex-1" />
 

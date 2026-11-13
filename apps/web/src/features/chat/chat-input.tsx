@@ -154,7 +154,7 @@ export const ChatInput = ({
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         className={cn(
-          "rounded-2xl border border-border bg-input transition-colors focus-within:border-ring/60",
+          "rounded-[20px] border border-input bg-surface shadow-[0_8px_32px_rgba(0,0,0,0.35)] transition-colors focus-within:border-ring/60",
           dragging && "border-primary bg-primary/5 ring-3 ring-primary/20",
         )}
       >
