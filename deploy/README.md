@@ -240,8 +240,17 @@ Reset password:
 <p>요청하지 않았다면 이 메일은 무시해도 돼요.</p>
 ```
 
-흐름: 메일 링크 → `/auth/confirm`(서버가 토큰 검증 · 세션 쿠키) → `/auth/set-password`(새 비밀번호) → 대화.
+흐름: 메일 링크 → `/auth/confirm`("계속하기" 버튼만 있는 화면) → 버튼이 `/auth/confirm/verify` 로 POST
+(서버가 토큰 검증 · 세션 쿠키) → `/auth/set-password`(새 비밀번호) → 대화.
 링크가 만료됐거나 이미 쓴 것이면 `/login?error=link` 로 돌아가 안내가 보인다.
+
+- ★ 링크를 여는 것만으로는 토큰을 쓰지 않는다. 메일 · 메신저의 링크 검사기가 미리 열어 보면 토큰이 소모돼,
+  회원이 처음 누를 때 이미 "만료"였다(2026-11-13). 사람이 버튼을 눌러야만 쓰인다.
+- 토큰은 Supabase 규칙상 **한 번만** 쓸 수 있다. 다만 한 번 쓴 뒤에도 그 브라우저에 세션이 남아 있으면 다시 열어도
+  들어간다. 유효 시간은 Authentication → Emails(또는 Providers → Email) 의 **Email OTP Expiration** 이다
+  (초 단위, 기본 3600 = 1시간, 최대 86400). 메일 문구의 "N시간 뒤 만료"와 맞춘다.
+- 디자인한 HTML 템플릿을 쓸 때는 버튼 `href` 와 보조 주소 **둘 다** 위 주소 그대로여야 한다
+  (`{{ .TokenHash }}` · `type=` 이 빠지면 처음부터 "만료"로 보인다).
 
 **메일 발송(SMTP)** — Supabase 기본 발송은 시간당 몇 통으로 제한되고, 팀원으로 등록된 주소에만 보내는
 제약이 있다. 다른 사람을 초대하려면 Authentication → Emails → SMTP Settings 에 자체 SMTP(Resend · Gmail 등)를

@@ -23,7 +23,7 @@ const LOGIN_PATH = "/login";
  * 로그인 없이 열리는 화면. 비밀번호 찾기와 메일 링크 처리(/auth/confirm)는 아직 로그인 전이다.
  * /auth/set-password 는 여기 없다 — 메일 링크를 지나 로그인된 뒤에만 연다.
  */
-const PUBLIC_PATHS = new Set([LOGIN_PATH, "/forgot-password", "/auth/confirm"]);
+const PUBLIC_PATHS = new Set([LOGIN_PATH, "/forgot-password", "/auth/confirm", "/auth/confirm/verify"]);
 
 export async function proxy(request: NextRequest) {
   const env = supabaseEnv();
