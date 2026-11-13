@@ -1,7 +1,9 @@
 "use client";
 
+import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getConversationListQueryOptions, useConversationList } from "@/hooks/apis/conversation/use-conversation-list";
+import { useRoomSeenStore } from "@/store/room-seen-store";
 import { useSelectedConversationStore } from "@/store/selected-conversation-store";
 
 /**
@@ -17,6 +19,14 @@ export const useConversationWorkspace = () => {
   const select = useSelectedConversationStore((s) => s.select);
   const main = rooms.find((r) => r.isMain) ?? null;
   const current = rooms.find((r) => r.id === selectedId) ?? main;
+
+  // 사이드바의 새 메시지 점 — 처음 보는 방은 지금을 본 것으로, 열려 있는 방은 늘 본 것으로 적는다.
+  const adopt = useRoomSeenStore((s) => s.adopt);
+  const markSeen = useRoomSeenStore((s) => s.markSeen);
+  useEffect(() => adopt(rooms), [rooms, adopt]);
+  useEffect(() => {
+    if (current) markSeen(current.id, current.updatedAt);
+  }, [current, markSeen]);
 
   // 턴이 끝나면 제목·마지막 메시지·정렬이 바뀐다.
   const refresh = () =>

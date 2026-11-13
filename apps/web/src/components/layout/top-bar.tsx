@@ -53,7 +53,7 @@ export function NavisTopBar({ rooms, current, onSelect }: Readonly<Props>) {
   return (
     <header className="flex h-14 shrink-0 items-center gap-1 border-b border-sidebar-border px-3 md:h-16 md:px-6">
       {/* 모바일은 사이드바가 없다 — 방 목록을 서랍으로 연다. */}
-      <Button variant="ghost" size="icon" aria-label="대화방 목록" className="lg:hidden" onClick={() => setRoomsOpen(true)}>
+      <Button variant="ghost" size="icon" aria-label="대화방 목록" data-tour="rooms" className="lg:hidden" onClick={() => setRoomsOpen(true)}>
         <Menu />
       </Button>
       {/* 데스크탑의 메인 방은 제목을 두지 않는다 — 사이드바에 '나비스'가 이미 있다(2026-11-13 사용자 요청). */}

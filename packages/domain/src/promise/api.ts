@@ -7,6 +7,7 @@ export {
   create,
   get,
   list,
+  listForRoom,
   remove,
   setEnabled,
   update,

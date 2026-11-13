@@ -22,6 +22,7 @@ import {
 import { useCreateConversation } from "@/hooks/apis/conversation/use-create-conversation";
 import { useDeleteConversation } from "@/hooks/apis/conversation/use-delete-conversation";
 import { useUpdateConversationTopic } from "@/hooks/apis/conversation/use-update-conversation-topic";
+import { hasUnseen, useRoomSeenStore } from "@/store/room-seen-store";
 import { TopicDialog } from "./topic-dialog";
 
 type Props = {
@@ -44,6 +45,24 @@ export function RoomList({ rooms, currentId, onSelect }: Readonly<Props>) {
   const create = useCreateConversation();
   const update = useUpdateConversationTopic();
   const remove = useDeleteConversation();
+  const seen = useRoomSeenStore((s) => s.seen);
+  // 보고 있지 않은 방에 새것이 왔으면 점을 밝게 키운다(약속 결과 등).
+  const dot = (room: ConversationSummary, active: boolean) => {
+    const unseen = !active && hasUnseen(seen, room);
+    return (
+      <span className="flex w-4 shrink-0 justify-center" aria-hidden>
+        <span
+          className={cn(
+            "rounded-full",
+            unseen ? "size-2 bg-primary shadow-[0_0_8px_var(--primary)]" : "size-1.5",
+            !unseen && (active ? "bg-primary" : "bg-muted-foreground/50"),
+          )}
+        />
+      </span>
+    );
+  };
+  const unseenLabel = (room: ConversationSummary) =>
+    room.id !== currentId && hasUnseen(seen, room) ? " (새 메시지)" : "";
 
   const row = (active: boolean) =>
     cn(
@@ -55,6 +74,7 @@ export function RoomList({ rooms, currentId, onSelect }: Readonly<Props>) {
     <div className="flex min-h-0 flex-1 flex-col gap-5">
       <button
         type="button"
+        data-tour="rooms"
         onClick={() => setCreating(true)}
         className="flex min-h-11 items-center gap-2.5 rounded-xl border border-border bg-secondary/60 px-3.5 text-[14.5px] font-medium transition-colors hover:bg-secondary"
       >
@@ -71,12 +91,12 @@ export function RoomList({ rooms, currentId, onSelect }: Readonly<Props>) {
               onClick={() => onSelect(main.id)}
               className={row(main.id === currentId)}
             >
-              <span className="flex w-4 shrink-0 justify-center" aria-hidden>
-                <span className={cn("size-1.5 rounded-full", main.id === currentId ? "bg-primary" : "bg-muted-foreground/50")} />
-              </span>
+              {dot(main, main.id === currentId)}
               <span className="flex min-w-0 flex-col leading-snug">
-                <span className="text-[14.5px] font-medium">나비스</span>
-                <span className="truncate text-xs text-muted-foreground">기본 대화 · 전하기</span>
+                <span className="text-[14.5px] font-medium">
+                  나비스<span className="sr-only">{unseenLabel(main)}</span>
+                </span>
+                <span className="truncate text-xs text-muted-foreground">기본 대화방</span>
               </span>
             </button>
           </div>
@@ -99,11 +119,12 @@ export function RoomList({ rooms, currentId, onSelect }: Readonly<Props>) {
                   onClick={() => onSelect(room.id)}
                   className={cn(row(active), "pr-10")}
                 >
-                  <span className="flex w-4 shrink-0 justify-center" aria-hidden>
-                    <span className={cn("size-1.5 rounded-full", active ? "bg-primary" : "bg-muted-foreground/50")} />
-                  </span>
+                  {dot(room, active)}
                   <span className="flex min-w-0 flex-col leading-snug">
-                    <span className="truncate text-[14.5px] font-medium">{room.title}</span>
+                    <span className="truncate text-[14.5px] font-medium">
+                      {room.title}
+                      <span className="sr-only">{unseenLabel(room)}</span>
+                    </span>
                     <span className="truncate text-xs text-muted-foreground">{room.lastMessage ?? "아직 대화가 없어요"}</span>
                   </span>
                 </button>

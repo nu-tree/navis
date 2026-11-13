@@ -1,6 +1,6 @@
 import { Hono, type Context } from "hono";
 import type { AppEnv } from "../types";
-import { conversation } from "@navis/domain";
+import { conversation, promise } from "@navis/domain";
 import { isMainRoomUndeletable, isNotFound } from "@navis/domain/errors";
 import { MESSAGE_PAGE_MAX, MESSAGE_PAGE_SIZE, topicRequestSchema } from "@navis/validation";
 
@@ -61,6 +61,17 @@ export const conversationsRoute = new Hono<AppEnv>()
     }
     try {
       return c.json(await conversation.page(c.get("userId"), c.req.param("id"), before, limit));
+    } catch (err) {
+      return failure(c, err);
+    }
+  })
+  // 이 방의 켜진 약속 — 오른쪽 패널(2026-11-13). 남의 방이면 404.
+  .get("/:id/promises", async (c) => {
+    const userId = c.get("userId");
+    try {
+      const room = await conversation.findRoom(userId, c.req.param("id"));
+      if (!room) return c.json({ error: "대화방을 찾을 수 없다." }, 404);
+      return c.json(await promise.listForRoom(userId, room.id, { isMain: room.isMain }));
     } catch (err) {
       return failure(c, err);
     }

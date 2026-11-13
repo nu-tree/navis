@@ -4,6 +4,14 @@ import type { DriveStep } from "driver.js";
 const at = (name: string) => `[data-tour="${name}"]`;
 
 /**
+ * 같은 이름이 둘 이상이면 지금 보이는 것을 짚는다 — 방 목록은 넓은 화면에선 사이드바, 휴대폰에선 위쪽 메뉴 버튼이다.
+ * 숨은(display:none) 요소를 짚으면 말풍선이 화면 구석에 붙는다.
+ */
+const visible = (name: string) => () =>
+  [...document.querySelectorAll<HTMLElement>(at(name))].find((el) => el.offsetParent !== null) ??
+  document.body;
+
+/**
  * 첫 방문 튜토리얼 — 실제 버튼을 하나씩 짚으며 무엇을 할 수 있고 왜 좋은지 말한다.
  * 문구는 여기서만 고친다. 요소가 화면에 없으면 가운데 말풍선으로 보인다.
  */
@@ -34,9 +42,22 @@ export const tourSteps = ({ tokenRegistered }: { tokenRegistered: boolean }): Dr
     popover: {
       title: "때가 되면 먼저 말을 걸어요 ⏰",
       description:
-        "나중에 할 일을 맡겨 두면, 그때가 됐을 때 나비스가 <b>먼저 이 대화방에 말을 걸어요</b>. 창을 닫아 둬도 알림이 와요.<br/><br/>" +
+        "나중에 할 일을 맡겨 두면, 그때가 됐을 때 나비스가 <b>약속을 만든 대화방에 먼저 말을 걸어요</b>. 창을 닫아 둬도 알림이 와요.<br/><br/>" +
         "<i>예) 16일 저녁에 축의금 챙기라고 알려줘</i><br/><i>예) 매일 아침 8시에 오늘 할 일 정리해줘</i><br/><i>예) 금요일마다 이번 주 지출 정리해줘</i><br/><br/>" +
         "\"17일에 결혼식 있어\"처럼 날짜가 걸린 말을 하면 나비스가 먼저 \"전날 짚어 드릴까요?\" 하고 물어보기도 해요.",
+    },
+  },
+  {
+    element: visible("rooms"),
+    popover: {
+      title: "주제마다 방을 나눌 수 있어요",
+      description:
+        "<b>새 주제 방</b>을 만들고 주제를 적으면, 그 방에서는 나비스가 그 주제에 맞춰 기억을 먼저 떠올려요. " +
+        "다른 기억이 필요하면 그것도 그대로 꺼내 써요.<br/><br/>" +
+        "<i>예) 강의 준비 · 이사 · 운동</i><br/><br/>" +
+        "넓은 화면에서는 오른쪽에 <b>이 답에 참고한 기억</b>이 보여서, 나비스가 무엇을 보고 답했는지 알 수 있어요.",
+      side: "right",
+      align: "start",
     },
   },
   {

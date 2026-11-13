@@ -38,7 +38,16 @@ describe("renderGuide", () => {
   it("못 하는 것도 안내한다 — 추측하지 않게", () => {
     const text = renderGuide({ owner: false, topic: "못 하는" });
     expect(text).toContain("나비스가 못 하는 것");
-    expect(text).toContain("주제별로 방을 나누는 기능은 아직 없다");
+    expect(text).toContain("음성으로 말하거나 듣지 못하고");
+    // 주제 방이 생겼으니 '방은 하나뿐'이라고 말하면 안 된다(2026-11-13).
+    expect(text).not.toContain("주제별로 방을 나누는 기능은 아직 없다");
+  });
+
+  it("주제 방을 물으면 만드는 법 · 기억을 거르지 않는다는 것 · 약속이 오는 곳을 안내한다", () => {
+    const text = renderGuide({ owner: false, topic: "주제 방" });
+    expect(text).toContain("새 주제 방");
+    expect(text).toContain("걸러 막지는 않는다");
+    expect(text).toContain("약속은 만든 방으로 온다");
   });
 
   it("화면 이름으로 물어도 찾는다 — 설정에 무엇이 있는지", () => {

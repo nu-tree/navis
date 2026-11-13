@@ -157,6 +157,29 @@ export async function list(
   return rows.map((r) => toItem(r, runs.get(r.id) ?? []));
 }
 
+/**
+ * 한 대화방의 켜진 약속 — 오른쪽 패널의 '이 방의 약속'(2026-11-13). 약속은 만든 방으로 오므로 만든 방으로 고른다.
+ * "나비스"(메인) 방이면 만든 방이 없거나(예전 약속) 그 방이 지워진 약속도 함께 — 그 약속들은 메인 방으로 온다.
+ */
+export async function listForRoom(
+  userId: string,
+  conversationId: string,
+  { isMain }: { isMain: boolean },
+): Promise<PromiseItem[]> {
+  const origin = promises.originConversationId;
+  const here = isMain
+    ? sql`(${origin} = ${conversationId} or ${origin} is null or not exists (
+        select 1 from "conversations" c where c."id" = ${origin} and c."user_id" = ${userId}))`
+    : eq(origin, conversationId);
+  const rows = await db
+    .select()
+    .from(promises)
+    .where(and(eq(promises.userId, userId), eq(promises.enabled, true), isNull(promises.endedAt), here))
+    .orderBy(sql`${promises.nextRunAt} asc nulls last`, desc(promises.createdAt));
+  const runs = await recentRunsOf(rows.map((r) => r.id));
+  return rows.map((r) => toItem(r, runs.get(r.id) ?? []));
+}
+
 export async function get(userId: string, id: string): Promise<PromiseItem> {
   const row = await getRow(userId, id);
   const runs = await recentRunsOf([row.id]);

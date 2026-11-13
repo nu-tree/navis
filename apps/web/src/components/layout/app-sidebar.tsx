@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Brain, Settings } from "lucide-react";
 import type { ConversationSummary } from "@navis/validation";
 import { PineRow } from "@/components/decor/winter-scene";
@@ -17,8 +20,11 @@ type Props = {
  * 로고는 원래 앱 아이콘을 그대로 쓴다(포인트색으로 다시 그리지 않는다).
  */
 export function AppSidebar({ rooms, currentId, onSelect }: Readonly<Props>) {
-  const item =
-    "flex min-h-11 items-center gap-3 rounded-[10px] px-3.5 text-[14.5px] text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground";
+  const pathname = usePathname();
+  const item = (href: string) =>
+    pathname.startsWith(href)
+      ? "flex min-h-11 items-center gap-3 rounded-[10px] bg-sidebar-accent px-3.5 text-[14.5px] font-medium text-sidebar-foreground"
+      : "flex min-h-11 items-center gap-3 rounded-[10px] px-3.5 text-[14.5px] text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground";
 
   return (
     <aside className="relative z-10 hidden w-66 shrink-0 flex-col gap-5 border-r border-sidebar-border bg-sidebar px-3 py-4 text-sidebar-foreground lg:flex">
@@ -33,11 +39,11 @@ export function AppSidebar({ rooms, currentId, onSelect }: Readonly<Props>) {
       {/* 바닥의 침엽수 숲 — 메뉴 뒤에 옅게 깐다. */}
       <PineRow className="absolute inset-x-0 bottom-0 h-36 w-full opacity-35" />
       <div className="relative flex flex-col gap-0.5 border-t border-sidebar-border pt-3">
-        <Link href="/memories" className={item}>
+        <Link href="/memories" aria-current={pathname.startsWith("/memories") ? "page" : undefined} className={item("/memories")}>
           <Brain className="size-4.5" />
           기억
         </Link>
-        <Link href="/settings" className={item}>
+        <Link href="/settings" aria-current={pathname.startsWith("/settings") ? "page" : undefined} className={item("/settings")}>
           <Settings className="size-4.5" />
           설정
         </Link>

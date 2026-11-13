@@ -13,6 +13,8 @@ export const getConversationListQueryOptions = queryOptions({
     }
     return res.data;
   },
+  // 약속은 보고 있지 않은 방에도 온다 — 사이드바의 새 메시지 점이 늦지 않게 가끔 다시 받는다.
+  refetchInterval: 60_000,
 });
 
 /** 대화방 목록 조회 */

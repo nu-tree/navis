@@ -30,7 +30,7 @@ export const MemoryScreen = () => {
 
   return (
     <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)} className="flex min-h-0 flex-1 flex-col gap-0">
-      <header className="grid h-14 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 border-b border-border px-2 md:px-4">
+      <header className="grid h-14 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 border-b border-sidebar-border px-2 md:h-16 md:px-4">
         <div className="flex items-center">
           <Button asChild variant="ghost" size="sm">
             <Link href="/">

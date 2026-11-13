@@ -1,9 +1,12 @@
 "use client";
 
-import type { Message, UsedMemory } from "@navis/validation";
+import type { Message, PromiseItem, UsedMemory } from "@navis/validation";
+import { useEffect } from "react";
+import { AlarmClock } from "lucide-react";
 import { PineRow } from "@/components/decor/winter-scene";
 import { CATEGORY_LABELS } from "@/features/memory/category";
 import { useConversationMessageList } from "@/hooks/apis/conversation/use-conversation-message-list";
+import { useConversationPromiseList } from "@/hooks/apis/conversation/use-conversation-promise-list";
 
 type Props = { conversationId: string };
 
@@ -11,6 +14,17 @@ type Props = { conversationId: string };
 const SAVED_LIMIT = 5;
 /** 참고한 기억 칸에 보이는 최대 수. 더 있으면 개수만 알린다. */
 const USED_LIMIT = 8;
+
+/** 다음 실행 시각 — "11/14 오전 9:00". */
+const formatNext = (iso: string | null) => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const time = d.toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" });
+  return `${d.getMonth() + 1}/${d.getDate()} ${time}`;
+};
+
+const describeSchedule = (p: PromiseItem) => (p.schedule.kind === "cron" ? p.schedule.description : "한 번");
 
 const formatDate = (iso: string) => {
   const d = new Date(iso);
@@ -23,11 +37,18 @@ const formatDate = (iso: string) => {
  * - 이 답에 참고한 기억: 이 방의 마지막 나비스 답이 실제로 받은 기억(memoriesUsed). 모델이 썼다고 말한 것이 아니라
  *   도구가 넘긴 것이라 지어낼 수 없다.
  * - 방금 저장: 이 방의 최근 답들이 저장한 기억(savedMemories), 최신순.
+ * - 이 방의 약속: 이 방으로 올 켜진 약속(만든 방 기준, 메인 방은 갈 곳 잃은 약속까지).
  *
  * 메시지 캐시(use-chat 이 done 때 쓴다)를 그대로 본다 — 따로 조회하지 않는다.
  */
 export function MemoryPanel({ conversationId }: Readonly<Props>) {
   const { data: messages = [] } = useConversationMessageList(conversationId);
+  const { data: promises = [], refetch: refetchPromises } = useConversationPromiseList(conversationId);
+  // 답이 하나 늘면(약속을 만들었을 수 있다) 약속을 다시 받는다.
+  const answers = messages.filter((m) => m.role === "assistant").length;
+  useEffect(() => {
+    void refetchPromises();
+  }, [answers, refetchPromises]);
   const lastAnswer = [...messages].reverse().find((m: Message) => m.role === "assistant" && !m.origin);
   const used = lastAnswer?.memoriesUsed;
   const saved = [...messages]
@@ -74,6 +95,33 @@ export function MemoryPanel({ conversationId }: Readonly<Props>) {
           </ul>
         ) : (
           <p className="text-[13px] leading-relaxed text-muted-foreground">이 방에서 남긴 기억이 여기에 쌓여요.</p>
+        )}
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="flex items-baseline justify-between text-[13px] font-medium tracking-[0.02em] text-muted-foreground">
+          <span>이 방의 약속</span>
+          {promises.length ? <span className="font-mono text-foreground/70">{promises.length}</span> : null}
+        </h2>
+        {promises.length ? (
+          <ul className="flex flex-col gap-2">
+            {promises.map((p) => (
+              <li key={p.id} className="flex items-center gap-3.5 rounded-2xl border border-border bg-card px-4 py-3.5">
+                <AlarmClock className="size-5 shrink-0 text-primary" aria-hidden />
+                <span className="flex min-w-0 flex-col gap-0.5">
+                  <span className="truncate text-sm font-medium">{p.label}</span>
+                  <span className="truncate text-xs text-muted-foreground">
+                    {describeSchedule(p)}
+                    {p.nextRunAt ? ` · 다음 ${formatNext(p.nextRunAt)}` : ""}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-[13px] leading-relaxed text-muted-foreground">
+            &lsquo;내일 9시에 알려줘&rsquo;처럼 맡기면 여기에 보이고, 때가 되면 이 방으로 와요.
+          </p>
         )}
       </section>
 
