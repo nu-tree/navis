@@ -1,6 +1,7 @@
 "use client";
 
 import type { Message, UsedMemory } from "@navis/validation";
+import { PineRow } from "@/components/decor/winter-scene";
 import { CATEGORY_LABELS } from "@/features/memory/category";
 import { useConversationMessageList } from "@/hooks/apis/conversation/use-conversation-message-list";
 
@@ -37,7 +38,7 @@ export function MemoryPanel({ conversationId }: Readonly<Props>) {
   return (
     <aside
       aria-label="이 대화의 기억"
-      className="hidden w-80 shrink-0 flex-col gap-8 overflow-y-auto border-l border-sidebar-border bg-sidebar/70 px-6 py-6 xl:flex"
+      className="relative z-10 hidden w-80 shrink-0 flex-col gap-8 overflow-y-auto border-l border-sidebar-border bg-sidebar/70 px-6 py-6 xl:flex"
     >
       <section className="flex flex-col gap-3">
         <h2 className="flex items-baseline justify-between text-[13px] font-medium tracking-[0.02em] text-muted-foreground">
@@ -75,6 +76,9 @@ export function MemoryPanel({ conversationId }: Readonly<Props>) {
           <p className="text-[13px] leading-relaxed text-muted-foreground">이 방에서 남긴 기억이 여기에 쌓여요.</p>
         )}
       </section>
+
+      {/* 맨 아래 흰 숲(레퍼런스 오른쪽 위의 흰 나무). 내용이 적으면 바닥에, 많으면 맨 끝에 놓인다. */}
+      <PineRow tone="snow" className="-mx-6 -mb-6 mt-auto h-28 w-[calc(100%+3rem)] shrink-0 opacity-20" />
     </aside>
   );
 }

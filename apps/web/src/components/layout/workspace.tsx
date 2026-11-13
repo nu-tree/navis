@@ -1,5 +1,6 @@
 "use client";
 
+import { Snowfall } from "@/components/decor/winter-scene";
 import { AppShell } from "./app-shell";
 import { AppSidebar } from "./app-sidebar";
 import { NavisTopBar } from "./top-bar";
@@ -16,7 +17,9 @@ export const Workspace = () => {
 
   return (
     // 데스크탑: 왼쪽 방 목록 · 가운데 채팅 · 오른쪽 기억 패널. 사이드바는 lg, 패널은 xl 아래에서 숨는다.
-    <div className="flex min-h-0 flex-1">
+    // 겨울 밤 장식: 눈은 맨 뒤에 깔고(z-0), 나머지는 그 위(relative z-10)에 둔다.
+    <div className="relative flex min-h-0 flex-1">
+      <Snowfall />
       <AppSidebar rooms={rooms} currentId={current?.id ?? null} onSelect={select} />
       <AppShell header={<NavisTopBar rooms={rooms} current={current} onSelect={select} />}>
         {/* 방 id 가 오기 전엔 그리지 않는다(use-conversation-workspace 주석). */}

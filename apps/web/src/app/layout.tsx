@@ -25,7 +25,7 @@ export const metadata: Metadata = {
 };
 
 // 설치한 앱의 제목 표시줄 · 모바일 상태 표시줄 색. manifest 의 theme_color 와 같다.
-export const viewport: Viewport = { themeColor: "#141c31" };
+export const viewport: Viewport = { themeColor: "#252b43" };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (

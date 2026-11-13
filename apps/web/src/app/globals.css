@@ -7,7 +7,7 @@
 
 /* ── 디자인 토큰 ──────────────────────────────────────────────────────────────
    구조는 shadcn 규약을 그대로 따른다(`:root` = 라이트, `.dark` = 다크). 값만 navis
-   팔레트로 바꿨다 — 네이비 + 라임 포인트(2026-11-13 개편, 그 전엔 거의 검정 + 라임). 규약을 지키면 앞으로 추가하는
+   팔레트로 바꿨다 — 겨울 밤 남색 + 전구색 포인트(2026-11-13 개편, 그 전엔 네이비 + 라임). 규약을 지키면 앞으로 추가하는
    shadcn 컴포넌트가 손대지 않고 그대로 맞는다.
 
    토큰은 채널 문자열("13 14 26")이 아니라 일반 CSS 색상이다. 옛 앱은 `rgb(var(--x) /
@@ -63,44 +63,45 @@
 }
 
 .dark {
-  /* 데스크탑 리디자인 시안(2026-11-13, 디자인 캔버스 'navy' 테마)에 맞춘 팔레트 — 네이비 + 라임 포인트 하나.
-     포인트 색은 하나만 쓴다: primary 가 라임이고, accent 는 shadcn 규약대로 hover 면(무채색)이다. */
-  --background: #141c31;
-  --foreground: #eef1f8;
-  --surface: #1c2744;
+  /* 겨울 밤 테마(2026-11-13 사용자 요청, 레퍼런스: 겨울 음악회 포스터) — 먼지 낀 남색 밤하늘 + 따뜻한 전구색 포인트.
+     포인트 색은 하나만 쓴다: primary 가 전구색이고, accent 는 shadcn 규약대로 hover 면(무채색)이다.
+     장식(전구 줄 · 눈 · 침엽수)은 components/decor/winter-scene.tsx 에 있다. */
+  --background: #252b43;
+  --foreground: #f4f2ea;
+  --surface: #2e3552;
 
-  --card: #1a2440;
-  --card-foreground: #eef1f8;
-  --popover: #1f2a48;
-  --popover-foreground: #eef1f8;
+  --card: #2c3350;
+  --card-foreground: #f4f2ea;
+  --popover: #30375a;
+  --popover-foreground: #f4f2ea;
 
-  --primary: #b8dc4b;
-  --primary-foreground: #0f1629;
-  --secondary: #243152;
-  --secondary-foreground: #eef1f8;
-  --muted: #1c2744;
-  --muted-foreground: #93a0bd;
-  --accent: #243152;
-  --accent-foreground: #eef1f8;
-  --destructive: #ef4444;
-  --destructive-foreground: #ffffff;
+  --primary: #f6e7a6;
+  --primary-foreground: #1e2338;
+  --secondary: #343b5c;
+  --secondary-foreground: #f4f2ea;
+  --muted: #2e3552;
+  --muted-foreground: #a7acc6;
+  --accent: #343b5c;
+  --accent-foreground: #f4f2ea;
+  --destructive: #ff8a80;
+  --destructive-foreground: #1e2338;
 
-  --border: #26324f;
-  --input: #2c3a5e;
-  --ring: #b8dc4b;
+  --border: #3a4163;
+  --input: #444c70;
+  --ring: #f6e7a6;
 
-  --sidebar: #0f1629;
-  --sidebar-foreground: #eef1f8;
-  --sidebar-primary: #b8dc4b;
-  --sidebar-primary-foreground: #0f1629;
-  --sidebar-accent: #243152;
-  --sidebar-accent-foreground: #eef1f8;
-  --sidebar-border: #212b46;
-  --sidebar-ring: #b8dc4b;
+  --sidebar: #1e2338;
+  --sidebar-foreground: #f4f2ea;
+  --sidebar-primary: #f6e7a6;
+  --sidebar-primary-foreground: #1e2338;
+  --sidebar-accent: #2e3552;
+  --sidebar-accent-foreground: #f4f2ea;
+  --sidebar-border: #2c3250;
+  --sidebar-ring: #f6e7a6;
 
   /* 분류 색과 같은 계열 — 결정 앰버, 배움 블루, 감정 틸 … (기억 화면 2단계에서 매핑) */
-  --chart-1: #b8dc4b;
-  --chart-2: #7c9cff;
+  --chart-1: #f6e7a6;
+  --chart-2: #bfe3f5;
   --chart-3: #5fd0b0;
   --chart-4: #f2b65a;
   --chart-5: #ff8a80;
@@ -296,3 +297,23 @@
 .driver-popover.navis-tour .driver-popover-arrow-side-right { border-right-color: var(--popover); }
 .driver-popover.navis-tour .driver-popover-arrow-side-top { border-top-color: var(--popover); }
 .driver-popover.navis-tour .driver-popover-arrow-side-bottom { border-bottom-color: var(--popover); }
+
+/* ── 겨울 밤 장식 ─────────────────────────────────────────────────────────────
+   움직임을 줄이라는 설정이면 눈은 멈추고 전구는 깜빡이지 않는다. */
+@keyframes navis-snow {
+  from { transform: translate3d(0, -12vh, 0); }
+  to { transform: translate3d(var(--drift, 0px), 112vh, 0); }
+}
+@keyframes navis-twinkle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+.navis-flake {
+  animation: navis-snow var(--fall, 14s) linear var(--delay, 0s) infinite;
+}
+.navis-bulb {
+  animation: navis-twinkle var(--blink, 3.2s) ease-in-out var(--delay, 0s) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .navis-flake, .navis-bulb { animation: none; }
+}
