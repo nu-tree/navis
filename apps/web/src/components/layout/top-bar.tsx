@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Brain, CircleHelp, Download, Ellipsis, Inbox, LogOut, MessageCircleMore, Settings } from "lucide-react";
+import { Brain, CircleHelp, Download, Ellipsis, Inbox, LogOut, Menu, MessageCircleMore, Pencil, Settings } from "lucide-react";
+import type { ConversationSummary } from "@navis/validation";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -10,7 +11,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { RoomList } from "@/features/conversation/room-list";
+import { TopicDialog } from "@/features/conversation/topic-dialog";
 import { InstallGuideDialog } from "@/features/install/install-guide-dialog";
+import { useUpdateConversationTopic } from "@/hooks/apis/conversation/use-update-conversation-topic";
 import { useSignOut } from "@/hooks/apis/auth/use-sign-out";
 import { useIsAdmin } from "@/hooks/apis/me/use-me";
 import { useInstallPrompt, useStandalone } from "@/hooks/common/use-install-prompt";
@@ -24,7 +29,13 @@ import { useOnboardingStore } from "@/store/onboarding-store";
  * 가계부 · 일정 같은 화면이 생기면 기억 옆에 아이콘으로 더하고, 많아지면 ⋯ 로 옮긴다.
  * data-tour 는 첫 방문 튜토리얼이 짚는 자리다(features/onboarding/tour-steps.ts).
  */
-export function NavisTopBar() {
+type Props = {
+  rooms: readonly ConversationSummary[];
+  current: ConversationSummary | null;
+  onSelect: (id: string) => void;
+};
+
+export function NavisTopBar({ rooms, current, onSelect }: Readonly<Props>) {
   const { mutate: signOut } = useSignOut();
   const openOnboarding = useOnboardingStore((s) => s.setOpen);
   const configured = supabaseEnv() !== null;
@@ -33,10 +44,34 @@ export function NavisTopBar() {
   const admin = useIsAdmin();
   // 설치 안내 창은 메뉴 밖에 둔다 — 메뉴 안에 두면 메뉴가 닫히면서 창도 함께 사라진다.
   const [guideOpen, setGuideOpen] = useState(false);
+  // 모바일 방 서랍 · 주제 고치기 창.
+  const [roomsOpen, setRoomsOpen] = useState(false);
+  const [topicOpen, setTopicOpen] = useState(false);
+  const updateTopic = useUpdateConversationTopic();
+  const topic = current && !current.isMain ? current.topic : null;
 
   return (
     <header className="flex h-14 shrink-0 items-center gap-1 border-b border-sidebar-border px-3 md:h-16 md:px-6">
-      <span className="text-base font-extrabold">나비스</span>
+      {/* 모바일은 사이드바가 없다 — 방 목록을 서랍으로 연다. */}
+      <Button variant="ghost" size="icon" aria-label="대화방 목록" className="lg:hidden" onClick={() => setRoomsOpen(true)}>
+        <Menu />
+      </Button>
+      {/* 데스크탑의 메인 방은 제목을 두지 않는다 — 사이드바에 '나비스'가 이미 있다(2026-11-13 사용자 요청). */}
+      <span className={topic ? "min-w-0 truncate text-base font-semibold" : "text-base font-extrabold lg:hidden"}>
+        {topic ? current?.title : "나비스"}
+      </span>
+      {topic ? (
+        <button
+          type="button"
+          onClick={() => setTopicOpen(true)}
+          aria-label="주제 고치기"
+          className="ml-2 hidden min-h-8 max-w-[28rem] items-center gap-2 rounded-full border border-border bg-card px-3 text-[13px] text-muted-foreground transition-colors hover:text-foreground md:inline-flex"
+        >
+          <span className="shrink-0">주제</span>
+          <span className="truncate text-foreground/80">{topic}</span>
+          <Pencil className="size-3.5 shrink-0" />
+        </button>
+      ) : null}
       <div className="flex-1" />
 
       <Button asChild variant="ghost" size="sm" data-tour="memories">
@@ -109,6 +144,29 @@ export function NavisTopBar() {
         </DropdownMenu>
       )}
       <InstallGuideDialog open={guideOpen} onOpenChange={setGuideOpen} />
+      <Sheet open={roomsOpen} onOpenChange={setRoomsOpen}>
+        <SheetContent side="left" className="flex w-72 flex-col gap-4 bg-sidebar px-3 py-5 text-sidebar-foreground">
+          <SheetTitle className="px-1.5 text-[17px]">대화방</SheetTitle>
+          <RoomList
+            rooms={rooms}
+            currentId={current?.id ?? null}
+            onSelect={(id) => {
+              onSelect(id);
+              setRoomsOpen(false);
+            }}
+          />
+        </SheetContent>
+      </Sheet>
+      {current && topic ? (
+        <TopicDialog
+          key={current.id}
+          open={topicOpen}
+          onOpenChange={setTopicOpen}
+          initialTopic={topic}
+          pending={updateTopic.isPending}
+          onSubmit={(next) => updateTopic.mutate({ id: current.id, topic: next }, { onSuccess: () => setTopicOpen(false) })}
+        />
+      ) : null}
     </header>
   );
 }

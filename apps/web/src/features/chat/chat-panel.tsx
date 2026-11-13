@@ -20,9 +20,11 @@ type Props = {
   onTurnEnd?: () => void;
   /** 다른 탭에 있다가 답 알림을 누르면 그 방을 연다. */
   onOpen?: (conversationId: string) => void;
+  /** 주제 방의 주제. 빈 방의 첫 화면이 이걸 보여준다. */
+  topic?: string | null;
 };
 
-export const ChatPanel = ({ conversationId, onTurnEnd, onOpen }: Readonly<Props>) => {
+export const ChatPanel = ({ conversationId, onTurnEnd, onOpen, topic }: Readonly<Props>) => {
   const { data: messages = [] } = useConversationMessageList(conversationId);
   const { mutate: removeMessage } = useDeleteConversationMessage(conversationId);
   const { streaming, tool, error, errorCode, send, stop } = useChat({
@@ -42,7 +44,16 @@ export const ChatPanel = ({ conversationId, onTurnEnd, onOpen }: Readonly<Props>
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {empty ? (
+      {empty && topic ? (
+        // 주제 방의 첫 화면 — 무엇을 하는 방인지, 기억은 어떻게 쓰는지 한 번 밝힌다.
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-4 text-center">
+          <p className="text-sm text-muted-foreground">주제 방</p>
+          <p className="max-w-md text-xl font-semibold text-balance">{topic}</p>
+          <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">
+            이 주제에 맞춰 기억을 먼저 떠올려요. 여기서 만든 약속은 이 방으로 와요.
+          </p>
+        </div>
+      ) : empty ? (
         // 처음 여는 사용자가 안내 없이 첫 기억을 남기게 해야 한다(SC-012).
         // "무엇을 도와드릴까요?" 만으로는 이게 기억하는 도구라는 걸 알 수 없다.
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-6 px-4">

@@ -90,3 +90,25 @@ describe("turnBudget()", () => {
     expect(buildTurnTools({ userId: USER, promiseRun }, tally).systemPrompt).toContain("### 찾아보는 약속");
   });
 });
+
+// 주제 방(2026-11-13) — 주제는 초점일 뿐 거르지 않는다. 메인 방 · 전하기 턴에는 절이 없다.
+describe("주제 방 프롬프트", () => {
+  it("주제가 있는 대화 턴에만 '이 방의 주제' 절이 붙는다", () => {
+    const t = buildTurnTools({ userId: USER, conversationId: "c", topic: "강의 준비" }, tally);
+    expect(t.systemPrompt).toContain("## 이 방의 주제");
+    expect(t.systemPrompt).toContain('"강의 준비"');
+    expect(t.systemPrompt).toContain("걸러내지 않는다");
+    expect(buildTurnTools({ userId: USER, conversationId: "c" }, tally).systemPrompt).not.toContain("## 이 방의 주제");
+    expect(buildTurnTools({ userId: USER, conversationId: "c", topic: "  " }, tally).systemPrompt).not.toContain("## 이 방의 주제");
+  });
+
+  it("약속 턴도 만든 방의 주제를 본다", () => {
+    const promiseRun = { promiseId: "p", label: "l", state: {} };
+    expect(buildTurnTools({ userId: USER, promiseRun, topic: "강의 준비" }, tally).systemPrompt).toContain("## 이 방의 주제");
+  });
+
+  it("전하기 턴에는 주제가 넘어와도 붙지 않는다 — 전하기는 늘 메인 방이다", () => {
+    const t = buildTurnTools({ userId: USER, relayRun: { relayId: "r", state: {} }, topic: "강의 준비" }, tally);
+    expect(t.systemPrompt).not.toContain("## 이 방의 주제");
+  });
+});

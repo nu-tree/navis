@@ -2,12 +2,12 @@ import { Hono, type Context } from "hono";
 import type { AppEnv } from "../types";
 import { conversation } from "@navis/domain";
 import { isMainRoomUndeletable, isNotFound } from "@navis/domain/errors";
-import { MESSAGE_PAGE_MAX, MESSAGE_PAGE_SIZE } from "@navis/validation";
+import { MESSAGE_PAGE_MAX, MESSAGE_PAGE_SIZE, topicRequestSchema } from "@navis/validation";
 
 // 대화방 라우트. 인증은 app.ts 의 기본 잠금이 이미 걸어뒀다.
 //
-// ★ 방 생성 전용 엔드포인트는 만들지 않는다 — 첫 메시지를 보낼 때 POST /chat 이
-//   겸한다. 쓰는 곳이 없는 라우트를 미리 만들지 않는다(헌장 원칙 I).
+// 주제 방은 POST / 로 먼저 만든다(2026-11-13) — 회원이 주제를 정하고 빈 방에서 첫 말을 건다.
+// 그 밖의 방은 지금처럼 첫 메시지를 보낼 때 POST /chat 이 겸한다.
 
 function failure(c: Context, err: unknown) {
   // 오류의 **종류**로 판정한다. 메시지 문자열로 분기하면 문구를 다듬을 때
@@ -26,6 +26,27 @@ export const conversationsRoute = new Hono<AppEnv>()
     try {
       // 메시지를 싣지 않는 요약만 반환한다(FR-032). 메인 방을 보장하고 맨 위에 둔다(specs/003 R9).
       return c.json(await conversation.list(c.get("userId")));
+    } catch (err) {
+      return failure(c, err);
+    }
+  })
+  // 주제 방 만들기. 주제가 곧 방 이름이다.
+  .post("/", async (c) => {
+    const parsed = topicRequestSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: parsed.error.issues[0]?.message ?? "잘못된 요청" }, 400);
+    try {
+      return c.json(await conversation.create(c.get("userId"), parsed.data.topic), 201);
+    } catch (err) {
+      return failure(c, err);
+    }
+  })
+  // 주제 고치기. 메인 방에는 주제가 없다(404).
+  .patch("/:id", async (c) => {
+    const parsed = topicRequestSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: parsed.error.issues[0]?.message ?? "잘못된 요청" }, 400);
+    try {
+      await conversation.setTopic(c.get("userId"), c.req.param("id"), parsed.data.topic);
+      return c.json({ ok: true });
     } catch (err) {
       return failure(c, err);
     }

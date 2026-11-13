@@ -11,3 +11,9 @@ export const DELETE = async (request: Request, { params }: Params) => {
   const { id } = await params;
   return proxyToServer(request, { path: `/conversations/${encodeURIComponent(id)}` });
 };
+
+// 주제 고치기(2026-11-13).
+export const PATCH = async (request: Request, { params }: Params) => {
+  const { id } = await params;
+  return proxyToServer(request, { path: `/conversations/${encodeURIComponent(id)}` });
+};

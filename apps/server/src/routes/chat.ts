@@ -62,8 +62,11 @@ export const chatRoute = new Hono<AppEnv>()
     // 이번 질문을 붙이기 **전**의 최근 메시지. 세션을 이어갈 수 없을 때 맥락 복원에 쓴다
     // (domain/chat 의 liveSessions 주석). 방 전체를 읽지 않는다 — 끝없이 긴 "나비스" 방이 있다.
     let history: Message[] = [];
+    // 주제 방의 주제(2026-11-13). 턴의 시스템 프롬프트 · 저장 태그에 쓴다.
+    let topic: string | null = null;
     try {
       const room = await conversation.ensure(userId, req.conversationId, req.text);
+      topic = room.topic;
       if (!conversation.shouldStartFreshSession(room)) {
         resumeSessionId = room.sessionId;
         sessionTurns = room.sessionTurns;
@@ -103,6 +106,7 @@ export const chatRoute = new Hono<AppEnv>()
           {
             userId,
             conversationId: req.conversationId,
+            topic,
             prompt: req.text,
             resumeSessionId,
             history,
@@ -141,6 +145,7 @@ export const chatRoute = new Hono<AppEnv>()
           ...(result.savedCount > 0 ? { saved: true } : {}),
           ...(result.usage ? { usage: result.usage } : {}),
           ...(result.memoriesUsed ? { memoriesUsed: result.memoriesUsed } : {}),
+          ...(result.savedMemories.length ? { savedMemories: result.savedMemories } : {}),
         });
 
         await send({

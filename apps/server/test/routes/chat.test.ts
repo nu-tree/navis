@@ -22,6 +22,7 @@ const ensure = vi.fn(async () => ({
   sessionId: null as string | null,
   sessionTurns: 0,
   isMain: false,
+  topic: null as string | null,
 }));
 const recentForHistory = vi.fn(async () => []);
 const setSessionId = vi.fn();
@@ -93,7 +94,7 @@ describe("POST /chat — 토큰 오류", () => {
 
 describe("POST /chat — 회원 분리 (specs/002)", () => {
   it("domain 에 이 요청의 회원을 넘긴다", async () => {
-    runTurn.mockResolvedValueOnce({ text: "답", sessionId: null, toolsUsed: [], savedCount: 0 });
+    runTurn.mockResolvedValueOnce({ text: "답", sessionId: null, toolsUsed: [], savedCount: 0, savedMemories: [] });
     await send();
     expect(ensure).toHaveBeenLastCalledWith(MEMBER, "room-1", "안녕");
     expect(runTurn).toHaveBeenLastCalledWith(expect.objectContaining({ userId: MEMBER }), expect.anything());
@@ -101,13 +102,13 @@ describe("POST /chat — 회원 분리 (specs/002)", () => {
 
   // specs/004 T025 — 전하기 도구는 관리자 턴에만 열린다. 판정은 server 가 한다.
   it("관리자가 아니면 runTurn 에 canRelay: false", async () => {
-    runTurn.mockResolvedValueOnce({ text: "답", sessionId: null, toolsUsed: [], savedCount: 0 });
+    runTurn.mockResolvedValueOnce({ text: "답", sessionId: null, toolsUsed: [], savedCount: 0, savedMemories: [] });
     await send();
     expect(runTurn).toHaveBeenLastCalledWith(expect.objectContaining({ canRelay: false }), expect.anything());
   });
 
   it("관리자면 runTurn 에 canRelay: true", async () => {
-    runTurn.mockResolvedValueOnce({ text: "답", sessionId: null, toolsUsed: [], savedCount: 0 });
+    runTurn.mockResolvedValueOnce({ text: "답", sessionId: null, toolsUsed: [], savedCount: 0, savedMemories: [] });
     await send("00000000-0000-4000-8000-000000000001");
     expect(runTurn).toHaveBeenLastCalledWith(expect.objectContaining({ canRelay: true }), expect.anything());
   });
@@ -185,7 +186,7 @@ describe("POST /chat — 회원 분리 (specs/002)", () => {
 describe("POST /chat — 푸시 알림", () => {
   it("답이 끝나면 그 회원에게 방 id 와 함께 알린다", async () => {
     notify.mockClear();
-    runTurn.mockResolvedValueOnce({ text: "답", sessionId: null, toolsUsed: [], savedCount: 0 });
+    runTurn.mockResolvedValueOnce({ text: "답", sessionId: null, toolsUsed: [], savedCount: 0, savedMemories: [] });
     const events = await send();
     expect(events.at(-1)).toMatchObject({ type: "done" });
     expect(notify).toHaveBeenCalledWith(MEMBER, { title: "나비스", body: "답", conversationId: "room-1" });
@@ -200,7 +201,7 @@ describe("POST /chat — 푸시 알림", () => {
 
   it("푸시가 실패해도 done 은 그대로 간다", async () => {
     notify.mockRejectedValueOnce(new Error("push down"));
-    runTurn.mockResolvedValueOnce({ text: "답", sessionId: null, toolsUsed: [], savedCount: 0 });
+    runTurn.mockResolvedValueOnce({ text: "답", sessionId: null, toolsUsed: [], savedCount: 0, savedMemories: [] });
     const events = await send();
     expect(events.at(-1)).toMatchObject({ type: "done" });
   });
@@ -209,9 +210,9 @@ describe("POST /chat — 푸시 알림", () => {
 // specs/003 R8 — 긴 방의 세션 교체
 describe("POST /chat — 세션 교체", () => {
   it("30턴을 이어 쓴 세션은 잇지 않고, 최근 기록을 넘기며 턴 수를 1 로 센다", async () => {
-    ensure.mockResolvedValueOnce({ id: "room-1", sessionId: "old", sessionTurns: 30, isMain: true });
+    ensure.mockResolvedValueOnce({ id: "room-1", sessionId: "old", sessionTurns: 30, isMain: true, topic: null });
     recentForHistory.mockResolvedValueOnce([{ id: "h", role: "user", text: "이전", createdAt: "" }] as never);
-    runTurn.mockResolvedValueOnce({ text: "답", sessionId: "new", toolsUsed: [], savedCount: 0 });
+    runTurn.mockResolvedValueOnce({ text: "답", sessionId: "new", toolsUsed: [], savedCount: 0, savedMemories: [] });
     await send();
     expect(runTurn.mock.calls.at(-1)?.[0]).toMatchObject({
       resumeSessionId: null,
@@ -221,10 +222,10 @@ describe("POST /chat — 세션 교체", () => {
   });
 
   it("같은 세션을 이어 쓰면 턴 수를 하나 올린다", async () => {
-    ensure.mockResolvedValueOnce({ id: "room-1", sessionId: "s", sessionTurns: 4, isMain: false });
-    runTurn.mockResolvedValueOnce({ text: "답", sessionId: "s", toolsUsed: [], savedCount: 0 });
+    ensure.mockResolvedValueOnce({ id: "room-1", sessionId: "s", sessionTurns: 4, isMain: false, topic: "강의 준비" });
+    runTurn.mockResolvedValueOnce({ text: "답", sessionId: "s", toolsUsed: [], savedCount: 0, savedMemories: [] });
     await send();
-    expect(runTurn.mock.calls.at(-1)?.[0]).toMatchObject({ resumeSessionId: "s" });
+    expect(runTurn.mock.calls.at(-1)?.[0]).toMatchObject({ resumeSessionId: "s", topic: "강의 준비" });
     expect(setSessionId).toHaveBeenLastCalledWith(MEMBER, "room-1", "s", 5);
   });
 });

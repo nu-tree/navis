@@ -42,7 +42,7 @@ type MessageRow = typeof messages.$inferSelect;
  * relayId 는 저장만 하고 와이어로 내보내지 않는다(specs/004 research R8) — 받는 회원의 응답 JSON 에
  * 실리면 화면 표시가 없어도 관리자가 보냈다는 것이 드러난다. 내부 추적은 이 행과 relays 표로 충분하다.
  */
-type MessageMeta = Pick<Message, "toolsUsed" | "saved" | "origin" | "files" | "usage" | "memoriesUsed"> & { relayId?: string };
+type MessageMeta = Pick<Message, "toolsUsed" | "saved" | "origin" | "files" | "usage" | "memoriesUsed" | "savedMemories"> & { relayId?: string };
 
 /** 행 → 와이어. meta 의 필드를 펼친다. */
 export const toMessage = (row: Pick<MessageRow, "id" | "role" | "text" | "meta" | "createdAt">): Message => {
@@ -58,6 +58,7 @@ export const toMessage = (row: Pick<MessageRow, "id" | "role" | "text" | "meta" 
     ...(meta.files?.length ? { files: meta.files } : {}),
     ...(meta.usage ? { usage: meta.usage } : {}),
     ...(meta.memoriesUsed?.total ? { memoriesUsed: meta.memoriesUsed } : {}),
+    ...(meta.savedMemories?.length ? { savedMemories: meta.savedMemories } : {}),
   };
 };
 
@@ -73,6 +74,7 @@ export const toMeta = (m: MessageMeta): MessageMeta => ({
   ...(m.relayId ? { relayId: m.relayId } : {}),
   ...(m.usage ? { usage: m.usage } : {}),
   ...(m.memoriesUsed?.total ? { memoriesUsed: m.memoriesUsed } : {}),
+  ...(m.savedMemories?.length ? { savedMemories: m.savedMemories } : {}),
 });
 
 /**
@@ -93,6 +95,8 @@ export type RoomSession = {
   sessionId: string | null;
   sessionTurns: number;
   isMain: boolean;
+  /** 주제 방의 주제. 턴의 시스템 프롬프트에 실린다. */
+  topic: string | null;
 };
 
 /** 이번 턴을 새 세션으로 시작해야 하는가(R8). 순수 함수. */
@@ -143,6 +147,7 @@ export async function list(userId: string): Promise<ConversationSummary[]> {
       title: conversations.title,
       sessionId: conversations.sessionId,
       isMain: conversations.isMain,
+      topic: conversations.topic,
       createdAt: conversations.createdAt,
       updatedAt: conversations.updatedAt,
       // (conversation_id, seq desc) 인덱스로 한 행만 읽는다.
@@ -163,6 +168,7 @@ export async function list(userId: string): Promise<ConversationSummary[]> {
     title: row.title,
     sessionId: row.sessionId,
     isMain: row.isMain,
+    topic: row.topic,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     lastMessage: row.lastMessage,
@@ -203,6 +209,7 @@ export async function get(userId: string, id: string): Promise<Conversation> {
     messages: first.messages,
     hasMore: first.hasMore,
     isMain: row.isMain,
+    topic: row.topic,
     sessionId: row.sessionId,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -254,6 +261,57 @@ export async function recentForHistory(
 }
 
 /**
+ * 주제 방을 만든다(2026-11-13 결정). 주제가 곧 방 이름이다. 메시지 없이 빈 방으로 생긴다 —
+ * 회원이 주제를 먼저 정하고 그 방에서 첫 말을 건다.
+ */
+export async function create(userId: string, topic: string): Promise<ConversationSummary> {
+  const now = new Date();
+  const [row] = await db
+    .insert(conversations)
+    .values({ id: randomUUID(), userId, title: titleFrom(topic), topic, updatedAt: now })
+    .returning();
+  if (!row) throw new Error("방을 만들지 못했다.");
+  return {
+    id: row.id,
+    title: row.title,
+    sessionId: row.sessionId,
+    isMain: row.isMain,
+    topic: row.topic,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+    lastMessage: null,
+  };
+}
+
+/**
+ * 주제를 고친다 — 방 이름도 함께. 메인 방에는 주제가 없다(없는 것과 같다).
+ *
+ * 세션을 비운다: 이어 쓰는 세션의 시스템 프롬프트에는 옛 주제가 박혀 있다. 다음 턴이 새 세션 + 최근
+ * 기록으로 시작해 새 주제를 본다(R8).
+ */
+export async function setTopic(userId: string, id: string, topic: string): Promise<void> {
+  const [row] = await db
+    .update(conversations)
+    .set({ topic, title: titleFrom(topic), sessionId: null, sessionTurns: 0 })
+    .where(and(owned(userId, id), eq(conversations.isMain, false)))
+    .returning({ id: conversations.id });
+  if (!row) throw new NotFoundError("conversation", id);
+}
+
+/** 이 회원의 방이 있으면 id · 주제를, 없으면(지워졌거나 남의 방) null. 약속을 어디로 보낼지 정할 때 쓴다. */
+export async function findRoom(
+  userId: string,
+  id: string,
+): Promise<{ id: string; topic: string | null; isMain: boolean } | null> {
+  const [row] = await db
+    .select({ id: conversations.id, topic: conversations.topic, isMain: conversations.isMain })
+    .from(conversations)
+    .where(owned(userId, id))
+    .limit(1);
+  return row ?? null;
+}
+
+/**
  * 있으면 그대로, 없으면 만든다. 첫 메시지를 보낼 때 불린다(R9). 세션 상태를 돌려준다.
  *
  * ★ 같은 id 의 방이 **다른 회원의 것이면** 이어 쓰지 않고 NotFoundError(specs/002 R8). 방 id 는
@@ -269,6 +327,7 @@ export async function ensure(
     sessionId: conversations.sessionId,
     sessionTurns: conversations.sessionTurns,
     isMain: conversations.isMain,
+    topic: conversations.topic,
   };
   const [created] = await db
     .insert(conversations)

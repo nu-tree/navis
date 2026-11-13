@@ -90,6 +90,8 @@ export type MemoryToolTally = {
    * 없으면 모으지 않는다(외부 MCP 는 보여줄 화면이 없다).
    */
   recalled?: Map<string, Memory>;
+  /** 이 턴에 저장한 기억. 오른쪽 패널의 '방금 저장'이 이걸 본다. 없으면 모으지 않는다. */
+  savedItems?: Memory[];
 };
 
 const noteRecalled = (tally: MemoryToolTally, list: readonly Memory[]) => {
@@ -114,9 +116,14 @@ export type MemoryMcpContext = {
   tally: MemoryToolTally;
   /** 관리자인가 — guide 가 관리자 전용 기능(전하기)을 보일지. 회원에게는 있는지도 말하지 않는다. */
   owner?: boolean;
+  /**
+   * 주제 방의 주제. 있으면 그 방에서 저장한 기억에 태그로 붙는다(2026-11-13 결정) — 프로젝트는 지금처럼
+   * 내용을 보고 정하고, 방 주제는 태그로만 남긴다. 모델에게 맡기지 않고 여기서 붙여 빠지지 않게 한다.
+   */
+  topic?: string | null;
 };
 
-export const createMemoryMcpServer = ({ userId, tally, owner = false }: MemoryMcpContext) =>
+export const createMemoryMcpServer = ({ userId, tally, owner = false, topic = null }: MemoryMcpContext) =>
   createSdkMcpServer({
   name: MEMORY_SERVER_NAME,
   version: "0.1.0",
@@ -151,11 +158,13 @@ export const createMemoryMcpServer = ({ userId, tally, owner = false }: MemoryMc
         // 삼키면 모델이 "저장했다"고 답하는데 실제로는 저장되지 않는다(최악의 실패).
         // 비슷한 스코프 조회는 저장과 나란히 돌린다 — 저장 지연에 더해지지 않게.
         // 이 조회가 실패해도 저장은 성공한 것이다. 경고만 빠진다.
+        const tags = topic && !args.tags?.includes(topic) ? [...(args.tags ?? []), topic] : args.tags;
         const [memory, similar] = await Promise.all([
-          save(userId, args),
+          save(userId, tags ? { ...args, tags } : args),
           args.project ? similarProjects(userId, args.project).catch(() => []) : [],
         ]);
         tally.saved += 1;
+        tally.savedItems?.push(memory);
         const warning = similar.length
           ? `\n주의: 표기만 다른 프로젝트가 이미 있다 — ${similar.join(", ")}. ` +
             "같은 프로젝트라면 사용자에게 알리고 rename_project 로 합칠지 묻는다."

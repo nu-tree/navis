@@ -10,7 +10,9 @@ import { db, conversations, messages } from "@navis/db";
 import { MainRoomUndeletableError, NotFoundError } from "../../src/errors";
 import {
   appendMessage,
+  create,
   detachSession,
+  findRoom,
   ensure,
   ensureMain,
   get,
@@ -20,6 +22,7 @@ import {
   remove,
   removeMessage,
   setSessionId,
+  setTopic,
   titleFrom,
 } from "../../src/conversation/index";
 
@@ -119,7 +122,7 @@ describeDb("대화방 (실제 DB)", () => {
 
   it("ensure 가 방을 만들고 첫 메시지로 제목을 정한다", async () => {
     const s = await ensure(USER_A, id("a"), "배포는 어디로 할까?");
-    expect(s).toEqual({ id: id("a"), sessionId: null, sessionTurns: 0, isMain: false });
+    expect(s).toEqual({ id: id("a"), sessionId: null, sessionTurns: 0, isMain: false, topic: null });
     const c = await get(USER_A, id("a"));
     expect(c.title).toBe("배포는 어디로 할까?");
     expect(c.messages).toEqual([]);
@@ -331,5 +334,51 @@ describeDb("대화방 (실제 DB)", () => {
   it("있는 방의 없는 메시지도 NotFoundError", async () => {
     await ensure(USER_A, id("m"), "x");
     await expect(removeMessage(USER_A, id("m"), "없는-메시지")).rejects.toThrow(NotFoundError);
+  });
+
+  // 주제 방(2026-11-13). create 는 무작위 id 라 접두사 정리에 안 걸린다 — 직접 지운다.
+  it("create 가 주제를 이름으로 한 빈 방을 만들고, 목록 · 조회에 주제가 실린다", async () => {
+    const room = await create(USER_A, "강의 준비");
+    try {
+      expect(room).toMatchObject({ title: "강의 준비", topic: "강의 준비", isMain: false, lastMessage: null });
+      expect((await get(USER_A, room.id)).topic).toBe("강의 준비");
+      const rooms = await list(USER_A);
+      expect(rooms[0]?.isMain).toBe(true); // 메인 방은 여전히 맨 위
+      expect(rooms.find((r) => r.id === room.id)?.topic).toBe("강의 준비");
+    } finally {
+      await db.delete(conversations).where(eq(conversations.id, room.id));
+    }
+  });
+
+  it("setTopic 은 주제 · 이름을 바꾸고 세션을 비운다 — 옛 주제가 박힌 세션을 잇지 않게", async () => {
+    const room = await create(USER_A, "처음 주제");
+    try {
+      await setSessionId(USER_A, room.id, "sess-1", 3);
+      await setTopic(USER_A, room.id, "바뀐 주제");
+      const s = await ensure(USER_A, room.id, "x");
+      expect(s).toMatchObject({ topic: "바뀐 주제", sessionId: null, sessionTurns: 0 });
+      expect((await get(USER_A, room.id)).title).toBe("바뀐 주제");
+    } finally {
+      await db.delete(conversations).where(eq(conversations.id, room.id));
+    }
+  });
+
+  it("setTopic 은 메인 방 · 남의 방에 NotFoundError", async () => {
+    const main = await ensureMain(USER_A);
+    await expect(setTopic(USER_A, main.id, "주제")).rejects.toThrow(NotFoundError);
+    const room = await create(USER_A, "내 방");
+    try {
+      await expect(setTopic(USER_B, room.id, "남의 주제")).rejects.toThrow(NotFoundError);
+    } finally {
+      await db.delete(conversations).where(eq(conversations.id, room.id));
+    }
+  });
+
+  it("findRoom 은 내 방만 찾고, 지워진 방 · 남의 방은 null", async () => {
+    const room = await create(USER_A, "약속 방");
+    expect(await findRoom(USER_A, room.id)).toEqual({ id: room.id, topic: "약속 방", isMain: false });
+    expect(await findRoom(USER_B, room.id)).toBeNull();
+    await db.delete(conversations).where(eq(conversations.id, room.id));
+    expect(await findRoom(USER_A, room.id)).toBeNull();
   });
 });

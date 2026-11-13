@@ -79,6 +79,9 @@ export const conversations = pgTable(
     sessionTurns: integer("session_turns").notNull().default(0),
     // 회원마다 하나인 "나비스" 방(specs/003 R9). 지울 수 없고, 약속 메시지가 여기로 온다.
     isMain: boolean("is_main").notNull().default(false),
+    // 주제 방의 주제 — 회원이 글로 직접 쓴다(2026-11-13 결정). 나비스는 이걸 보고 기억에 초점만 맞추고
+    // 걸러내지는 않는다. 메인 방 · 예전 방은 null.
+    topic: text("topic"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

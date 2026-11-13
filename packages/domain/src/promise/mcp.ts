@@ -155,9 +155,11 @@ export type PromiseRunMcpContext = {
   promiseId: string;
   label: string;
   state: PromiseRunState;
+  /** 말을 걸 방 — 약속을 만든 방(지워졌으면 메인 방). 없으면 메인 방. */
+  conversationId?: string | null;
 };
 
-export const createPromiseRunMcpServer = ({ userId, promiseId, label, state }: PromiseRunMcpContext) =>
+export const createPromiseRunMcpServer = ({ userId, promiseId, label, state, conversationId = null }: PromiseRunMcpContext) =>
   createSdkMcpServer({
     name: PROMISE_RUN_SERVER_NAME,
     version: "0.1.0",
@@ -173,7 +175,7 @@ export const createPromiseRunMcpServer = ({ userId, promiseId, label, state }: P
         notifyInputSchema.shape,
         async ({ text }) => {
           if (state.messageId) return refuse("이번 실행에서는 이미 말했어요.");
-          const message = await deliver(userId, { origin: { kind: "promise", promiseId, label } }, text);
+          const message = await deliver(userId, { origin: { kind: "promise", promiseId, label } }, text, conversationId);
           state.messageId = message.id;
           return reply("전했다.");
         },

@@ -10,7 +10,7 @@ import type { Message } from "@navis/validation";
 import { runTurn } from "../chat/index";
 import { isClaudeRateLimited } from "../errors";
 import * as conversation from "../conversation/index";
-import { deliver } from "./deliver";
+import { deliver, deliveryRoom } from "./deliver";
 import { complete, formatKst, previousRun, type ClaimedRun, type RunOutcome } from "./index";
 import type { PromiseRunState } from "./mcp";
 
@@ -42,14 +42,16 @@ export async function executeRun(run: ClaimedRun, now: Date = new Date()): Promi
   const state: PromiseRunState = {};
   const outcome = await (async (): Promise<RunOutcome> => {
     try {
-      const main = await conversation.ensureMain(promise.userId);
-      const history: Message[] = await conversation.recentForHistory(promise.userId, main.id, HISTORY_MESSAGES);
+      // 약속을 만든 방에서 실행한다 — 그 방의 최근 대화와 주제를 보고, 결과도 그 방으로 간다(2026-11-13).
+      const room = await deliveryRoom(promise.userId, promise.originConversationId);
+      const history: Message[] = await conversation.recentForHistory(promise.userId, room.id, HISTORY_MESSAGES);
       const previous = await previousRun(promise.id, run.runId);
       await runTurn({
         userId: promise.userId,
         prompt: promisePrompt(run, now, previous),
         history,
-        promiseRun: { promiseId: promise.id, label: promise.label, state },
+        topic: room.topic,
+        promiseRun: { promiseId: promise.id, label: promise.label, state, conversationId: room.id },
       });
       return state.messageId
         ? { status: "spoke", messageId: state.messageId }
@@ -82,6 +84,7 @@ export async function executeRun(run: ClaimedRun, now: Date = new Date()): Promi
         promise.userId,
         { origin: { kind: "promise-disabled", promiseId: promise.id, label: promise.label } },
         `'${promise.label}' 약속이 세 번 연속 실패해서 껐어요. 이유: ${outcome.error ?? "알 수 없음"}\n약속 화면에서 다시 켤 수 있어요.`,
+        promise.originConversationId,
       );
     }
   } catch (err) {

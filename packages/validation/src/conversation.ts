@@ -64,6 +64,8 @@ export const messageSchema = z.object({
   // 나비스 답에만. 이 턴에 쓴 토큰 · 참고한 기억. 이 기능 전의 메시지에는 없다.
   usage: messageUsageSchema.optional(),
   memoriesUsed: memoriesUsedSchema.optional(),
+  // 이 턴에 저장한 기억의 사본. 오른쪽 패널의 '방금 저장'이 이걸 본다.
+  savedMemories: z.array(usedMemorySchema).optional(),
 });
 export type Message =z.infer<typeof messageSchema>;
 
@@ -75,6 +77,8 @@ export const conversationSchema = z.object({
   hasMore: z.boolean(),
   // 회원마다 하나인 "나비스" 방. 지울 수 없다(specs/003 R9).
   isMain: z.boolean(),
+  // 주제 방의 주제(회원이 쓴 글). 메인 방 · 예전 방은 null.
+  topic: z.string().nullable(),
   // 이어갈 에이전트 세션 id. 방마다 맥락을 분리하므로 방 단위로 보관한다.
   sessionId: z.string().nullable(),
   createdAt: z.string(),
@@ -98,3 +102,12 @@ export type MessagePage = z.infer<typeof messagePageSchema>;
 /** 한 번에 받는 메시지 수. 첫 화면 · 이전 페이지 모두. */
 export const MESSAGE_PAGE_SIZE = 50;
 export const MESSAGE_PAGE_MAX = 100;
+
+/** 주제의 최대 길이. 방 이름으로도 보이므로 짧게. */
+export const TOPIC_MAX = 80;
+
+// 주제 방 만들기 · 주제 고치기. 주제가 곧 방 이름이다.
+export const topicRequestSchema = z.object({
+  topic: z.string().trim().min(1, "주제를 적어 주세요.").max(TOPIC_MAX),
+});
+export type TopicRequest = z.infer<typeof topicRequestSchema>;
